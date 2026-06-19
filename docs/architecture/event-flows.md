@@ -88,6 +88,15 @@ flowchart TB
 
 ## 3. Event Payload Schemas
 
+> **Typed Contracts**: Tất cả event names và payload interfaces được định nghĩa trong `@erp/shared/contracts/events.ts` — **single source of truth**. Xem [system-overview → section 11](system-overview.md) để hiểu cấu trúc `@erp/shared`.
+>
+> ```typescript
+> import { EVENT, OrderSubmittedPayload, EventMetadata } from '@erp/shared';
+>
+> // EVENT.ORDER_SUBMITTED = 'order.submitted' (literal type, không phải string)
+> // Payload có interface rõ ràng → gõ sai field = compile error
+> ```
+
 ### 3.1. Base Event Interface
 
 ```typescript
@@ -442,6 +451,8 @@ class OutboxWorker {
 > **At-least-once delivery**: Outbox pattern đảm bảo event được gửi **ít nhất 1 lần**. Subscriber phải xử lý idempotent (cùng eventId chỉ xử lý 1 lần).
 
 ### 5.5. Idempotent Consumer
+
+> **Implementation chi tiết**: Xem [design-patterns.md → 12. Idempotent Consumer](design-patterns.md) để hiểu cơ chế Redis SET NX, retry-safe, và code sử dụng `withIdempotency()` từ `@erp/shared`.
 
 ```typescript
 // Pseudocode — Idempotent event handler

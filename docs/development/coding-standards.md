@@ -461,6 +461,130 @@ import { CustomerResponseDto } from '../dtos/customer-response.dto';
 
 ---
 
+## 8. Environment Config — Đọc biến môi trường an toàn
+
+### Vấn đề
+
+Viết `process.env.X ?? ''` rải rác khắp code → lỗi **im lặng** khi thiếu config (app chạy nhưng sai behavior). Phát hiện lỗi muộn, khó debug.
+
+### Quy tắc
+
+| ❌ Sai | ✅ Đúng |
+|---|---|
+| `const url = process.env.DATABASE_URL ?? ''` | `const url = getRequiredEnv('DATABASE_URL')` |
+| `const port = parseInt(process.env.PORT!)` | `const port = getEnvNumber('PORT', 3001)` |
+| Thiếu env → app chạy với string rỗng | Thiếu env → **throw ngay** lúc khởi động (fail fast) |
+
+### API Reference — `@erp/shared/config`
+
+```typescript
+import { getRequiredEnv, getEnv, getEnvNumber } from '@erp/shared';
+```
+
+| Function | Mô tả | Khi thiếu env |
+|---|---|---|
+| `getRequiredEnv(name)` | Biến **bắt buộc** | Throw `Error` ngay (fail fast) |
+| `getEnv(name, fallback)` | Biến **tùy chọn**, có giá trị mặc định | Trả `fallback` |
+| `getEnvNumber(name, fallback)` | Biến số (vd: PORT), có fallback | Trả `fallback` nếu thiếu/NaN |
+
+### DB Connection — `resolveConnectionString()`
+
+```typescript
+import { resolveConnectionString } from '@erp/shared';
+
+// Ưu tiên RUNTIME_DATABASE_URL (pooled/PgBouncer, port 6543)
+// Fallback DATABASE_URL (direct, port 5432)
+// Cả hai đều thiếu → throw Error
+const connectionString = resolveConnectionString();
+```
+
+| Biến | Port | Dùng cho |
+|---|---|---|
+| `RUNTIME_DATABASE_URL` | 6543 | App runtime (qua PgBouncer/pooler) |
+| `DATABASE_URL` | 5432 | Migration, seed, Prisma Studio |
+
+---
+
+## 9. Tích hợp `@erp/shared` — Checklist khi tạo Service mới
+
+Khi tạo một service mới, cần tích hợp các modules từ `@erp/shared`. Dưới đây là checklist đầy đủ.
+
+### 9.1. Cài đặt
+
+```bash
+# Trong package.json của service, thêm dependency:
+"@erp/shared": "workspace:*"
+```
+
+### 9.2. Checklist tích hợp
+
+| # | Module | Cần làm | Code |
+|---|---|---|---|
+| 1 | **Logger** | Đặt structured logger làm logger mặc định | `app.useLogger(new StructuredLogger())` |
+| 2 | **Correlation** | Đăng ký middleware vào AppModule | `consumer.apply(CorrelationMiddleware).forRoutes('*')` |
+| 3 | **Health** | Bind `HEALTH_INDICATORS` + import `HealthController` | Xem [design-patterns → 14.3](../architecture/design-patterns.md) |
+| 4 | **Metrics** | Import `MetricsService` + `MetricsController` | Xem [design-patterns → 14.4](../architecture/design-patterns.md) |
+| 5 | **Cache** | Import `RedisCacheService` (nếu cần cache) | Xem [design-patterns → 13](../architecture/design-patterns.md) |
+| 6 | **Outbox** | Bind `OUTBOX_STORE` adapter + import `OutboxWorkerService` | Xem [design-patterns → 5](../architecture/design-patterns.md) |
+| 7 | **Idempotency** | Bọc event handler bằng `withIdempotency()` | Xem [design-patterns → 12](../architecture/design-patterns.md) |
+| 8 | **Contracts** | Import `EVENT` const và payload interfaces | `import { EVENT, OrderSubmittedPayload } from '@erp/shared'` |
+| 9 | **Config** | Dùng `getRequiredEnv()` thay vì `process.env.X` | Xem section 8 ở trên |
+| 10 | **Persistence** | Dùng `resolveConnectionString()` trong PrismaService | Xem section 8 ở trên |
+
+### 9.3. Setup tối thiểu trong `main.ts`
+
+```typescript
+import { NestFactory } from '@nestjs/core';
+import { StructuredLogger } from '@erp/shared';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,  // Buffer logs until logger is set
+  });
+
+  // Structured JSON logger with auto correlationId
+  app.useLogger(new StructuredLogger());
+
+  await app.listen(getEnvNumber('PORT', 3001));
+}
+bootstrap();
+```
+
+### 9.4. Setup tối thiểu trong `AppModule`
+
+```typescript
+import {
+  CorrelationMiddleware,
+  HealthController, HEALTH_INDICATORS,
+  MetricsService, MetricsController,
+  RedisCacheService,
+} from '@erp/shared';
+
+@Module({
+  controllers: [HealthController, MetricsController],
+  providers: [
+    MetricsService,
+    RedisCacheService,
+    {
+      provide: HEALTH_INDICATORS,
+      useFactory: (prisma: PrismaService, redis: RedisCacheService) => [
+        { name: 'postgres', check: () => prisma.$queryRaw`SELECT 1`.then(() => true) },
+        { name: 'redis', check: () => redis.ping() },
+      ],
+      inject: [PrismaService, RedisCacheService],
+    },
+  ],
+})
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationMiddleware).forRoutes('*');
+  }
+}
+```
+
+---
+
 ## Tổng hợp Checklist
 
 Trước khi push code, tự kiểm tra theo checklist sau:
@@ -476,7 +600,9 @@ Trước khi push code, tự kiểm tra theo checklist sau:
 | 7  | Error dùng HttpException, không leak stack trace? |    |
 | 8  | Import theo thứ tự: external → internal → relative? |    |
 | 9  | Domain layer không import framework?      |    |
+| 10 | Env dùng `getRequiredEnv()` thay vì `process.env.X ?? ''`? |    |
+| 11 | Service mới đã tích hợp `@erp/shared` (section 9)? |    |
 
 ---
 
-Liên quan: [Getting Started](./getting-started.md) · [Auth Endpoints](../api/auth-endpoints.md) · [Customer Endpoints](../api/customer-endpoints.md) · [Order Endpoints](../api/order-endpoints.md) · [Inventory Endpoints](../api/inventory-endpoints.md)
+Liên quan: [Getting Started](./getting-started.md) · [Auth Endpoints](../api/auth-endpoints.md) · [Customer Endpoints](../api/customer-endpoints.md) · [Order Endpoints](../api/order-endpoints.md) · [Inventory Endpoints](../api/inventory-endpoints.md) · [Design Patterns](../architecture/design-patterns.md) · [System Overview](../architecture/system-overview.md)

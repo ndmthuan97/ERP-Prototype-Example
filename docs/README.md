@@ -13,15 +13,15 @@
 | 2 | [Business Requirements](overview/business-requirements.md) | Hiểu nghiệp vụ, user stories |
 | 3 | [Glossary](overview/glossary.md) | Nắm thuật ngữ |
 | 4 | [Tech Decisions](overview/tech-decisions.md) | Tại sao chọn từng công nghệ |
-| 5 | [System Overview](architecture/system-overview.md) | Sơ đồ tổng thể, tech stack |
+| 5 | [System Overview](architecture/system-overview.md) | Sơ đồ tổng thể, tech stack, `@erp/shared` |
 | 6 | [Bounded Contexts](architecture/bounded-contexts.md) | 3 contexts, data ownership |
 | 7 | [Data Model](architecture/data-model.md) | ER diagrams, table definitions |
 | 8 | [Event Flows](architecture/event-flows.md) | Pub/Sub topics, saga flow |
-| 9 | [Design Patterns](architecture/design-patterns.md) | 11 patterns giải thích |
+| 9 | [Design Patterns](architecture/design-patterns.md) | 14 patterns giải thích |
 | 10 | [RBAC](architecture/rbac.md) | 3 roles, permission matrix |
 | 11 | [API Reference](api/) | Endpoints cho từng service |
 | 12 | [Getting Started](development/getting-started.md) | Setup + chạy lần đầu |
-| 13 | [Coding Standards](development/coding-standards.md) | Quy tắc code |
+| 13 | [Coding Standards](development/coding-standards.md) | Quy tắc code, tích hợp `@erp/shared` |
 
 ---
 
@@ -37,6 +37,7 @@
 | Hiểu database schema | [Data Model](architecture/data-model.md) |
 | Biết quy tắc phân quyền | [RBAC](architecture/rbac.md) |
 | Hiểu tại sao chọn NestJS, Prisma... | [Tech Decisions](overview/tech-decisions.md) |
+| Hiểu `@erp/shared` package | [System Overview → §11](architecture/system-overview.md) · [Design Patterns → §12–14](architecture/design-patterns.md) · [Coding Standards → §8–9](development/coding-standards.md) |
 | Học từng service chi tiết | [Study Guide](development/study-guide/) (viết sau khi code xong) |
 
 ---

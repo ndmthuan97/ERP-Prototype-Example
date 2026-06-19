@@ -311,3 +311,215 @@ cd frontend; npm run dev                    # :3000
 | Saga | — | — | ✅ | ✅ | — |
 | Optimistic Lock | — | — | — | ✅ | — |
 | JWT + RBAC | ✅ | — | — | — | ✅ |
+
+---
+
+## 11. `@erp/shared` — Cross-cutting Infrastructure Package
+
+5 services (Customer, Order, Inventory, Auth, Gateway) cần các primitives giống hệt: outbox worker, idempotency, cache, logger, health check, metrics, event contracts. Thay vì copy-paste → tất cả nằm trong **1 package dùng chung**: `@erp/shared`.
+
+### Sơ đồ 6 Modules
+
+```mermaid
+flowchart TB
+    SHARED["@erp/shared"]
+
+    subgraph contracts
+        EVT["EVENT const + Payload interfaces"]
+    end
+
+    subgraph messaging
+        OW["OutboxWorkerService"]
+        PSP["PubSubPublisher"]
+        IDP["withIdempotency()"]
+    end
+
+    subgraph cache
+        RCS["RedisCacheService"]
+    end
+
+    subgraph observability
+        COR["CorrelationMiddleware"]
+        LOG["StructuredLogger"]
+        HLT["HealthController"]
+        MET["MetricsService"]
+    end
+
+    subgraph config
+        ENV["getRequiredEnv / getEnv"]
+    end
+
+    subgraph persistence
+        PRS["resolveConnectionString()"]
+    end
+
+    SHARED --> contracts
+    SHARED --> messaging
+    SHARED --> cache
+    SHARED --> observability
+    SHARED --> config
+    SHARED --> persistence
+```
+
+### Bảng tổng hợp modules
+
+| Module | Files chính | Mục đích | Dùng bởi |
+|---|---|---|---|
+| **contracts** | `events.ts` | `EVENT` const (topic names), typed payload interfaces, `EventMetadata` | Tất cả services publish/subscribe |
+| **messaging** | `outbox-worker.service.ts`, `pubsub-publisher.ts`, `idempotency.ts` | Outbox worker generic, Pub/Sub publisher với topic cache, idempotent consumer helper | Customer, Order, Inventory |
+| **cache** | `redis-cache.service.ts` | Cache-Aside qua Upstash Redis REST API: `get/set/del/invalidatePattern` | Tất cả services cần cache |
+| **observability** | `correlation.ts`, `logger.ts`, `health.ts`, `metrics.ts` | CorrelationId (AsyncLocalStorage), JSON logger, health check endpoint, Prometheus metrics | Tất cả services |
+| **config** | `env.ts` | Đọc biến môi trường an toàn (fail-fast khi thiếu) | Tất cả services |
+| **persistence** | `prisma-connection.ts` | Lấy connection string: ưu tiên pooled URL, fallback direct | Customer, Order, Inventory |
+
+### Quan hệ giữa các files trong mỗi module
+
+#### messaging — Outbox → Publish → Dedup
+
+```mermaid
+flowchart TB
+    subgraph "shared/messaging"
+        OS_IF["OutboxStore\n(interface)"]
+        OS_TK["OUTBOX_STORE\n(DI token)"]
+        OW["OutboxWorkerService"]
+        PSP["PubSubPublisher"]
+        IDP["withIdempotency()"]
+    end
+
+    subgraph "Service cục bộ"
+        POS["PrismaOutboxStore\n(adapter)"]
+        SUB["Event Subscriber"]
+    end
+
+    subgraph External
+        DB[("PostgreSQL")]
+        PS["Pub/Sub"]
+        RD[("Redis")]
+    end
+
+    OS_TK -- "bind" --> POS
+    POS -. "implements" .-> OS_IF
+    OW -- "@Inject" --> OS_IF
+    OW -- "uses" --> PSP
+    POS -- "query outbox" --> DB
+    PSP -- "publish" --> PS
+    PS -- "deliver" --> SUB
+    SUB -- "wraps handler" --> IDP
+    IDP -- "SET NX EX" --> RD
+```
+
+**Đọc sơ đồ**: Worker poll outbox (qua adapter Prisma) → publish qua PubSubPublisher → Pub/Sub deliver cho subscriber → subscriber bọc handler bằng `withIdempotency()` để dedup qua Redis.
+
+#### contracts — Single source of truth cho event names + payloads
+
+```mermaid
+flowchart LR
+    EVT["events.ts\nEVENT const\nPayload interfaces\nEventMetadata"]
+
+    PUB["Producer\n(outbox.create)"]
+    SUB["Consumer\n(subscriber)"]
+
+    PUB -- "import EVENT.ORDER_SUBMITTED\nimport OrderSubmittedPayload" --> EVT
+    SUB -- "import EVENT.ORDER_SUBMITTED\nimport OrderSubmittedPayload" --> EVT
+```
+
+**1 file, 2 phía dùng**: Producer ghi event đúng tên + đúng payload. Consumer đọc event đúng tên + đúng type. Sai field = **compile error**.
+
+#### cache — Cache-Aside + chia sẻ Redis client
+
+```mermaid
+flowchart TB
+    RCS["redis-cache.service.ts\nRedisCacheService"]
+
+    SVC["Service\n(query/command)"]
+    IDP["withIdempotency()"]
+    HLT["HealthController"]
+
+    RD[("Upstash Redis\nREST API")]
+
+    SVC -- "get / set / del\ninvalidatePattern" --> RCS
+    IDP -- "getClient()" --> RCS
+    HLT -- "ping()" --> RCS
+    RCS -- "HTTP" --> RD
+```
+
+**3 consumer của RedisCacheService**: business cache (get/set/del), idempotency (dùng chung client), health check (ping).
+
+#### observability — 4 primitives, kết nối qua AsyncLocalStorage
+
+```mermaid
+flowchart TB
+    subgraph "shared/observability"
+        COR["correlation.ts\nCorrelationMiddleware\nAsyncLocalStorage"]
+        LOG["logger.ts\nStructuredLogger"]
+        HLT["health.ts\nHealthController"]
+        MET["metrics.ts\nMetricsService\nMetricsController"]
+    end
+
+    subgraph "Service cục bộ"
+        APP["AppModule"]
+        SVC["Business code"]
+    end
+
+    subgraph External
+        REQ["HTTP Request"]
+        SCR["Prometheus\n/ curl"]
+    end
+
+    REQ -- "x-correlation-id" --> COR
+    COR -- "AsyncLocalStorage\nlưu correlationId" --> LOG
+    LOG -- "tự đính correlationId\nvào mỗi dòng JSON" --> SVC
+    APP -- "bind HEALTH_INDICATORS" --> HLT
+    SVC -- "inc() / setGauge()" --> MET
+    SCR -- "GET /health" --> HLT
+    SCR -- "GET /metrics" --> MET
+```
+
+**Chuỗi kết nối**: Request → CorrelationMiddleware lưu ID → StructuredLogger tự đính ID vào log → business code dùng Logger bình thường, correlationId tự có.
+
+#### config — Fail-fast env reading
+
+```mermaid
+flowchart LR
+    ENV["env.ts\ngetRequiredEnv()\ngetEnv()\ngetEnvNumber()"]
+
+    BOOT["Service bootstrap\n(main.ts)"]
+    PENV[("process.env")]
+
+    BOOT -- "gọi lúc khởi động" --> ENV
+    ENV -- "đọc" --> PENV
+    ENV -. "throw nếu thiếu\n(fail fast)" .-> BOOT
+```
+
+#### persistence — Connection string resolution
+
+```mermaid
+flowchart LR
+    PRS["prisma-connection.ts\nresolveConnectionString()"]
+
+    PS["PrismaService\n(service cục bộ)"]
+    PENV[("process.env")]
+    DB[("PostgreSQL")]
+
+    PS -- "gọi" --> PRS
+    PRS -- "đọc RUNTIME_DATABASE_URL\nfallback DATABASE_URL" --> PENV
+    PS -- "connect" --> DB
+```
+
+### Barrel Export
+
+Mọi service chỉ cần 1 import duy nhất:
+
+```typescript
+import {
+  EVENT, CustomerCreatedPayload,       // contracts
+  OutboxWorkerService, withIdempotency, // messaging
+  RedisCacheService,                    // cache
+  StructuredLogger, HealthController,   // observability
+  getRequiredEnv,                       // config
+  resolveConnectionString,              // persistence
+} from '@erp/shared';
+```
+
+Xem chi tiết API và cách dùng: [design-patterns](design-patterns.md) (patterns 5, 6, 12–14) · [coding-standards](../development/coding-standards.md) (sections 8–9)
+

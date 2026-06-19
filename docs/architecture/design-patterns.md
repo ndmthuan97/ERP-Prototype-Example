@@ -1,11 +1,11 @@
 # Design Patterns — Các mẫu thiết kế
 
-> Tài liệu mô tả 11 design patterns được áp dụng trong ERP Prototype. Mỗi pattern: giải thích, vấn đề nó giải quyết, nơi áp dụng, và code/diagram minh họa.
+> Tài liệu mô tả 14 design patterns được áp dụng trong ERP Prototype. Mỗi pattern: giải thích, vấn đề nó giải quyết, nơi áp dụng, và code/diagram minh họa.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [event-flows](event-flows.md)
 
 ---
 
-## Tổng quan — 11 Patterns
+## Tổng quan — 14 Patterns
 
 | # | Pattern | Áp dụng tại | Mục đích chính |
 |---|---|---|---|
@@ -20,6 +20,9 @@
 | 9 | Optimistic Locking | Inventory (stock_levels) | Concurrent update safety |
 | 10 | API Gateway | Gateway service | Single entry point |
 | 11 | RBAC + JWT | Auth + Gateway | Access control |
+| 12 | Idempotent Consumer | `@erp/shared` → all subscribers | Dedup message trùng (at-least-once safety) |
+| 13 | Cache-Aside | `@erp/shared` → all services | Cache lazy loading + invalidation |
+| 14 | Observability Primitives | `@erp/shared` → all services | Truy vết, logging, health check, metrics |
 
 ---
 
@@ -408,6 +411,48 @@ class CustomerService {
 | Order | `order.outbox` | `order.submitted`, `order.confirmed`, `order.cancelled` |
 | Inventory | `inventory.outbox` | `inventory.reserved`, `inventory.reservation-failed` |
 
+### Implementation trong `@erp/shared`
+
+Outbox Worker là **generic** — logic poll/publish/mark giống hệt mọi service. Thay vì copy-paste, `@erp/shared` cung cấp:
+
+| Export | Vai trò |
+|---|---|
+| `OutboxWorkerService` | Worker generic: poll mỗi 2s, batch 10, publish qua `PubSubPublisher`, đánh dấu published |
+| `OutboxStore` (interface) | Port trừu tượng — service tự implement adapter Prisma cho schema riêng |
+| `OutboxRecord` (interface) | Chuẩn hoá 1 bản ghi outbox (id, eventType, payload, aggregateId, aggregateType) |
+| `OUTBOX_STORE` (DI token) | NestJS injection token — service bind implementation vào đây |
+
+```typescript
+// Service cung cấp adapter Prisma cho schema riêng
+@Module({
+  providers: [
+    {
+      provide: OUTBOX_STORE,
+      useFactory: (prisma: PrismaService) => ({
+        async fetchUnpublished(limit: number) {
+          return prisma.outbox.findMany({
+            where: { publishedAt: null },
+            orderBy: { createdAt: 'asc' },
+            take: limit,
+          });
+        },
+        async markPublished(id: string) {
+          await prisma.outbox.update({
+            where: { id },
+            data: { publishedAt: new Date() },
+          });
+        },
+      }),
+      inject: [PrismaService],
+    },
+    OutboxWorkerService,
+  ],
+})
+export class MessagingModule {}
+```
+
+**Dependency Inversion (SOLID "D")**: Worker không biết Prisma. Mỗi service tự cung cấp adapter nhỏ implement `OutboxStore` → worker dùng được với mọi schema.
+
 ---
 
 ## 6. Event-Driven Architecture — Kiến trúc hướng sự kiện
@@ -455,6 +500,17 @@ flowchart LR
 | Reserve → Confirm | Inventory | `inventory.reserved` | Order | Continue saga → credit check |
 | Reserve → Fail | Inventory | `inventory.reservation-failed` | Order | Mark order failed |
 | Cancel → Release | Order | `order.cancelled` | Inventory | Release stock |
+
+### PubSubPublisher trong `@erp/shared`
+
+`PubSubPublisher` (injectable) lo kỹ thuật publish, tách khỏi Outbox Worker (Single Responsibility):
+
+| Tính năng | Chi tiết |
+|---|---|
+| **Topic auto-creation** | Lần đầu gặp topic → `topic.exists()` → nếu chưa có thì `topic.create()` |
+| **Topic cache** (`ensuredTopics`) | Sau lần đầu, publish thẳng — không gọi `exists()` lại |
+| **Zero-config GCP** | Dev: tự kết nối emulator qua `PUBSUB_EMULATOR_HOST`. Production: bỏ env → kết nối Pub/Sub thật, không đổi code |
+| **Serialization** | Payload → `JSON.stringify()` → `Buffer` → Pub/Sub message |
 
 ---
 
@@ -817,21 +873,325 @@ flowchart TB
 
 ---
 
+## 12. Idempotent Consumer — Xử lý message trùng lặp
+
+### Giải thích
+
+**Idempotent Consumer** (Consumer lũy đẳng) đảm bảo rằng dù message được gửi đến **nhiều hơn 1 lần**, consumer chỉ **xử lý đúng 1 lần**. Đây là pattern bắt buộc khi dùng message broker vì không có broker nào đảm bảo exactly-once delivery cho side-effects bên ngoài.
+
+### Vấn đề nó giải quyết
+
+| Không có Idempotency | Có Idempotent Consumer |
+|---|---|
+| Message `order.submitted` đến 2 lần → reserve stock **gấp đôi** | Message đến 2 lần → chỉ reserve **1 lần** |
+| Pub/Sub redeliver khi ack timeout → xử lý trùng | Redeliver → phát hiện đã xử lý → bỏ qua |
+| Outbox worker crash → publish lại → duplicate | Worker publish lại → consumer dedup → an toàn |
+
+### Cơ chế Dedup bằng Redis
+
+```mermaid
+flowchart TB
+    MSG["Message đến\n(eventId = abc-123)"] --> CHECK{"Redis: SET processed:abc-123\n'1' NX EX 86400"}
+    CHECK -- "OK (lần đầu)" --> RUN["Chạy handler"]
+    CHECK -- "null (đã có)" --> SKIP["Bỏ qua"]
+    RUN -- "throw error" --> DEL["Xoá key\n→ cho phép retry"]
+    RUN -- "thành công" --> DONE["return true"]
+```
+
+- **`NX`** (Not eXists): chỉ set nếu key chưa tồn tại → atomic race-safe
+- **`EX 86400`**: tự expire sau 1 ngày → không phình Redis vô hạn
+- **Retry-safe**: nếu handler throw → xoá key → Pub/Sub redeliver → xử lý lại
+
+### Code minh họa
+
+```typescript
+import { withIdempotency } from '@erp/shared';
+
+// Trong event subscriber:
+async handleOrderSubmitted(message: Message): Promise<void> {
+  const payload = JSON.parse(message.data.toString());
+  const eventId = payload._meta?.eventId ?? message.id;
+
+  const processed = await withIdempotency(
+    this.redis,
+    eventId,
+    async () => {
+      // Business logic — chỉ chạy đúng 1 lần
+      await this.reserveStock(payload);
+    },
+  );
+
+  if (!processed) {
+    this.logger.debug(`Event ${eventId} đã xử lý trước đó — bỏ qua`);
+  }
+
+  message.ack();
+}
+```
+
+### Áp dụng trong project
+
+| Service | Dùng khi | eventId lấy từ |
+|---|---|---|
+| Inventory | Nhận `order.submitted`, `order.cancelled` | `payload._meta.eventId` hoặc `message.id` |
+| Order | Nhận `inventory.reserved`, `inventory.reservation-failed` | `payload._meta.eventId` hoặc `message.id` |
+
+> **Liên hệ Outbox**: Outbox đảm bảo event **chắc chắn được gửi** (reliability ở producer). Idempotent Consumer đảm bảo event **chỉ xử lý 1 lần** (safety ở consumer). Hai pattern **bổ trợ nhau**.
+
+---
+
+## 13. Cache-Aside — Cache lazy loading
+
+### Giải thích
+
+**Cache-Aside** (Lazy Loading Cache) là strategy mà application tự quản lý cache: đọc cache trước, nếu miss thì đọc DB rồi ghi vào cache. Khi data thay đổi, application invalidate cache.
+
+### Vấn đề nó giải quyết
+
+| Không có Cache | Có Cache-Aside |
+|---|---|
+| Mỗi request → query DB | Request lặp lại → trả từ cache (~1ms) |
+| DB chịu tải toàn bộ read | DB chỉ chịu cache miss |
+| Latency cao cho data ít thay đổi | Latency thấp, TTL tự expire |
+
+### Sơ đồ
+
+```mermaid
+flowchart TB
+    REQ["GET /customers/:id"] --> C{"Cache hit?"}
+    C -- "Hit" --> RET["Trả từ cache"]
+    C -- "Miss" --> DB["Query DB"]
+    DB --> WC["Ghi vào cache\n(TTL 5 phút)"]
+    WC --> RET
+
+    UPD["PUT /customers/:id"] --> WDB["Ghi DB"]
+    WDB --> INV["Invalidate cache\n(del key)"]
+```
+
+### Code minh họa
+
+```typescript
+import { RedisCacheService } from '@erp/shared';
+
+class CustomerQueryService {
+  constructor(
+    private cache: RedisCacheService,
+    private repo: ICustomerRepository,
+  ) {}
+
+  // READ — Cache-Aside
+  async getCustomer(id: string): Promise<Customer> {
+    const cacheKey = `customer:${id}`;
+
+    // 1. Check cache
+    const cached = await this.cache.get<Customer>(cacheKey);
+    if (cached) return cached;
+
+    // 2. Cache miss → query DB
+    const customer = await this.repo.findById(id);
+    if (!customer) throw new NotFoundException();
+
+    // 3. Populate cache (TTL 300s)
+    await this.cache.set(cacheKey, customer);
+    return customer;
+  }
+
+  // WRITE — Invalidate
+  async updateCustomer(id: string, data: UpdateDto): Promise<Customer> {
+    const updated = await this.repo.save(id, data);
+
+    // Invalidate cache cũ
+    await this.cache.del(`customer:${id}`);
+    // Invalidate search results liên quan
+    await this.cache.invalidatePattern('customers:search:*');
+
+    return updated;
+  }
+}
+```
+
+### API Reference — `RedisCacheService`
+
+| Method | Mô tả | Khi nào dùng |
+|---|---|---|
+| `get<T>(key)` | Đọc cache, trả `T \| null` | Đầu mỗi read operation |
+| `set(key, value, ttl?)` | Ghi cache với TTL (mặc định 300s) | Sau khi query DB thành công |
+| `del(key)` | Xoá 1 key | Sau write operation (invalidate) |
+| `invalidatePattern(pattern)` | Xoá nhiều key theo glob pattern (dùng SCAN) | Invalidate search/list cache |
+| `getClient()` | Trả client Redis thô | Dùng cho `withIdempotency()` |
+| `ping()` | Health check Redis | Dùng trong `HealthController` |
+
+> **Lưu ý**: Cache lỗi **không crash app** — tất cả method catch error, log warning, và fallback (trả `null` hoặc skip). Cache là tối ưu, không phải yêu cầu.
+
+### Áp dụng trong project
+
+| Service | Cache key pattern | TTL | Invalidate khi |
+|---|---|---|---|
+| Customer | `customer:{id}`, `customers:search:*` | 300s | Create, update, delete |
+| Order | `order:{id}` | 300s | Status change |
+| Inventory | `stock:{itemId}:{warehouseId}` | 60s | Reserve, release, inbound, outbound |
+
+---
+
+## 14. Observability Primitives — Truy vết, log, health, metrics
+
+### Giải thích
+
+**Observability** là khả năng hiểu hệ thống đang hoạt động thế nào từ bên ngoài. Trong microservices, 1 request đi qua nhiều services → cần 4 primitives để theo dõi.
+
+### Vấn đề nó giải quyết
+
+| Không có Observability | Có Observability |
+|---|---|
+| Log text thường, không biết thuộc request nào | JSON log có `correlationId` → grep 1 ID thấy cả saga |
+| `console.log()` → không cấu trúc | Structured logger → dễ filter trong ELK/Loki |
+| Không biết service health | `/health` → orchestrator tự biết service nào down |
+| Không biết throughput/latency | `/metrics` → Prometheus scrape → Grafana dashboard |
+
+### 4 Thành phần
+
+```mermaid
+flowchart LR
+    subgraph Observability Primitives
+        COR["1. Correlation ID"]
+        LOG["2. Structured Logger"]
+        HLT["3. Health Check"]
+        MET["4. Metrics"]
+    end
+
+    COR --> LOG
+    LOG --> HLT
+    HLT --> MET
+```
+
+### 14.1. Correlation ID — Truy vết xuyên service
+
+Mỗi request/luồng nghiệp vụ được gắn 1 `correlationId` duy nhất. ID này lan truyền qua HTTP headers và event metadata → grep 1 ID thấy toàn bộ lifecycle xuyên 4 services.
+
+```mermaid
+sequenceDiagram
+    participant GW as Gateway
+    participant OS as Order Service
+    participant PS as Pub/Sub
+    participant IS as Inventory Service
+
+    GW->>OS: x-correlation-id: abc-123
+    Note over OS: AsyncLocalStorage lưu abc-123
+    OS->>OS: Logger tự đính abc-123
+    OS->>OS: Outbox ghi _meta.correlationId = abc-123
+    OS->>PS: order.submitted (correlationId: abc-123)
+    PS->>IS: Deliver message
+    Note over IS: runWithCorrelation("abc-123", handler)
+    IS->>IS: Logger tự đính abc-123
+```
+
+**Cơ chế**: `AsyncLocalStorage` (Node.js) — "biến toàn cục theo ngữ cảnh async". Mỗi request chạy trong store riêng chứa `correlationId`; mọi code async bên trong (kể cả logger) đọc được ID đó mà KHÔNG cần truyền tay qua từng hàm.
+
+| Export | Vai trò |
+|---|---|
+| `CorrelationMiddleware` | NestJS middleware: đọc `x-correlation-id` từ header (hoặc sinh UUID mới) → chạy request trong ngữ cảnh |
+| `getCorrelationId()` | Lấy correlationId hiện tại (gọi ở bất kỳ đâu trong request) |
+| `runWithCorrelation(id, fn)` | Chạy `fn` trong ngữ cảnh có correlationId — dùng ở event subscriber |
+| `CORRELATION_HEADER` | Tên header: `x-correlation-id` |
+
+### 14.2. Structured Logger — JSON log có correlationId
+
+```typescript
+// Output mỗi dòng log:
+{"level":"info","time":"2025-01-15T10:30:00Z","context":"OrderService","correlationId":"abc-123","msg":"Order submitted"}
+```
+
+| Tính năng | Chi tiết |
+|---|---|
+| JSON format | Dễ parse bằng ELK, Loki, CloudWatch |
+| Auto correlationId | Tự lấy từ `AsyncLocalStorage` — không cần truyền tay |
+| NestJS compatible | Implement `LoggerService` → `app.useLogger(new StructuredLogger())` |
+| Stream tách biệt | `error`/`warn` → stderr, còn lại → stdout |
+
+### 14.3. Health Check — Endpoint `/health`
+
+```json
+// GET /health → 200
+{"status":"ok","time":"2025-01-15T10:30:00Z","checks":[{"name":"postgres","ok":true},{"name":"redis","ok":true}]}
+
+// GET /health → 503 (khi dependency down)
+{"status":"down","time":"2025-01-15T10:30:00Z","checks":[{"name":"postgres","ok":true},{"name":"redis","ok":false}]}
+```
+
+**Dependency Inversion**: `HealthController` KHÔNG biết Prisma/Redis cụ thể. Service đăng ký mảng `HealthIndicator` (mỗi cái 1 hàm `check()`) qua token `HEALTH_INDICATORS`.
+
+```typescript
+// Service đăng ký health indicators
+@Module({
+  providers: [
+    {
+      provide: HEALTH_INDICATORS,
+      useFactory: (prisma: PrismaService, redis: RedisCacheService) => [
+        { name: 'postgres', check: () => prisma.$queryRaw`SELECT 1`.then(() => true) },
+        { name: 'redis', check: () => redis.ping() },
+      ],
+      inject: [PrismaService, RedisCacheService],
+    },
+    HealthController,
+  ],
+})
+export class HealthModule {}
+```
+
+### 14.4. Metrics — Counter/Gauge + Prometheus
+
+```
+# GET /metrics → text/plain (Prometheus exposition format)
+# HELP events_published_total events_published_total
+# TYPE events_published_total counter
+events_published_total{event="customer.created"} 42
+
+# HELP outbox_pending outbox_pending
+# TYPE outbox_pending gauge
+outbox_pending 3
+```
+
+| Export | Vai trò |
+|---|---|
+| `MetricsService` | Registry: `inc(name, labels)` cho counter, `setGauge(name, value)` cho gauge |
+| `MetricsController` | Endpoint `GET /metrics` trả Prometheus text format |
+
+| Metric quan trọng | Type | Ý nghĩa |
+|---|---|---|
+| `events_published_total` | counter | Số event đã publish (theo event type) |
+| `events_consumed_total` | counter | Số event đã xử lý |
+| `events_publish_failed_total` | counter | Số event publish thất bại |
+| `outbox_pending` | gauge | Số event tồn đọng trong outbox (chưa publish) |
+
+### Áp dụng trong project
+
+| Primitive | Dùng bởi | Setup |
+|---|---|---|
+| CorrelationMiddleware | Tất cả services | `app.use(CorrelationMiddleware)` |
+| StructuredLogger | Tất cả services | `app.useLogger(new StructuredLogger())` |
+| HealthController | Tất cả services | Bind `HEALTH_INDICATORS` trong module |
+| MetricsService | Tất cả services | Inject + gọi `inc()`/`setGauge()` tại các điểm quan trọng |
+
+---
+
 ## Tổng hợp — Patterns × Services
 
-| Pattern | Auth | Customer | Order | Inventory | Gateway |
-|---|:---:|:---:|:---:|:---:|:---:|
-| DDD Layers | — | ✅ | ✅ | ✅ | — |
-| Repository | — | ✅ | ✅ | ✅ | — |
-| Value Object | — | ✅ | — | — | — |
-| Aggregate Root | — | — | ✅ | — | — |
-| Outbox | — | ✅ | ✅ | ✅ | — |
-| Event-Driven | — | ✅ | ✅ | ✅ | — |
-| CQRS | — | — | ✅ | — | — |
-| Saga | — | — | ✅ | ✅ | — |
-| Optimistic Lock | — | — | — | ✅ | — |
-| API Gateway | — | — | — | — | ✅ |
-| RBAC + JWT | ✅ | — | — | — | ✅ |
+| Pattern | Auth | Customer | Order | Inventory | Gateway | `@erp/shared` |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| DDD Layers | — | ✅ | ✅ | ✅ | — | — |
+| Repository | — | ✅ | ✅ | ✅ | — | — |
+| Value Object | — | ✅ | — | — | — | — |
+| Aggregate Root | — | — | ✅ | — | — | — |
+| Outbox | — | ✅ | ✅ | ✅ | — | ✅ Worker generic |
+| Event-Driven | — | ✅ | ✅ | ✅ | — | ✅ PubSubPublisher |
+| CQRS | — | — | ✅ | — | — | — |
+| Saga | — | — | ✅ | ✅ | — | — |
+| Optimistic Lock | — | — | — | ✅ | — | — |
+| API Gateway | — | — | — | — | ✅ | — |
+| RBAC + JWT | ✅ | — | — | — | ✅ | — |
+| Idempotent Consumer | — | — | ✅ | ✅ | — | ✅ `withIdempotency()` |
+| Cache-Aside | — | ✅ | ✅ | ✅ | — | ✅ `RedisCacheService` |
+| Observability | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 4 primitives |
 
 ---
 
