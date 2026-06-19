@@ -1,29 +1,24 @@
 // =============================================================================
 // PRISMA SCHEMA — Customer Service
 // =============================================================================
-// Sử dụng preview feature "multiSchema" để mỗi service có schema riêng
-// trên cùng 1 database Supabase PostgreSQL.
+// Prisma v7: url/directUrl đã chuyển sang prisma.config.ts
+// Schema này chỉ khai báo provider, models, và schemas.
+//
 // Customer Service sở hữu schema "customer" với 2 bảng:
 //   1. cores     — Lưu thông tin khách hàng (aggregate root)
 //   2. outbox    — Outbox Pattern để đảm bảo event được gửi đi đáng tin cậy
 
 datasource db {
-  // Sử dụng PostgreSQL driver kết nối tới Supabase
+  // PostgreSQL driver — kết nối Supabase
   provider  = "postgresql"
 
-  // DATABASE_URL: kết nối qua Supabase Pooler (port 6543) — dùng cho runtime
-  url       = env("DATABASE_URL")
-
-  // DIRECT_URL: kết nối trực tiếp tới DB (port 5432) — dùng cho migrations
-  directUrl = env("DIRECT_URL")
-
-  // Khai báo danh sách schema mà Prisma quản lý
-  // Mỗi service chỉ quản lý schema của riêng mình, không truy cập schema khác
+  // Danh sách schema mà service này quản lý
+  // Mỗi service chỉ quản lý schema của riêng mình
   schemas   = ["customer"]
 }
 
 generator client {
-  // Sử dụng Prisma Client JS mặc định
+  // Prisma Client JS mặc định
   provider        = "prisma-client-js"
 
   // Bật multiSchema để hỗ trợ nhiều schema trên 1 database
@@ -97,22 +92,18 @@ model Outbox {
   // Loại event (vd: "customer.created", "customer.updated")
   eventType     String    @map("event_type")
 
-  // Payload chứa dữ liệu event dạng JSON — linh hoạt cho mọi loại event
+  // Payload chứa dữ liệu event dạng JSON
   payload       Json
 
   // Thời điểm event được tạo
   createdAt     DateTime  @default(now()) @map("created_at")
 
-  // Thời điểm event được publish thành công lên Pub/Sub
   // NULL = chưa được publish → worker sẽ xử lý
   publishedAt   DateTime? @map("published_at")
 
-  // Index trên published_at để worker query nhanh các event chưa publish
-  // WHERE published_at IS NULL sẽ sử dụng index này
+  // Index để worker query nhanh các event chưa publish
   @@index([publishedAt], map: "idx_outbox_unpublished")
 
-  // Map model name sang tên bảng "outbox" trong DB
   @@map("outbox")
-  // Đặt vào schema "customer"
   @@schema("customer")
 }

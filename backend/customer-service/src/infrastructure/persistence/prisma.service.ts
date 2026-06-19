@@ -1,43 +1,53 @@
-// =============================================================================
-// PRISMA SERVICE — Kết nối database PostgreSQL qua Prisma ORM
-// =============================================================================
-// PrismaService wrap PrismaClient, tích hợp vào NestJS lifecycle:
-// - onModuleInit:    tự động kết nối DB khi module khởi tạo
-// - onModuleDestroy: tự động đóng kết nối khi module bị hủy (graceful shutdown)
-//
-// Đánh dấu @Global() để tất cả module trong app đều dùng chung 1 instance,
-// không cần import lại ở mỗi module con.
-
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+/**
+ * PrismaService — Quản lý kết nối database (Infrastructure Layer)
+ *
+ * Prisma v7 yêu cầu sử dụng Driver Adapter thay vì url trong schema.prisma.
+ * PrismaPg adapter cung cấp kết nối trực tiếp tới PostgreSQL.
+ *
+ * Lifecycle:
+ *   - onModuleInit: kết nối DB khi NestJS module khởi tạo
+ *   - onModuleDestroy: ngắt kết nối khi module bị destroy (graceful shutdown)
+ *
+ * Global scope: được đánh dấu @Global() để các module khác inject được
+ * mà không cần import lại.
+ */
+import { Injectable, OnModuleInit, OnModuleDestroy, Global } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
+@Global()
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
-  // Logger riêng cho PrismaService — giúp phân biệt log từ DB connection
-  private readonly logger = new Logger(PrismaService.name);
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    // Prisma v7: tạo adapter với connection string từ environment
+    // Adapter quản lý connection pool thay vì Prisma quản lý trực tiếp
+    // RUNTIME_DATABASE_URL (port 6543, pooled) cho app runtime
+    // Fallback sang DATABASE_URL (port 5432, direct) nếu chưa set
+    const connectionString = process.env.RUNTIME_DATABASE_URL || process.env.DATABASE_URL;
 
-  /**
-   * NestJS lifecycle hook — được gọi khi module khởi tạo xong.
-   * Kết nối tới PostgreSQL database trên Supabase.
-   * Nếu kết nối thất bại, NestJS sẽ throw error và app không khởi động.
-   */
-  async onModuleInit(): Promise<void> {
-    this.logger.log('Đang kết nối tới PostgreSQL (Supabase)...');
-    await this.$connect();
-    this.logger.log('Kết nối PostgreSQL thành công ✅');
+    if (!connectionString) {
+      throw new Error('DATABASE_URL chưa được set trong environment');
+    }
+
+    const adapter = new PrismaPg({ connectionString });
+
+    // Truyền adapter vào PrismaClient — Prisma v7 bắt buộc
+    super({ adapter });
   }
 
   /**
-   * NestJS lifecycle hook — được gọi khi module bị hủy (app shutdown).
-   * Đóng connection pool để giải phóng tài nguyên.
-   * Quan trọng trong production để tránh connection leak.
+   * Kết nối database khi NestJS module khởi tạo.
+   * NestJS tự động gọi method này nhờ implement OnModuleInit.
+   */
+  async onModuleInit(): Promise<void> {
+    await this.$connect();
+  }
+
+  /**
+   * Ngắt kết nối khi module bị destroy.
+   * Đảm bảo không leak connection khi service shutdown.
    */
   async onModuleDestroy(): Promise<void> {
-    this.logger.log('Đang đóng kết nối PostgreSQL...');
     await this.$disconnect();
-    this.logger.log('Đã đóng kết nối PostgreSQL ✅');
   }
 }

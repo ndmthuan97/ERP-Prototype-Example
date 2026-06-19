@@ -1,24 +1,33 @@
+/**
+ * Entry point — Customer Service
+ *
+ * Service này quản lý Bounded Context "Customer" trong kiến trúc DDD:
+ * - CRUD khách hàng (tạo, đọc, sửa, xóa mềm)
+ * - Kiểm tra tín dụng (credit check) cho Order Service
+ * - Publish domain events qua Outbox pattern → Pub/Sub
+ *
+ * Port: 3001 (cấu hình trong .env)
+ * Kiến trúc: DDD 4 layers (domain → application → infrastructure → presentation)
+ */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
-/**
- * Khởi động Customer Service
- * - Port 3001 (hoặc PORT từ env)
- * - Service này quản lý bounded context "Customer":
- *   + CRUD khách hàng
- *   + Kiểm tra tín dụng (credit check)
- *   + Phát event qua Pub/Sub khi có thay đổi
- */
+/** Port mặc định — Customer Service */
+const DEFAULT_PORT = 3001;
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Lấy port từ biến môi trường, mặc định 3001
-  // Mỗi service chạy port riêng để không conflict
-  const port = process.env.CUSTOMER_SERVICE_PORT ?? 3001;
+  // CORS — cho phép frontend (Next.js :3000) gọi API
+  // Production sẽ đi qua API Gateway, không cần CORS trực tiếp
+  app.enableCors();
 
+  const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
   await app.listen(port);
 
-  // Log ra console để biết service đã sẵn sàng
-  console.log(`🟢 Customer Service đang chạy tại: http://localhost:${port}`);
+  console.log(`🚀 Customer Service đang chạy tại http://localhost:${port}`);
+  console.log(`📁 Kiến trúc: DDD (domain → application → infrastructure → presentation)`);
+  console.log(`📦 Bounded Context: Customer`);
 }
+
 bootstrap();
