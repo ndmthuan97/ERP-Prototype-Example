@@ -1,0 +1,9 @@
+{
+  "name": "erp-scripts",
+  "private": true,
+  "description": "One-time setup scripts cho ERP prototype",
+  "dependencies": {
+    "pg": "^8.13.0",
+    "dotenv": "^16.4.0"
+  }
+}
