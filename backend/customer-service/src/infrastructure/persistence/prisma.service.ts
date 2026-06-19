@@ -14,22 +14,18 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Global } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+// Helper lấy connection string dùng chung mọi service (@erp/shared) — DRY
+import { resolveConnectionString } from '@erp/shared';
 
 @Global()
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    // Prisma v7: tạo adapter với connection string từ environment
-    // Adapter quản lý connection pool thay vì Prisma quản lý trực tiếp
-    // RUNTIME_DATABASE_URL (port 6543, pooled) cho app runtime
-    // Fallback sang DATABASE_URL (port 5432, direct) nếu chưa set
-    const connectionString = process.env.RUNTIME_DATABASE_URL || process.env.DATABASE_URL;
-
-    if (!connectionString) {
-      throw new Error('DATABASE_URL chưa được set trong environment');
-    }
-
-    const adapter = new PrismaPg({ connectionString });
+    // Prisma v7: tạo adapter với connection string từ environment.
+    // Adapter quản lý connection pool thay vì Prisma quản lý trực tiếp.
+    // Logic chọn RUNTIME_DATABASE_URL (pooled) / DATABASE_URL (direct) đã rút lên
+    // @erp/shared (resolveConnectionString) — mọi service dùng chung, không lặp.
+    const adapter = new PrismaPg({ connectionString: resolveConnectionString() });
 
     // Truyền adapter vào PrismaClient — Prisma v7 bắt buộc
     super({ adapter });

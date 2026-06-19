@@ -18,7 +18,7 @@ import {
   CUSTOMER_REPOSITORY,
   type ICustomerRepository,
 } from '../../domain/repositories/index.js';
-import { RedisCacheService } from '../../infrastructure/cache/redis-cache.service.js';
+import { RedisCacheService } from '@erp/shared';
 
 @Injectable()
 export class DeleteCustomerCommand {

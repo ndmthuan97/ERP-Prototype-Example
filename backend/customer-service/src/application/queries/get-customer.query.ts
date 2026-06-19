@@ -18,7 +18,7 @@ import {
   CUSTOMER_REPOSITORY,
   type ICustomerRepository,
 } from '../../domain/repositories/index.js';
-import { RedisCacheService } from '../../infrastructure/cache/redis-cache.service.js';
+import { RedisCacheService } from '@erp/shared';
 
 /** Prefix cho cache key — tổ chức key theo namespace */
 const CACHE_KEY_PREFIX = 'customer';

@@ -1,0 +1,14 @@
+{
+  "name": "erp-backend",
+  "version": "0.0.1",
+  "description": "ERP backend — 5 NestJS services + @erp/shared. Script orchestrator (KHÔNG dùng npm workspaces: mỗi service có Prisma Client riêng, hoisting sẽ làm đụng độ generated client → mỗi service giữ node_modules độc lập, dùng @erp/shared qua 'file:../shared').",
+  "private": true,
+  "scripts": {
+    "build:shared": "npm run build --prefix shared",
+    "typecheck:shared": "npm run typecheck --prefix shared",
+    "install:shared": "npm install --prefix shared",
+    "install:customer": "npm install --prefix customer-service",
+    "dev:customer": "npm run start:dev --prefix customer-service",
+    "test:customer": "npm test --prefix customer-service"
+  }
+}

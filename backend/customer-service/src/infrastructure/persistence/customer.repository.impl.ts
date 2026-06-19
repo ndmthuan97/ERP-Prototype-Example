@@ -23,6 +23,16 @@ import type {
   PaginatedResult,
 } from '../../domain/repositories/index.js';
 import { PrismaService } from './prisma.service.js';
+// Event names typed + correlationId để truy vết — dùng chung từ @erp/shared
+import { EVENT, getCorrelationId } from '@erp/shared';
+
+/** Tạo metadata truy vết đính kèm mọi event (correlationId xuyên saga) */
+function buildEventMeta() {
+  return {
+    correlationId: getCorrelationId() ?? null,
+    occurredAt: new Date().toISOString(),
+  };
+}
 
 // ---- Type alias cho Prisma model — tránh lặp lại kiểu dài dòng ----
 
@@ -226,7 +236,7 @@ export class PrismaCustomerRepository implements ICustomerRepository {
       where: { id: customer.id },
     });
     const isCreating = !existing;
-    const eventType = isCreating ? 'customer.created' : 'customer.updated';
+    const eventType = isCreating ? EVENT.CUSTOMER_CREATED : EVENT.CUSTOMER_UPDATED;
 
     // Transaction đảm bảo upsert + outbox ghi cùng lúc (all-or-nothing)
     const result = await this.prisma.$transaction(async (tx) => {
@@ -258,6 +268,8 @@ export class PrismaCustomerRepository implements ICustomerRepository {
             status: upsertedRecord.status,
             creditLimitAmount: upsertedRecord.creditLimitAmount?.toString() ?? null,
             creditUsedAmount: upsertedRecord.creditUsedAmount.toString(),
+            // Metadata truy vết — correlationId để grep cả vòng đời xuyên service
+            _meta: buildEventMeta(),
           },
         },
       });
@@ -300,11 +312,12 @@ export class PrismaCustomerRepository implements ICustomerRepository {
           id: uuidv4(),
           aggregateType: 'Customer',
           aggregateId: customer.id,
-          eventType: 'customer.deleted',
+          eventType: EVENT.CUSTOMER_DELETED,
           payload: {
             id: customer.id,
             businessName: customer.businessName,
             deletedAt: customer.deletedAt?.toISOString() ?? null,
+            _meta: buildEventMeta(),
           },
         },
       });
