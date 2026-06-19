@@ -7,6 +7,47 @@
 
 ---
 
+## 0. Nguyên tắc nền tảng — Clean Code & SOLID
+
+> Toàn bộ code trong dự án phải tuân thủ 2 bộ nguyên tắc này. Đây là yêu cầu **bắt buộc**, không phải khuyến nghị.
+
+### Clean Code
+
+| Nguyên tắc | Ví dụ Sai ❌ | Ví dụ Đúng ✅ |
+|---|---|---|
+| **Tên rõ nghĩa** | `const d = getD()` | `const customer = getCustomerById(id)` |
+| **Hàm làm 1 việc** | `createAndSendEmail()` | `create()` rồi `sendEmail()` riêng |
+| **Hàm ngắn (≤ 30 dòng)** | 1 hàm 80 dòng | Tách thành 3-4 hàm nhỏ |
+| **Không magic number** | `if (role === 3)` | `if (role === ROLE.STAFF)` |
+| **Early return** | `if (ok) { ...100 dòng... } else { throw }` | `if (!ok) throw ...; ...tiếp tục...` |
+| **DRY** | Copy-paste validation 3 chỗ | Tách thành `validateTaxCode()` dùng chung |
+
+### SOLID
+
+| Nguyên tắc | Áp dụng trong dự án |
+|---|---|
+| **S** — Single Responsibility | `CreateCustomerCommand` chỉ tạo customer. Không validate JWT hay gửi email. |
+| **O** — Open/Closed | Thêm status mới → thêm handler, không sửa code cũ. |
+| **L** — Liskov Substitution | `PrismaCustomerRepository` thay thế được `ICustomerRepository` ở mọi nơi. |
+| **I** — Interface Segregation | `ICustomerRepository` tách khỏi `IOutboxRepository` — không gộp chung. |
+| **D** — Dependency Inversion | Command inject `ICustomerRepository` (interface), không inject `PrismaCustomerRepository` (implementation). |
+
+### Áp dụng theo DDD layer
+
+```mermaid
+flowchart LR
+    Controller["Controller"] -- "inject" --> Command["Command/Query"]
+    Command -- "inject interface" --> IRepo["IRepository"]
+    PrismaRepo["PrismaRepository"] -. "implements" .-> IRepo
+```
+
+- **Domain**: Entity thuần TypeScript, không import NestJS/Prisma → **S**, **D**
+- **Application**: Mỗi Command/Query = 1 use case → **S**, **I**
+- **Infrastructure**: Implement domain interfaces → **D**, **L**
+- **Presentation**: Controller chỉ nhận request, delegate cho Application → **S**
+
+---
+
 ## 1. DDD Folder Structure — Cấu trúc thư mục theo Domain-Driven Design
 
 Mỗi service tuân theo cấu trúc 4 tầng DDD. Đây là quy ước **bắt buộc** — tất cả code mới phải đặt đúng vị trí.

@@ -1,0 +1,118 @@
+// =============================================================================
+// PRISMA SCHEMA — Customer Service
+// =============================================================================
+// Sử dụng preview feature "multiSchema" để mỗi service có schema riêng
+// trên cùng 1 database Supabase PostgreSQL.
+// Customer Service sở hữu schema "customer" với 2 bảng:
+//   1. cores     — Lưu thông tin khách hàng (aggregate root)
+//   2. outbox    — Outbox Pattern để đảm bảo event được gửi đi đáng tin cậy
+
+datasource db {
+  // Sử dụng PostgreSQL driver kết nối tới Supabase
+  provider  = "postgresql"
+
+  // DATABASE_URL: kết nối qua Supabase Pooler (port 6543) — dùng cho runtime
+  url       = env("DATABASE_URL")
+
+  // DIRECT_URL: kết nối trực tiếp tới DB (port 5432) — dùng cho migrations
+  directUrl = env("DIRECT_URL")
+
+  // Khai báo danh sách schema mà Prisma quản lý
+  // Mỗi service chỉ quản lý schema của riêng mình, không truy cập schema khác
+  schemas   = ["customer"]
+}
+
+generator client {
+  // Sử dụng Prisma Client JS mặc định
+  provider        = "prisma-client-js"
+
+  // Bật multiSchema để hỗ trợ nhiều schema trên 1 database
+  previewFeatures = ["multiSchema"]
+}
+
+// =============================================================================
+// MODEL: CustomerCore — Aggregate Root của bounded context "Customer"
+// =============================================================================
+// Bảng này lưu toàn bộ thông tin cốt lõi của khách hàng.
+// Áp dụng soft delete thông qua trường deletedAt (không xóa vật lý).
+// creditLimitAmount và creditUsedAmount dùng để kiểm tra tín dụng (credit check)
+// trước khi cho phép đặt hàng.
+model CustomerCore {
+  // ID dạng UUID, tự động sinh bởi PostgreSQL
+  id                  String    @id @default(uuid())
+
+  // Tên doanh nghiệp / tên khách hàng — trường bắt buộc
+  businessName        String    @map("business_name")
+
+  // Mã số thuế — tùy chọn, dùng để định danh pháp lý
+  taxCode             String?   @map("tax_code")
+
+  // Trạng thái khách hàng: prospect | active | suspended | archived
+  // Mặc định "active" khi tạo mới
+  status              String    @default("active")
+
+  // Hạn mức tín dụng tối đa (VND) — nullable vì không phải KH nào cũng có
+  // Decimal(15,2) cho phép lưu tới 999,999,999,999,999.99
+  creditLimitAmount   Decimal?  @map("credit_limit_amount") @db.Decimal(15, 2)
+
+  // Số tín dụng đã sử dụng — mặc định 0 khi tạo mới
+  creditUsedAmount    Decimal   @default(0) @map("credit_used_amount") @db.Decimal(15, 2)
+
+  // Thông tin liên hệ — tất cả đều tùy chọn
+  contactName         String?   @map("contact_name")
+  contactPhone        String?   @map("contact_phone")
+  contactEmail        String?   @map("contact_email")
+
+  // Timestamps — createdAt tự động set khi INSERT, updatedAt tự động cập nhật
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  // Soft delete: nếu deletedAt != null → khách hàng đã bị "xóa" (archived)
+  deletedAt           DateTime? @map("deleted_at")
+
+  // Map model name "CustomerCore" sang tên bảng "cores" trong DB
+  @@map("cores")
+  // Đặt bảng này vào schema "customer"
+  @@schema("customer")
+}
+
+// =============================================================================
+// MODEL: Outbox — Outbox Pattern cho Event-Driven Architecture
+// =============================================================================
+// Thay vì publish event trực tiếp lên Pub/Sub (có thể thất bại),
+// ta ghi event vào bảng outbox trong cùng transaction với business data.
+// Một worker riêng sẽ poll bảng này và publish lên Pub/Sub,
+// sau đó đánh dấu published_at để biết event đã được gửi thành công.
+// Pattern này đảm bảo "at-least-once" delivery.
+model Outbox {
+  // ID dạng UUID cho mỗi event
+  id            String    @id @default(uuid())
+
+  // Loại aggregate phát ra event (vd: "Customer")
+  aggregateType String    @map("aggregate_type")
+
+  // ID của aggregate liên quan (vd: customer ID)
+  aggregateId   String    @map("aggregate_id")
+
+  // Loại event (vd: "customer.created", "customer.updated")
+  eventType     String    @map("event_type")
+
+  // Payload chứa dữ liệu event dạng JSON — linh hoạt cho mọi loại event
+  payload       Json
+
+  // Thời điểm event được tạo
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  // Thời điểm event được publish thành công lên Pub/Sub
+  // NULL = chưa được publish → worker sẽ xử lý
+  publishedAt   DateTime? @map("published_at")
+
+  // Index trên published_at để worker query nhanh các event chưa publish
+  // WHERE published_at IS NULL sẽ sử dụng index này
+  @@index([publishedAt], map: "idx_outbox_unpublished")
+
+  // Map model name sang tên bảng "outbox" trong DB
+  @@map("outbox")
+  // Đặt vào schema "customer"
+  @@schema("customer")
+}
