@@ -1,75 +1,107 @@
-# 🏛️ System Overview — Kiến trúc tổng quan
+# System Overview — Kiến trúc tổng quan
 
 > Tài liệu mô tả kiến trúc tổng thể của ERP Prototype.
 > Liên quan: [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
 
 ---
 
-## 1. Sơ đồ kiến trúc tổng thể
+## 1. Luồng Request — Frontend đến Backend
 
 ```mermaid
 flowchart TB
-    subgraph CLIENT["🌐 Client"]
-        Browser["Browser"]
-    end
+    Browser[Browser]
+    Frontend["Frontend :3000"]
+    Gateway["API Gateway :3010"]
 
-    subgraph FE["Frontend (:3000)"]
-        NextJS["Next.js 15<br/>Ant Design 5 + Tailwind CSS"]
-    end
-
-    subgraph GW["API Gateway (:3010)"]
-        Gateway["NestJS Gateway"]
-        JWTGuard["JWT Guard + RBAC"]
-    end
-
-    subgraph SERVICES["Backend Services"]
-        direction LR
-        Auth["Auth Service<br/>(:3004)"]
-        Customer["Customer Service<br/>(:3001)"]
-        Order["Order Service<br/>(:3002)"]
-        Inventory["Inventory Service<br/>(:3003)"]
-    end
-
-    subgraph INFRA["Infrastructure"]
-        direction LR
-        DB[("Supabase<br/>PostgreSQL<br/>4 schemas")]
-        Redis[("Upstash<br/>Redis")]
-        PubSub["GCP Pub/Sub<br/>Emulator<br/>(Docker)"]
-    end
-
-    Browser --> NextJS
-    NextJS -- "HTTP REST" --> Gateway
-    Gateway --> JWTGuard
-    JWTGuard -- "verify JWT" --> Auth
-    JWTGuard -- "forward" --> Customer
-    JWTGuard -- "forward" --> Order
-    JWTGuard -- "forward" --> Inventory
-
-    Auth --> DB
-    Customer --> DB
-    Order --> DB
-    Inventory --> DB
-
-    Customer -.-> Redis
-    Order -.-> Redis
-    Inventory -.-> Redis
-
-    Order -- "publish events" --> PubSub
-    Customer -- "publish events" --> PubSub
-    Inventory -- "publish events" --> PubSub
-    PubSub -- "subscribe" --> Order
-    PubSub -- "subscribe" --> Inventory
-
-    style CLIENT fill:#1a1a2e,stroke:#e94560,color:#fff
-    style FE fill:#16213e,stroke:#0f3460,color:#fff
-    style GW fill:#0f3460,stroke:#533483,color:#fff
-    style SERVICES fill:#533483,stroke:#e94560,color:#fff
-    style INFRA fill:#1a1a2e,stroke:#0f3460,color:#fff
+    Browser --> Frontend
+    Frontend -- "HTTP REST" --> Gateway
 ```
 
 ---
 
-## 2. Tech Stack
+## 2. API Gateway — Routing
+
+Gateway nhận request từ frontend → verify JWT → check role → forward đến service đúng.
+
+```mermaid
+flowchart TB
+    Gateway["API Gateway :3010"]
+
+    Auth["Auth Service :3004"]
+    Customer["Customer Service :3001"]
+    Order["Order Service :3002"]
+    Inventory["Inventory Service :3003"]
+
+    Gateway -- "/api/auth/*" --> Auth
+    Gateway -- "/api/customers/*" --> Customer
+    Gateway -- "/api/orders/*" --> Order
+    Gateway -- "/api/inventory/*" --> Inventory
+```
+
+---
+
+## 3. Services → Database
+
+Mỗi service có schema riêng trong cùng 1 Supabase PostgreSQL instance. Không cross-schema query.
+
+```mermaid
+flowchart TB
+    Auth["Auth Service :3004"]
+    Customer["Customer Service :3001"]
+    Order["Order Service :3002"]
+    Inventory["Inventory Service :3003"]
+
+    AuthDB["schema: auth"]
+    CustDB["schema: customer"]
+    OrdDB["schema: order"]
+    InvDB["schema: inventory"]
+
+    Auth --> AuthDB
+    Customer --> CustDB
+    Order --> OrdDB
+    Inventory --> InvDB
+```
+
+---
+
+## 4. Services → Pub/Sub (Event-driven)
+
+3 business services publish events qua outbox → Pub/Sub Emulator. Order và Inventory subscribe lẫn nhau (Saga).
+
+```mermaid
+flowchart LR
+    Customer["Customer Service"]
+    Order["Order Service"]
+    Inventory["Inventory Service"]
+    PubSub["Pub/Sub Emulator :8085"]
+
+    Customer -- "publish" --> PubSub
+    Order -- "publish" --> PubSub
+    Inventory -- "publish" --> PubSub
+
+    PubSub -. "subscribe" .-> Order
+    PubSub -. "subscribe" .-> Inventory
+```
+
+---
+
+## 5. Services → Redis (Cache)
+
+```mermaid
+flowchart LR
+    Customer["Customer Service"]
+    Order["Order Service"]
+    Inventory["Inventory Service"]
+    Redis["Upstash Redis"]
+
+    Customer -. "cache" .-> Redis
+    Order -. "cache" .-> Redis
+    Inventory -. "cache" .-> Redis
+```
+
+---
+
+## 6. Tech Stack
 
 | Layer | Công nghệ | Vai trò |
 |---|---|---|
@@ -90,41 +122,7 @@ flowchart TB
 
 ---
 
-## 3. Service Map — 5 services
-
-```mermaid
-flowchart LR
-    subgraph GATEWAY["API Gateway :3010"]
-        GW_ROLE["JWT verify<br/>RBAC check<br/>Proxy routing"]
-    end
-
-    subgraph AUTH["Auth Service :3004"]
-        AUTH_ROLE["Schema: auth<br/>─────────────<br/>• Login / Register<br/>• JWT sign / verify<br/>• Refresh token<br/>• User management"]
-    end
-
-    subgraph CUST["Customer Service :3001"]
-        CUST_ROLE["Schema: customer<br/>─────────────<br/>• Customer CRUD<br/>• Credit check<br/>• Tax code validation<br/>• Outbox → events"]
-    end
-
-    subgraph ORD["Order Service :3002"]
-        ORD_ROLE["Schema: order<br/>─────────────<br/>• Order lifecycle<br/>• Aggregate Root<br/>• Saga orchestration<br/>• CQRS read model<br/>• Outbox → events"]
-    end
-
-    subgraph INV["Inventory Service :3003"]
-        INV_ROLE["Schema: inventory<br/>─────────────<br/>• Stock management<br/>• Optimistic locking<br/>• Reserve / Release<br/>• Movement log<br/>• Outbox → events"]
-    end
-
-    GW_ROLE -- "verify" --> AUTH_ROLE
-    GW_ROLE --> CUST_ROLE
-    GW_ROLE --> ORD_ROLE
-    GW_ROLE --> INV_ROLE
-
-    style GATEWAY fill:#0f3460,color:#fff
-    style AUTH fill:#e94560,color:#fff
-    style CUST fill:#533483,color:#fff
-    style ORD fill:#0f3460,color:#fff
-    style INV fill:#16213e,color:#fff
-```
+## 7. Service Map — 5 services
 
 | Service | Port | Schema | Patterns chính |
 |---|---|---|---|
@@ -136,32 +134,32 @@ flowchart LR
 
 ---
 
-## 4. Luồng Request (HTTP)
+## 8. Luồng Request chi tiết — JWT Authentication
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant FE as Frontend<br/>:3000
-    participant GW as API Gateway<br/>:3010
-    participant Auth as Auth Service<br/>:3004
-    participant Svc as Target Service
+    participant FE as Frontend :3000
+    participant GW as Gateway :3010
+    participant Auth as Auth :3004
+    participant Svc as Service
 
     User->>FE: Click action
-    FE->>GW: HTTP request<br/>Authorization: Bearer <JWT>
+    FE->>GW: Authorization: Bearer JWT
 
-    alt Public route (/auth/login, /auth/refresh)
-        GW->>Auth: Forward trực tiếp
+    alt Public route
+        GW->>Auth: Forward thẳng
         Auth-->>GW: Response
     else Protected route
-        GW->>GW: Verify JWT (signature + expiry)
-        alt JWT invalid / expired
+        GW->>GW: Verify JWT
+        alt JWT invalid
             GW-->>FE: 401 Unauthorized
         else JWT valid
-            GW->>GW: Check role permission
-            alt Role không đủ quyền
+            GW->>GW: Check role
+            alt Không đủ quyền
                 GW-->>FE: 403 Forbidden
-            else Role OK
-                GW->>Svc: Forward request<br/>+ Header: x-user-id, x-user-role
+            else OK
+                GW->>Svc: Forward + x-user-id, x-user-role
                 Svc-->>GW: Response
             end
         end
@@ -173,81 +171,76 @@ sequenceDiagram
 
 ---
 
-## 5. Luồng Event (Pub/Sub) — Saga Flow
+## 9. Luồng Event — Saga (Order Submit)
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant OrderSvc as Order Service
-    participant PubSub as Pub/Sub
-    participant InvSvc as Inventory Service
-    participant CustSvc as Customer Service
+    actor User
+    participant Order as Order Service
+    participant PS as Pub/Sub
+    participant Inv as Inventory Service
+    participant Cust as Customer Service
 
-    User->>OrderSvc: POST /orders/{id}/submit
-    OrderSvc->>OrderSvc: status = 'submitted'
-    OrderSvc->>OrderSvc: Ghi outbox (cùng transaction)
-    OrderSvc-->>User: 200 OK
+    User->>Order: POST /orders/{id}/submit
+    Order->>Order: status = submitted
+    Order->>Order: Ghi outbox
+    Order-->>User: 200 OK
 
-    Note over OrderSvc,PubSub: Outbox Worker (poll 2s)
-    OrderSvc->>PubSub: publish: order.submitted
+    Note over Order,PS: Outbox Worker poll 2s
+    Order->>PS: order.submitted
 
-    PubSub->>InvSvc: subscribe: order.submitted
-    InvSvc->>InvSvc: Reserve stock (optimistic lock)
+    PS->>Inv: order.submitted
+    Inv->>Inv: Reserve stock
 
-    alt ✅ Đủ stock
-        InvSvc->>PubSub: publish: inventory.reserved
-        PubSub->>OrderSvc: subscribe: inventory.reserved
-        OrderSvc->>CustSvc: HTTP GET /customers/{id}/credit-check
-        alt ✅ Credit OK
-            OrderSvc->>OrderSvc: status = 'confirmed'
-            OrderSvc->>PubSub: publish: order.confirmed
-        else ❌ Credit FAIL
-            OrderSvc->>OrderSvc: status = 'failed_credit'
-            OrderSvc->>PubSub: publish: order.cancelled
-            PubSub->>InvSvc: subscribe: order.cancelled
-            InvSvc->>InvSvc: Release reserved stock
+    alt Đủ stock
+        Inv->>PS: inventory.reserved
+        PS->>Order: inventory.reserved
+        Order->>Cust: credit-check
+        alt Credit OK
+            Order->>Order: status = confirmed
+        else Credit FAIL
+            Order->>PS: order.cancelled
+            PS->>Inv: order.cancelled
+            Inv->>Inv: Release stock
         end
-    else ❌ Thiếu stock
-        InvSvc->>PubSub: publish: inventory.reservation-failed
-        PubSub->>OrderSvc: subscribe: inventory.reservation-failed
-        OrderSvc->>OrderSvc: status = 'failed_no_stock'
+    else Thiếu stock
+        Inv->>PS: reservation-failed
+        PS->>Order: reservation-failed
+        Order->>Order: status = failed
     end
 ```
 
 ---
 
-## 6. Database Architecture — 4 Schemas, 1 Instance
+## 10. Database — 4 Schemas
 
 ```mermaid
 erDiagram
-    AUTH_SCHEMA {
+    AUTH_USERS {
         uuid id PK
         string email UK
         string password_hash
         string full_name
-        string role "admin | manager | staff"
+        string role
         boolean is_active
     }
 
-    CUSTOMER_SCHEMA {
+    CUSTOMER_CORES {
         uuid id PK
         string business_name
         string tax_code
-        string status "prospect | active | suspended | archived"
-        decimal credit_limit_amount
-        string contact_name
-        string contact_phone
+        string status
+        decimal credit_limit
     }
 
-    ORDER_SCHEMA_HEADER {
+    ORDER_HEADERS {
         uuid id PK
         uuid customer_id FK
-        string status "draft | submitted | confirmed | cancelled | fulfilled"
+        string status
         decimal total_amount
-        string cancel_reason
     }
 
-    ORDER_SCHEMA_LINE {
+    ORDER_LINES {
         uuid id PK
         uuid header_id FK
         string item_id
@@ -255,19 +248,16 @@ erDiagram
         decimal unit_price
     }
 
-    INVENTORY_SCHEMA_STOCK {
+    STOCK_LEVELS {
         uuid id PK
         string item_id FK
-        string warehouse_id FK
-        int on_hand_quantity "CHECK >= 0"
-        int reserved_quantity "CHECK >= 0"
-        int version "Optimistic Lock"
+        int on_hand
+        int reserved
+        int version
     }
 
-    ORDER_SCHEMA_HEADER ||--o{ ORDER_SCHEMA_LINE : "has lines"
+    ORDER_HEADERS ||--o{ ORDER_LINES : "has lines"
 ```
-
-**4 schemas trong 1 Supabase PostgreSQL instance:**
 
 | Schema | Service sở hữu | Tables chính |
 |---|---|---|
@@ -276,51 +266,29 @@ erDiagram
 | `order` | Order Service | headers, lines, status_history, lifecycle_view, outbox |
 | `inventory` | Inventory Service | items, warehouses, stock_levels, movements, reservations, outbox |
 
-**Quy tắc**: Mỗi service CHỈ đọc/ghi schema của mình. Không cross-schema query. Cần data từ context khác → gọi qua HTTP API hoặc lắng nghe event.
+**Quy tắc**: Mỗi service CHỈ đọc/ghi schema của mình. Cần data từ context khác → HTTP API hoặc event.
 
 ---
 
-## 7. Outbox Pattern — Guaranteed Event Delivery
+## 11. Outbox Pattern
 
 ```mermaid
 flowchart LR
-    subgraph TX["DB Transaction"]
-        BIZ["1. Write business data"]
-        OBX["2. Write outbox record"]
-    end
-
-    subgraph WORKER["Outbox Worker (poll 2s)"]
-        POLL["3. SELECT unpublished"]
-        PUB["4. Publish to Pub/Sub"]
-        MARK["5. UPDATE published_at"]
-    end
-
-    subgraph PS["Pub/Sub"]
-        TOPIC["Topic"]
-        SUB["Subscription"]
-    end
-
-    BIZ --> OBX
-    OBX --> POLL
-    POLL --> PUB
-    PUB --> TOPIC
-    TOPIC --> SUB
-    PUB --> MARK
-
-    style TX fill:#0f3460,color:#fff
-    style WORKER fill:#533483,color:#fff
-    style PS fill:#e94560,color:#fff
+    A["1. Write data"] --> B["2. Write outbox"]
+    B --> C["3. Worker poll"]
+    C --> D["4. Publish Pub/Sub"]
+    D --> E["5. Mark published"]
 ```
 
-**Tại sao Outbox?**: Nếu publish event trực tiếp lên Pub/Sub (ngoài transaction), có thể xảy ra:
+**Tại sao Outbox?**: Ghi event vào DB **cùng transaction** với business data → worker poll và publish sau → **zero event loss**.
+
+Nếu publish trực tiếp (ngoài transaction):
 - Data saved nhưng event lost (Pub/Sub down)
 - Event published nhưng data rollback (transaction fail)
 
-Outbox giải quyết bằng cách ghi event vào DB **cùng transaction** với business data → worker poll và publish sau → **zero event loss**.
-
 ---
 
-## 8. RBAC — 3 Roles
+## 12. RBAC — 3 Roles
 
 | Thao tác | `admin` | `manager` | `staff` |
 |---|:---:|:---:|:---:|
@@ -333,63 +301,49 @@ Outbox giải quyết bằng cách ghi event vào DB **cùng transaction** với
 | **Tạo item** | ✅ | ✅ | ✅ |
 | **Nhập/xuất stock** | ✅ | ✅ | ❌ |
 | **Xem dashboard** | ✅ | ✅ | ✅ |
-| **Xem reports** | ✅ | ✅ | 👁️ (read-only) |
+| **Xem reports** | ✅ | ✅ | 👁️ |
 
 ---
 
-## 9. Deployment — Local Development
+## 13. Deployment — Local Development
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Developer Machine                                       │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │ Auth     │  │ Customer │  │ Order    │              │
-│  │ :3004    │  │ :3001    │  │ :3002    │              │
-│  └──────────┘  └──────────┘  └──────────┘              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │ Inventory│  │ Gateway  │  │ Frontend │              │
-│  │ :3003    │  │ :3010    │  │ :3000    │              │
-│  └──────────┘  └──────────┘  └──────────┘              │
-│                                                          │
-│  ┌──────────────────┐                                    │
-│  │ Docker            │                                   │
-│  │ Pub/Sub Emulator  │                                   │
-│  │ :8085             │                                   │
-│  └──────────────────┘                                    │
-│                                                          │
-├──────────── Cloud (Free Tier) ──────────────────────────┤
-│                                                          │
-│  ┌──────────────────┐  ┌──────────────────┐             │
-│  │ Supabase          │  │ Upstash           │            │
-│  │ PostgreSQL        │  │ Redis             │            │
-│  │ (Singapore)       │  │ (Singapore)       │            │
-│  └──────────────────┘  └──────────────────┘             │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+Developer Machine
+├── npm run dev
+│   ├── Auth Service         :3004
+│   ├── Customer Service     :3001
+│   ├── Order Service        :3002
+│   ├── Inventory Service    :3003
+│   ├── API Gateway          :3010
+│   └── Frontend (Next.js)   :3000
+│
+├── Docker
+│   └── Pub/Sub Emulator     :8085
+│
+└── Cloud (Free Tier)
+    ├── Supabase PostgreSQL   (Singapore)
+    └── Upstash Redis         (Singapore)
 ```
 
 **Startup:**
 ```bash
 # 1. Pub/Sub Emulator
-cd backend && docker compose up -d
+cd backend; docker compose up -d
 
 # 2. Services (mỗi terminal riêng)
-cd backend/auth-service && npm run dev       # :3004
-cd backend/customer-service && npm run dev   # :3001
-cd backend/order-service && npm run dev      # :3002
-cd backend/inventory-service && npm run dev  # :3003
-cd backend/api-gateway && npm run dev        # :3010
+cd backend/auth-service; npm run dev        # :3004
+cd backend/customer-service; npm run dev    # :3001
+cd backend/order-service; npm run dev       # :3002
+cd backend/inventory-service; npm run dev   # :3003
+cd backend/api-gateway; npm run dev         # :3010
 
 # 3. Frontend
-cd frontend && npm run dev                   # :3000
-
-# Supabase + Upstash chạy sẵn trên cloud
+cd frontend; npm run dev                    # :3000
 ```
 
 ---
 
-## 10. Tổng hợp — Patterns × Services
+## 14. Patterns × Services
 
 | Pattern | Auth | Customer | Order | Inventory | Gateway |
 |---|:---:|:---:|:---:|:---:|:---:|
