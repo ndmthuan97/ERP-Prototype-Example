@@ -374,14 +374,15 @@ flowchart TB
 
 ### Quan hệ giữa các files trong mỗi module
 
+> **Cách đọc**: Theo số thứ tự trên mũi tên (①→②→③...). Đường liền = gọi trực tiếp. Đường đứt = implement/gián tiếp. Hình trụ = database/store.
+
 #### messaging — Outbox → Publish → Dedup
 
 ```mermaid
 flowchart TB
     subgraph "shared/messaging"
         OS_IF["OutboxStore\n(interface)"]
-        OS_TK["OUTBOX_STORE\n(DI token)"]
-        OW["OutboxWorkerService"]
+        OW["OutboxWorkerService\n⏱️ poll mỗi 2s"]
         PSP["PubSubPublisher"]
         IDP["withIdempotency()"]
     end
@@ -397,114 +398,94 @@ flowchart TB
         RD[("Redis")]
     end
 
-    OS_TK -- "bind" --> POS
     POS -. "implements" .-> OS_IF
-    OW -- "@Inject" --> OS_IF
-    OW -- "uses" --> PSP
-    POS -- "query outbox" --> DB
-    PSP -- "publish" --> PS
-    PS -- "deliver" --> SUB
-    SUB -- "wraps handler" --> IDP
-    IDP -- "SET NX EX" --> RD
+    OW -- "① @Inject\nOutboxStore" --> OS_IF
+    POS -- "② query outbox\nWHERE published_at IS NULL" --> DB
+    OW -- "③ publish(eventType, payload)" --> PSP
+    PSP -- "④ topic.publishMessage()" --> PS
+    PS -- "⑤ deliver message" --> SUB
+    SUB -- "⑥ wraps handler" --> IDP
+    IDP -- "⑦ SET NX EX 86400" --> RD
 ```
 
-**Đọc sơ đồ**: Worker poll outbox (qua adapter Prisma) → publish qua PubSubPublisher → Pub/Sub deliver cho subscriber → subscriber bọc handler bằng `withIdempotency()` để dedup qua Redis.
-
-#### contracts — Single source of truth cho event names + payloads
+#### contracts — Event naming + typed payloads
 
 ```mermaid
 flowchart LR
-    EVT["events.ts\nEVENT const\nPayload interfaces\nEventMetadata"]
+    EVT["events.ts\n─────────\nEVENT const\nPayload interfaces\nEventMetadata"]
 
-    PUB["Producer\n(outbox.create)"]
-    SUB["Consumer\n(subscriber)"]
+    PUB["① Producer\n(outbox.create)"]
+    SUB["② Consumer\n(subscriber)"]
 
-    PUB -- "import EVENT.ORDER_SUBMITTED\nimport OrderSubmittedPayload" --> EVT
-    SUB -- "import EVENT.ORDER_SUBMITTED\nimport OrderSubmittedPayload" --> EVT
+    PUB -- "import EVENT + Payload" --> EVT
+    SUB -- "import EVENT + Payload" --> EVT
 ```
 
-**1 file, 2 phía dùng**: Producer ghi event đúng tên + đúng payload. Consumer đọc event đúng tên + đúng type. Sai field = **compile error**.
+> Cả 2 phía import từ **cùng 1 file** → sai tên/field = compile error.
 
-#### cache — Cache-Aside + chia sẻ Redis client
+#### cache — Cache-Aside + shared Redis client
+
+```mermaid
+flowchart LR
+    SVC["① Service\nget/set/del"]
+    IDP["② withIdempotency\ngetClient()"]
+    HLT["③ HealthController\nping()"]
+
+    RCS["RedisCacheService"]
+    RD[("Upstash Redis")]
+
+    SVC -- "Cache-Aside" --> RCS
+    IDP -- "dùng chung client" --> RCS
+    HLT -- "health check" --> RCS
+    RCS -- "HTTP REST API" --> RD
+```
+
+> 3 consumer hội tụ vào 1 instance `RedisCacheService` → dùng chung 1 connection.
+
+#### observability — 2 luồng độc lập
 
 ```mermaid
 flowchart TB
-    RCS["redis-cache.service.ts\nRedisCacheService"]
+    subgraph "Luồng A: Truy vết"
+        REQ["① HTTP Request\nx-correlation-id"]
+        COR["② CorrelationMiddleware\nAsyncLocalStorage lưu ID"]
+        LOG["③ StructuredLogger\ntự đính correlationId"]
+        SVC["④ Business code\nlog có correlationId tự động"]
+    end
 
-    SVC["Service\n(query/command)"]
-    IDP["withIdempotency()"]
-    HLT["HealthController"]
+    subgraph "Luồng B: Monitoring"
+        APP["Ⓐ AppModule\nbind HEALTH_INDICATORS"]
+        HLT["Ⓑ HealthController\nGET /health → 200|503"]
+        MET["Ⓒ MetricsController\nGET /metrics → Prometheus"]
+        BIZ["Ⓓ Business code\ninc() / setGauge()"]
+    end
 
-    RD[("Upstash Redis\nREST API")]
-
-    SVC -- "get / set / del\ninvalidatePattern" --> RCS
-    IDP -- "getClient()" --> RCS
-    HLT -- "ping()" --> RCS
-    RCS -- "HTTP" --> RD
+    REQ --> COR --> LOG --> SVC
+    APP --> HLT
+    BIZ --> MET
 ```
 
-**3 consumer của RedisCacheService**: business cache (get/set/del), idempotency (dùng chung client), health check (ping).
+> **Luồng A** đọc từ ①→④: Request → Middleware lưu ID → Logger đính ID → Business code log bình thường.
+> **Luồng B** đọc từ Ⓐ→Ⓓ: AppModule bind indicators → Health/Metrics endpoints → Business code ghi metrics.
 
-#### observability — 4 primitives, kết nối qua AsyncLocalStorage
-
-```mermaid
-flowchart TB
-    subgraph "shared/observability"
-        COR["correlation.ts\nCorrelationMiddleware\nAsyncLocalStorage"]
-        LOG["logger.ts\nStructuredLogger"]
-        HLT["health.ts\nHealthController"]
-        MET["metrics.ts\nMetricsService\nMetricsController"]
-    end
-
-    subgraph "Service cục bộ"
-        APP["AppModule"]
-        SVC["Business code"]
-    end
-
-    subgraph External
-        REQ["HTTP Request"]
-        SCR["Prometheus\n/ curl"]
-    end
-
-    REQ -- "x-correlation-id" --> COR
-    COR -- "AsyncLocalStorage\nlưu correlationId" --> LOG
-    LOG -- "tự đính correlationId\nvào mỗi dòng JSON" --> SVC
-    APP -- "bind HEALTH_INDICATORS" --> HLT
-    SVC -- "inc() / setGauge()" --> MET
-    SCR -- "GET /health" --> HLT
-    SCR -- "GET /metrics" --> MET
-```
-
-**Chuỗi kết nối**: Request → CorrelationMiddleware lưu ID → StructuredLogger tự đính ID vào log → business code dùng Logger bình thường, correlationId tự có.
-
-#### config — Fail-fast env reading
+#### config + persistence — Bootstrap helpers
 
 ```mermaid
 flowchart LR
-    ENV["env.ts\ngetRequiredEnv()\ngetEnv()\ngetEnvNumber()"]
+    BOOT["① Service khởi động\n(main.ts)"]
+    ENV["② getRequiredEnv()\ngetEnv() / getEnvNumber()"]
+    PENV[("③ process.env")]
 
-    BOOT["Service bootstrap\n(main.ts)"]
-    PENV[("process.env")]
+    PRS["② resolveConnectionString()"]
+    DB[("③ PostgreSQL")]
 
-    BOOT -- "gọi lúc khởi động" --> ENV
-    ENV -- "đọc" --> PENV
-    ENV -. "throw nếu thiếu\n(fail fast)" .-> BOOT
+    BOOT -- "đọc config" --> ENV -- "lookup" --> PENV
+    ENV -. "throw nếu thiếu" .-> BOOT
+    BOOT -- "kết nối DB" --> PRS -- "RUNTIME_DATABASE_URL\nfallback DATABASE_URL" --> PENV
+    PRS -. "connection string" .-> DB
 ```
 
-#### persistence — Connection string resolution
-
-```mermaid
-flowchart LR
-    PRS["prisma-connection.ts\nresolveConnectionString()"]
-
-    PS["PrismaService\n(service cục bộ)"]
-    PENV[("process.env")]
-    DB[("PostgreSQL")]
-
-    PS -- "gọi" --> PRS
-    PRS -- "đọc RUNTIME_DATABASE_URL\nfallback DATABASE_URL" --> PENV
-    PS -- "connect" --> DB
-```
+> Config + persistence gộp chung vì cùng chạy lúc bootstrap: ① service khởi động → ② đọc env/connection string → ③ kết nối external.
 
 ### Barrel Export
 
