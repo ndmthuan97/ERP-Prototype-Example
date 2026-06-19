@@ -19,7 +19,9 @@ services:
   # - Khi deploy production: bỏ PUBSUB_EMULATOR_HOST → SDK kết nối Pub/Sub thật
   #   → ZERO thay đổi code
   pubsub-emulator:
-    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+    # Image :emulators (~700MB) thay vì :latest (5GB)
+    # :latest chứa toàn bộ Google Cloud SDK — mình chỉ cần emulator
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
     command: >
       gcloud beta emulators pubsub start
       --host-port=0.0.0.0:8085

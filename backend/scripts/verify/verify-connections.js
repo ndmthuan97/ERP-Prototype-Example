@@ -9,7 +9,7 @@
  *   node verify-connections.js
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
 
 const { Client } = require('pg');
 
