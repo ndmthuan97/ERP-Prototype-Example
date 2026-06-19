@@ -5,103 +5,57 @@
 
 ---
 
-## 1. Luồng Request — Frontend đến Backend
+## 1. Sơ đồ kiến trúc tổng thể
 
 ```mermaid
 flowchart TB
-    Browser[Browser]
-    Frontend["Frontend :3000"]
-    Gateway["API Gateway :3010"]
+    Browser["Browser"]
+    FE["Frontend :3000"]
+    GW["API Gateway :3010  (JWT + RBAC)"]
 
-    Browser --> Frontend
-    Frontend -- "HTTP REST" --> Gateway
+    Auth["Auth :3004"]
+    Cust["Customer :3001"]
+    Ord["Order :3002"]
+    Inv["Inventory :3003"]
+
+    DB[("Supabase PostgreSQL — 4 schemas")]
+    PS["Pub/Sub Emulator :8085"]
+    RD[("Upstash Redis")]
+
+    Browser --> FE
+    FE -- "HTTP" --> GW
+
+    GW -- "verify" --> Auth
+    GW --> Cust
+    GW --> Ord
+    GW --> Inv
+
+    Auth --> DB
+    Cust --> DB
+    Ord --> DB
+    Inv --> DB
+
+    Cust -- "publish" --> PS
+    Ord -- "publish" --> PS
+    Inv -- "publish" --> PS
+
+    PS -. "subscribe" .-> Ord
+    PS -. "subscribe" .-> Inv
+
+    Cust -. "cache" .-> RD
+    Ord -. "cache" .-> RD
+    Inv -. "cache" .-> RD
 ```
+
+**Đọc sơ đồ:**
+- **Đường liền** (→) = HTTP request
+- **Đường đứt** (-.→) = event subscribe / cache
+- Tất cả services nối thẳng xuống DB — mỗi service chỉ truy cập schema của mình
+- Pub/Sub: 3 services publish events, Order + Inventory subscribe lẫn nhau (Saga)
 
 ---
 
-## 2. API Gateway — Routing
-
-Gateway nhận request từ frontend → verify JWT → check role → forward đến service đúng.
-
-```mermaid
-flowchart TB
-    Gateway["API Gateway :3010"]
-
-    Auth["Auth Service :3004"]
-    Customer["Customer Service :3001"]
-    Order["Order Service :3002"]
-    Inventory["Inventory Service :3003"]
-
-    Gateway -- "/api/auth/*" --> Auth
-    Gateway -- "/api/customers/*" --> Customer
-    Gateway -- "/api/orders/*" --> Order
-    Gateway -- "/api/inventory/*" --> Inventory
-```
-
----
-
-## 3. Services → Database
-
-Mỗi service có schema riêng trong cùng 1 Supabase PostgreSQL instance. Không cross-schema query.
-
-```mermaid
-flowchart TB
-    Auth["Auth Service :3004"]
-    Customer["Customer Service :3001"]
-    Order["Order Service :3002"]
-    Inventory["Inventory Service :3003"]
-
-    AuthDB["schema: auth"]
-    CustDB["schema: customer"]
-    OrdDB["schema: order"]
-    InvDB["schema: inventory"]
-
-    Auth --> AuthDB
-    Customer --> CustDB
-    Order --> OrdDB
-    Inventory --> InvDB
-```
-
----
-
-## 4. Services → Pub/Sub (Event-driven)
-
-3 business services publish events qua outbox → Pub/Sub Emulator. Order và Inventory subscribe lẫn nhau (Saga).
-
-```mermaid
-flowchart LR
-    Customer["Customer Service"]
-    Order["Order Service"]
-    Inventory["Inventory Service"]
-    PubSub["Pub/Sub Emulator :8085"]
-
-    Customer -- "publish" --> PubSub
-    Order -- "publish" --> PubSub
-    Inventory -- "publish" --> PubSub
-
-    PubSub -. "subscribe" .-> Order
-    PubSub -. "subscribe" .-> Inventory
-```
-
----
-
-## 5. Services → Redis (Cache)
-
-```mermaid
-flowchart LR
-    Customer["Customer Service"]
-    Order["Order Service"]
-    Inventory["Inventory Service"]
-    Redis["Upstash Redis"]
-
-    Customer -. "cache" .-> Redis
-    Order -. "cache" .-> Redis
-    Inventory -. "cache" .-> Redis
-```
-
----
-
-## 6. Tech Stack
+## 2. Tech Stack
 
 | Layer | Công nghệ | Vai trò |
 |---|---|---|
@@ -122,7 +76,7 @@ flowchart LR
 
 ---
 
-## 7. Service Map — 5 services
+## 3. Service Map — 5 services
 
 | Service | Port | Schema | Patterns chính |
 |---|---|---|---|
@@ -134,7 +88,7 @@ flowchart LR
 
 ---
 
-## 8. Luồng Request chi tiết — JWT Authentication
+## 4. Luồng Request chi tiết — JWT Authentication
 
 ```mermaid
 sequenceDiagram
@@ -171,7 +125,7 @@ sequenceDiagram
 
 ---
 
-## 9. Luồng Event — Saga (Order Submit)
+## 5. Luồng Event — Saga (Order Submit)
 
 ```mermaid
 sequenceDiagram
@@ -212,7 +166,7 @@ sequenceDiagram
 
 ---
 
-## 10. Database — 4 Schemas
+## 6. Database — 4 Schemas
 
 ```mermaid
 erDiagram
@@ -270,7 +224,7 @@ erDiagram
 
 ---
 
-## 11. Outbox Pattern
+## 7. Outbox Pattern
 
 ```mermaid
 flowchart LR
@@ -288,7 +242,7 @@ Nếu publish trực tiếp (ngoài transaction):
 
 ---
 
-## 12. RBAC — 3 Roles
+## 8. RBAC — 3 Roles
 
 | Thao tác | `admin` | `manager` | `staff` |
 |---|:---:|:---:|:---:|
@@ -305,7 +259,7 @@ Nếu publish trực tiếp (ngoài transaction):
 
 ---
 
-## 13. Deployment — Local Development
+## 9. Deployment — Local Development
 
 ```
 Developer Machine
@@ -343,7 +297,7 @@ cd frontend; npm run dev                    # :3000
 
 ---
 
-## 14. Patterns × Services
+## 10. Patterns × Services
 
 | Pattern | Auth | Customer | Order | Inventory | Gateway |
 |---|:---:|:---:|:---:|:---:|:---:|
