@@ -1,0 +1,29 @@
+# ============================================================
+# Pub/Sub Emulator — Docker Compose
+# ============================================================
+# Đây là container DUY NHẤT cần Docker.
+# PostgreSQL (Supabase) và Redis (Upstash) chạy trên cloud.
+#
+# Cách dùng:
+#   cd backend
+#   docker compose up -d        # Khởi động Pub/Sub Emulator
+#   docker compose down         # Dừng
+#   docker compose logs -f      # Xem logs
+# ============================================================
+
+services:
+  # GCP Pub/Sub Emulator
+  # - Giả lập Google Cloud Pub/Sub trên máy local
+  # - Code dùng @google-cloud/pubsub SDK — khi set env PUBSUB_EMULATOR_HOST,
+  #   SDK tự động kết nối emulator thay vì Pub/Sub thật trên GCP
+  # - Khi deploy production: bỏ PUBSUB_EMULATOR_HOST → SDK kết nối Pub/Sub thật
+  #   → ZERO thay đổi code
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+    command: >
+      gcloud beta emulators pubsub start
+      --host-port=0.0.0.0:8085
+      --project=erp-prototype
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
