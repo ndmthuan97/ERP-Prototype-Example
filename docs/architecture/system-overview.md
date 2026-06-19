@@ -408,6 +408,16 @@ flowchart TB
     IDP -- "⑦ SET NX EX 86400" --> RD
 ```
 
+| Bước | Chức năng |
+|:---:|---|
+| ① | Worker inject `OutboxStore` qua DI token → nhận adapter Prisma do service bind |
+| ② | Adapter query bảng `outbox` trong PostgreSQL → lấy events chưa publish (`published_at IS NULL`) |
+| ③ | Worker gọi `PubSubPublisher.publish()` với eventType + payload |
+| ④ | Publisher gửi message lên Pub/Sub topic (auto-create topic nếu lần đầu) |
+| ⑤ | Pub/Sub deliver message cho subscriber ở service khác |
+| ⑥ | Subscriber bọc handler bằng `withIdempotency()` trước khi chạy business logic |
+| ⑦ | Idempotency check Redis: `SET processed:{eventId} NX EX 86400` — nếu key đã tồn tại → bỏ qua (dedup) |
+
 #### contracts — Event naming + typed payloads
 
 ```mermaid
@@ -420,6 +430,11 @@ flowchart LR
     PUB -- "import EVENT + Payload" --> EVT
     SUB -- "import EVENT + Payload" --> EVT
 ```
+
+| Bước | Chức năng |
+|:---:|---|
+| ① | Producer (vd: order-service) import `EVENT.ORDER_SUBMITTED` + `OrderSubmittedPayload` để ghi outbox đúng schema |
+| ② | Consumer (vd: inventory-service) import cùng tên event + cùng payload type để parse message đúng kiểu |
 
 > Cả 2 phía import từ **cùng 1 file** → sai tên/field = compile error.
 
@@ -439,6 +454,12 @@ flowchart LR
     HLT -- "health check" --> RCS
     RCS -- "HTTP REST API" --> RD
 ```
+
+| Bước | Chức năng |
+|:---:|---|
+| ① | Service (query/command) gọi `get/set/del/invalidatePattern` — đọc cache trước, miss thì query DB rồi ghi cache |
+| ② | `withIdempotency()` gọi `getClient()` để lấy raw Redis client — dùng cho `SET NX` (dedup message) |
+| ③ | `HealthController` gọi `ping()` — kiểm tra Redis còn phản hồi không, trả kết quả trong `GET /health` |
 
 > 3 consumer hội tụ vào 1 instance `RedisCacheService` → dùng chung 1 connection.
 
@@ -465,8 +486,23 @@ flowchart TB
     BIZ --> MET
 ```
 
-> **Luồng A** đọc từ ①→④: Request → Middleware lưu ID → Logger đính ID → Business code log bình thường.
-> **Luồng B** đọc từ Ⓐ→Ⓓ: AppModule bind indicators → Health/Metrics endpoints → Business code ghi metrics.
+**Luồng A — Truy vết** (đọc ①→④):
+
+| Bước | Chức năng |
+|:---:|---|
+| ① | HTTP request đến, mang header `x-correlation-id` (hoặc middleware sinh UUID mới nếu thiếu) |
+| ② | `CorrelationMiddleware` lưu ID vào `AsyncLocalStorage` — mọi code async trong request đọc được ID này |
+| ③ | `StructuredLogger` tự lấy ID từ AsyncLocalStorage, đính vào mỗi dòng log JSON (`"correlationId":"abc-123"`) |
+| ④ | Business code gọi `logger.log()` bình thường — correlationId tự có, không cần truyền tay |
+
+**Luồng B — Monitoring** (đọc Ⓐ→Ⓓ):
+
+| Bước | Chức năng |
+|:---:|---|
+| Ⓐ | `AppModule` bind mảng `HealthIndicator[]` vào token `HEALTH_INDICATORS` (vd: check Postgres + Redis) |
+| Ⓑ | `HealthController` expose `GET /health` — chạy tất cả indicators, trả `200 ok` hoặc `503 down` |
+| Ⓒ | `MetricsController` expose `GET /metrics` — xuất tất cả counter/gauge dạng Prometheus text |
+| Ⓓ | Business code gọi `metrics.inc('events_published_total')` hoặc `metrics.setGauge('outbox_pending', n)` tại các điểm quan trọng |
 
 #### config + persistence — Bootstrap helpers
 
@@ -485,7 +521,11 @@ flowchart LR
     PRS -. "connection string" .-> DB
 ```
 
-> Config + persistence gộp chung vì cùng chạy lúc bootstrap: ① service khởi động → ② đọc env/connection string → ③ kết nối external.
+| Bước | Chức năng |
+|:---:|---|
+| ① | Service khởi động (`main.ts` / `PrismaService` constructor) — cần config + DB connection |
+| ② | `getRequiredEnv()` đọc biến bắt buộc (throw ngay nếu thiếu). `resolveConnectionString()` ưu tiên `RUNTIME_DATABASE_URL` (pooled), fallback `DATABASE_URL` (direct) |
+| ③ | Giá trị lấy từ `process.env` → dùng để kết nối PostgreSQL |
 
 ### Barrel Export
 
