@@ -21,47 +21,39 @@ function makeRepoMock(): jest.Mocked<ICustomerRepository> {
   };
 }
 
-/** Mock cache — command chỉ gọi invalidatePattern */
-function makeCacheMock() {
-  return {
-    invalidatePattern: jest.fn().mockResolvedValue(undefined),
-  };
-}
-
 describe('CreateCustomerCommand', () => {
-  it('tạo khách hàng thành công, gọi save và invalidate cache', async () => {
+  it('tạo khách hàng thành công, gọi save', async () => {
     const repo = makeRepoMock();
-    const cache = makeCacheMock();
 
     // Không trùng MST + save trả lại chính entity được truyền vào
     repo.findByTaxCode.mockResolvedValue(null);
     repo.save.mockImplementation(async (customer: Customer) => customer);
 
-    const command = new CreateCustomerCommand(repo, cache as any);
+    const command = new CreateCustomerCommand(repo);
 
     const result = await command.execute({
       businessName: 'WeCare Corp',
       taxCode: '0312345678',
-    } as any);
+    });
 
     expect(result).toBeInstanceOf(Customer);
     expect(result.businessName).toBe('WeCare Corp');
     expect(result.status).toBe('active');
     expect(repo.save).toHaveBeenCalledTimes(1);
-    expect(cache.invalidatePattern).toHaveBeenCalledWith('customers:search:*');
   });
 
   it('ném ConflictException khi mã số thuế đã tồn tại — không save', async () => {
     const repo = makeRepoMock();
-    const cache = makeCacheMock();
 
     // Giả lập đã có khách hàng dùng MST này
-    repo.findByTaxCode.mockResolvedValue({ businessName: 'Đối thủ' } as Customer);
+    repo.findByTaxCode.mockResolvedValue({
+      businessName: 'Đối thủ',
+    } as Customer);
 
-    const command = new CreateCustomerCommand(repo, cache as any);
+    const command = new CreateCustomerCommand(repo);
 
     await expect(
-      command.execute({ businessName: 'WeCare Corp', taxCode: '0312345678' } as any),
+      command.execute({ businessName: 'WeCare Corp', taxCode: '0312345678' }),
     ).rejects.toBeInstanceOf(ConflictException);
 
     // Trùng MST → dừng sớm, KHÔNG được lưu

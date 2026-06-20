@@ -19,9 +19,11 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
 
-  // Connection string cho Prisma CLI (migrate, db push, studio)
-  // Dùng DATABASE_URL (pooler) — Prisma v7 không còn directUrl
+  // Connection string cho Prisma CLI (migrate, db push, studio).
+  // ƯU TIÊN DIRECT_URL (port 5432, direct): migrate/db push qua transaction-pooler
+  // (DATABASE_URL, 6543/PgBouncer) dễ lỗi "prepared statement already exists" / treo.
+  // Fallback DATABASE_URL nếu chưa set DIRECT_URL.
   datasource: {
-    url: process.env.DATABASE_URL!,
+    url: process.env.DIRECT_URL || process.env.DATABASE_URL || '',
   },
 });

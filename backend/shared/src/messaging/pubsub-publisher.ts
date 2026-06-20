@@ -11,6 +11,20 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PubSub } from '@google-cloud/pubsub';
+import {
+  EVENT_ENVELOPE_VERSION,
+  type EventEnvelope,
+} from '../contracts/events';
+
+/** Tuỳ chọn khi publish — eventId BẮT BUỘC (khoá dedup), còn lại optional. */
+export interface PublishOptions {
+  /** Khoá dedup ổn định cho consumer — thường là id dòng outbox */
+  eventId: string;
+  /** correlationId truy vết (worker đọc từ payload đã lưu, vì chạy ngoài request) */
+  correlationId?: string | null;
+  /** Phiên bản envelope — mặc định EVENT_ENVELOPE_VERSION */
+  eventVersion?: number;
+}
 
 @Injectable()
 export class PubSubPublisher {
@@ -35,10 +49,19 @@ export class PubSubPublisher {
    * Publish 1 event lên topic trùng tên eventType (vd: "customer.created").
    * Lần đầu gặp 1 topic: kiểm tra/tạo rồi nhớ vào cache. Các lần sau: gửi thẳng.
    *
+   * Bọc payload trong EventEnvelope (có eventId/version/correlationId) và gắn
+   * các khoá quan trọng vào message attributes → consumer dedup/route không cần
+   * parse body.
+   *
    * @param eventType - Tên event = tên topic
-   * @param payload   - Dữ liệu event (serialize JSON)
+   * @param payload   - Dữ liệu nghiệp vụ (sẽ nằm trong envelope.payload)
+   * @param options   - eventId (bắt buộc), correlationId, eventVersion
    */
-  async publish(eventType: string, payload: unknown): Promise<void> {
+  async publish(
+    eventType: string,
+    payload: unknown,
+    options: PublishOptions,
+  ): Promise<void> {
     const topic = this.pubsub.topic(eventType);
 
     // Chỉ kiểm tra tồn tại đúng 1 lần cho mỗi topic trong vòng đời process
@@ -51,7 +74,27 @@ export class PubSubPublisher {
       this.ensuredTopics.add(eventType);
     }
 
+    const correlationId = options.correlationId ?? null;
+    const envelope: EventEnvelope = {
+      eventId: options.eventId,
+      eventType,
+      eventVersion: options.eventVersion ?? EVENT_ENVELOPE_VERSION,
+      occurredAt: new Date().toISOString(),
+      correlationId,
+      payload,
+    };
+
+    // attributes: khoá dedup/route ở dạng metadata (không cần parse JSON body)
+    const attributes: Record<string, string> = {
+      eventId: envelope.eventId,
+      eventType,
+    };
+    if (correlationId) attributes.correlationId = correlationId;
+
     // Pub/Sub yêu cầu data dạng Buffer
-    await topic.publishMessage({ data: Buffer.from(JSON.stringify(payload)) });
+    await topic.publishMessage({
+      data: Buffer.from(JSON.stringify(envelope)),
+      attributes,
+    });
   }
 }

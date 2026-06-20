@@ -9,14 +9,23 @@
  * Observability (Phase 2.5):
  * - StructuredLogger: log JSON kèm correlationId (từ @erp/shared)
  * - CorrelationMiddleware: gắn x-correlation-id cho mọi request → truy vết xuyên service
- * - GET /health, GET /metrics: từ @erp/shared
+ * - GET /health (readiness) + /health/live (liveness), GET /metrics: từ @erp/shared
+ *
+ * Hardening (Phase 3):
+ * - helmet: security headers
+ * - CORS theo whitelist (env CORS_ORIGINS), không mở toàn bộ
+ * - ZodExceptionFilter: ZodError → 400 nhất quán toàn cục
  *
  * Port: 3001 (cấu hình trong .env)
  * Kiến trúc: DDD 4 layers (domain → application → infrastructure → presentation)
  */
 import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import helmet from 'helmet';
 import { StructuredLogger, CorrelationMiddleware } from '@erp/shared';
 import { AppModule } from './app.module';
+import { ZodExceptionFilter } from './common/zod-exception.filter';
 
 /** Port mặc định — Customer Service */
 const DEFAULT_PORT = 3001;
@@ -26,24 +35,38 @@ async function bootstrap() {
     // Log JSON có correlationId thay cho logger mặc định
     logger: new StructuredLogger(),
   });
+  const logger = new Logger('Bootstrap');
+
+  // Security headers (CSP, HSTS, X-Frame-Options...) cho mọi response
+  app.use(helmet());
 
   // Correlation middleware toàn cục: đọc/sinh x-correlation-id, chạy request
   // trong ngữ cảnh AsyncLocalStorage → mọi log line tự đính id để truy vết.
   // Đặt ở app.use (Express global) để né các vấn đề matching route wildcard.
   const correlation = new CorrelationMiddleware();
-  app.use((req: any, res: any, next: () => void) => correlation.use(req, res, next));
+  app.use((req: Request, res: Response, next: () => void) =>
+    correlation.use(req, res, next),
+  );
 
-  // CORS — cho phép frontend (Next.js :3000) gọi API
-  // Production sẽ đi qua API Gateway, không cần CORS trực tiếp
-  app.enableCors();
+  // ZodError (validate trong command) → 400 nhất quán cho mọi route
+  app.useGlobalFilters(new ZodExceptionFilter());
+
+  // CORS theo whitelist: CORS_ORIGINS="http://localhost:3000,https://app.example.com".
+  // Không set → cho phép tất cả (dev). Production NÊN set whitelist hoặc đi qua Gateway.
+  const corsOrigins = process.env.CORS_ORIGINS?.trim();
+  app.enableCors({
+    origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
+    credentials: true,
+  });
 
   const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
   await app.listen(port);
 
-  console.log(`🚀 Customer Service đang chạy tại http://localhost:${port}`);
-  console.log(`📁 Kiến trúc: DDD (domain → application → infrastructure → presentation)`);
-  console.log(`📦 Bounded Context: Customer`);
-  console.log(`❤️  Health: http://localhost:${port}/health  |  📊 Metrics: http://localhost:${port}/metrics`);
+  logger.log(`🚀 Customer Service đang chạy tại http://localhost:${port}`);
+  logger.log(`📦 Bounded Context: Customer (DDD 4 layers)`);
+  logger.log(
+    `❤️  Health: /health (readiness) · /health/live (liveness)  |  📊 Metrics: /metrics`,
+  );
 }
 
-bootstrap();
+void bootstrap();

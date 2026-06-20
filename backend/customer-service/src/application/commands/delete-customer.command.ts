@@ -38,9 +38,7 @@ export class DeleteCustomerCommand {
     // Load entity hiện tại — findById đã filter deletedAt IS NULL
     const customer = await this.customerRepository.findById(id);
     if (!customer) {
-      throw new NotFoundException(
-        `Không tìm thấy khách hàng với ID "${id}"`,
-      );
+      throw new NotFoundException(`Không tìm thấy khách hàng với ID "${id}"`);
     }
 
     // Gọi business method archive() trên entity
@@ -50,10 +48,7 @@ export class DeleteCustomerCommand {
     // Persist thay đổi + ghi outbox event trong transaction
     await this.customerRepository.delete(customer);
 
-    // Invalidate cache: xóa cache detail và search cache
-    await Promise.all([
-      this.cacheService.del(`customer:${id}`),
-      this.cacheService.invalidatePattern('customers:search:*'),
-    ]);
+    // Invalidate cache detail (search KHÔNG được cache → không cần invalidate).
+    await this.cacheService.del(`customer:${id}`);
   }
 }

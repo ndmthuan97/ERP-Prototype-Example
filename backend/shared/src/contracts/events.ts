@@ -45,6 +45,31 @@ export interface EventMetadata {
   occurredAt?: string;
 }
 
+/** Phiên bản envelope hiện tại — tăng khi đổi cấu trúc envelope (breaking). */
+export const EVENT_ENVELOPE_VERSION = 1;
+
+/**
+ * Envelope CHUẨN bọc mọi message publish lên Pub/Sub.
+ *
+ * Vì sao cần envelope (thay vì publish payload trần)?
+ * - `eventId` (= id dòng outbox) là KHOÁ DEDUP ổn định cho Idempotent Consumer:
+ *   outbox at-least-once có thể publish cùng 1 dòng >1 lần → consumer dedup theo eventId.
+ *   (Pub/Sub messageId KHÔNG đủ: mỗi lần re-publish sinh messageId mới.)
+ * - `eventVersion` cho phép tiến hoá schema mà consumer cũ vẫn xử lý được.
+ * - `correlationId` truy vết xuyên service; `occurredAt` thời điểm phát.
+ *
+ * Các trường khoá (eventId, eventType, correlationId) cũng được gắn vào Pub/Sub
+ * message attributes để consumer dedup/route mà không cần parse body.
+ */
+export interface EventEnvelope<T = unknown> {
+  eventId: string;
+  eventType: string;
+  eventVersion: number;
+  occurredAt: string;
+  correlationId: string | null;
+  payload: T;
+}
+
 // ---- Payload contracts cho từng event ----
 // Tiền tệ truyền dưới dạng string để không mất chính xác (Decimal → string).
 

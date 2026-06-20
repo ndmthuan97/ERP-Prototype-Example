@@ -8,7 +8,14 @@
 // Counter: chỉ tăng (vd: events_published_total). Gauge: tăng/giảm (vd: outbox_pending).
 // Mỗi metric có thể kèm labels (vd: {event="customer.created"}) → nhiều series.
 
-import { Injectable, Controller, Get, Header } from '@nestjs/common';
+import {
+  Injectable,
+  Controller,
+  Get,
+  Header,
+  Headers,
+  UnauthorizedException,
+} from '@nestjs/common';
 
 /** Loại metric hỗ trợ */
 type MetricType = 'counter' | 'gauge';
@@ -103,9 +110,20 @@ export class MetricsService {
 export class MetricsController {
   constructor(private readonly metrics: MetricsService) {}
 
+  /**
+   * GET /metrics — Prometheus scrape.
+   *
+   * Bảo vệ tùy chọn: nếu env METRICS_TOKEN được set, bắt buộc header
+   * `Authorization: Bearer <token>` (tránh lộ nội tại ra public). Không set
+   * (dev) → mở để dễ `curl`. Production NÊN set token + chặn ở network layer.
+   */
   @Get('metrics')
   @Header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
-  scrape(): string {
+  scrape(@Headers('authorization') authHeader?: string): string {
+    const token = process.env.METRICS_TOKEN;
+    if (token && authHeader !== `Bearer ${token}`) {
+      throw new UnauthorizedException('Metrics endpoint yêu cầu token hợp lệ');
+    }
     return this.metrics.render();
   }
 }

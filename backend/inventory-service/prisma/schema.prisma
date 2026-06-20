@@ -1,0 +1,66 @@
+// =============================================================================
+// PRISMA SCHEMA — Inventory Service
+// =============================================================================
+// Bounded context "Inventory": quản lý tồn kho theo SKU.
+// Điểm nhấn: OPTIMISTIC LOCKING qua cột `version` — chống lost update khi 2
+// request cùng reserve/release 1 mặt hàng đồng thời.
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["inventory"]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// =============================================================================
+// MODEL: StockItem — Aggregate Root tồn kho theo SKU
+// =============================================================================
+model StockItem {
+  id                String   @id @default(uuid())
+
+  // SKU — định danh mặt hàng, duy nhất
+  sku               String   @unique(map: "stock_items_sku_key")
+
+  name              String
+
+  // Số lượng khả dụng (có thể bán/giữ chỗ)
+  quantityAvailable Int      @default(0) @map("quantity_available")
+
+  // Số lượng đã giữ chỗ (reserved cho đơn hàng chưa hoàn tất)
+  quantityReserved  Int      @default(0) @map("quantity_reserved")
+
+  // OPTIMISTIC LOCKING: mỗi lần UPDATE phải khớp version cũ → version+1.
+  // Update khác ghi đè giữa chừng → version lệch → 0 row affected → retry.
+  version           Int      @default(0)
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([name], map: "idx_stock_items_name")
+  @@map("stock_items")
+  @@schema("inventory")
+}
+
+// =============================================================================
+// MODEL: Outbox — giống customer.outbox (claim SKIP LOCKED + retry/DLQ)
+// =============================================================================
+model Outbox {
+  id             String    @id @default(uuid())
+  aggregateType  String    @map("aggregate_type")
+  aggregateId    String    @map("aggregate_id")
+  eventType      String    @map("event_type")
+  payload        Json
+  createdAt      DateTime  @default(now()) @map("created_at")
+  publishedAt    DateTime? @map("published_at")
+  lockedUntil    DateTime? @map("locked_until")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  deadLetteredAt DateTime? @map("dead_lettered_at")
+
+  @@index([publishedAt], map: "idx_inv_outbox_unpublished")
+  @@map("outbox")
+  @@schema("inventory")
+}

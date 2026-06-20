@@ -29,6 +29,26 @@ export interface HealthIndicator {
 /** DI token: service bind mảng HealthIndicator vào đây */
 export const HEALTH_INDICATORS = Symbol('HEALTH_INDICATORS');
 
+/** Timeout cho mỗi health check (ms) — tránh /health treo khi 1 dependency hang */
+const CHECK_TIMEOUT_MS = 3_000;
+
+/** Bọc 1 promise với timeout — reject nếu quá hạn (coi như check hỏng). */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('health check timeout')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    );
+  });
+}
+
 @Controller()
 export class HealthController {
   constructor(
@@ -37,7 +57,17 @@ export class HealthController {
   ) {}
 
   /**
-   * GET /health — chạy tất cả indicator song song, tổng hợp kết quả.
+   * GET /health/live — LIVENESS: process còn sống? (không kiểm tra dependency)
+   * Dùng cho restart policy của orchestrator — không phụ thuộc DB/Redis để tránh
+   * restart-loop khi dependency tạm chập (đó là việc của readiness).
+   */
+  @Get('health/live')
+  live(): { status: 'ok'; time: string } {
+    return { status: 'ok', time: new Date().toISOString() };
+  }
+
+  /**
+   * GET /health (READINESS) — chạy tất cả indicator song song (có timeout).
    * Tất cả OK → 200 { status: 'ok' }. Có cái hỏng → 503 { status: 'down' }.
    */
   @Get('health')
@@ -45,10 +75,10 @@ export class HealthController {
     const checks = await Promise.all(
       this.indicators.map(async (indicator) => {
         try {
-          const ok = await indicator.check();
+          const ok = await withTimeout(indicator.check(), CHECK_TIMEOUT_MS);
           return { name: indicator.name, ok };
         } catch {
-          // Check throw (vd: DB timeout) → coi như hỏng, không làm sập endpoint
+          // Check throw/timeout (vd: DB hang) → coi như hỏng, không làm treo endpoint
           return { name: indicator.name, ok: false };
         }
       }),

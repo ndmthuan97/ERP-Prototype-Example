@@ -19,7 +19,9 @@ import { TaxCode } from '../../domain/value-objects/index.js';
  */
 export const updateCustomerSchema = z.object({
   // ID khách hàng — bắt buộc, dùng UUID format
-  id: z.string({ error: 'ID khách hàng là bắt buộc' }).uuid('ID phải là UUID hợp lệ'),
+  id: z
+    .string({ error: 'ID khách hàng là bắt buộc' })
+    .uuid('ID phải là UUID hợp lệ'),
 
   // Tên doanh nghiệp — optional, nếu có phải >= 2 ký tự
   businessName: z
@@ -31,19 +33,21 @@ export const updateCustomerSchema = z.object({
   taxCode: z
     .string()
     .optional()
-    .refine(
-      (value) => !value || TaxCode.isValid(value),
-      { message: 'Mã số thuế không đúng định dạng (VD: 0312345678 hoặc 0312345678-001)' },
-    ),
+    .refine((value) => !value || TaxCode.isValid(value), {
+      message:
+        'Mã số thuế không đúng định dạng (VD: 0312345678 hoặc 0312345678-001)',
+    }),
 
   // Các field liên hệ — tất cả optional
   contactName: z.string().optional(),
   contactPhone: z.string().optional(),
   contactEmail: z.string().email('Email không đúng định dạng').optional(),
 
-  // Hạn mức tín dụng — optional, phải dương nếu có
+  // Hạn mức tín dụng — optional. Tiền VND tính bằng ĐỒNG (số nguyên) → ép .int()
+  // để tránh sai số dấu phẩy động khi tính toán tín dụng.
   creditLimitAmount: z
     .number()
+    .int('Hạn mức tín dụng phải là số nguyên (đơn vị: đồng)')
     .positive('Hạn mức tín dụng phải là số dương')
     .optional(),
 });

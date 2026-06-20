@@ -9,6 +9,9 @@
     "install:shared": "npm install --prefix shared",
     "install:customer": "npm install --prefix customer-service",
     "dev:customer": "npm run start:dev --prefix customer-service",
-    "test:customer": "npm test --prefix customer-service"
+    "test:customer": "npm test --prefix customer-service",
+    "install:inventory": "npm install --prefix inventory-service",
+    "dev:inventory": "npm run start:dev --prefix inventory-service",
+    "test:inventory": "npm test --prefix inventory-service"
   }
 }

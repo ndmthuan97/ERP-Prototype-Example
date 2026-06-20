@@ -10,14 +10,22 @@
 // 4. Save entity mới qua repository
 // 5. Invalidate cache cũ
 
-import { Injectable, Inject, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 
 import { Customer } from '../../domain/entities/index.js';
 import {
   CUSTOMER_REPOSITORY,
   type ICustomerRepository,
 } from '../../domain/repositories/index.js';
-import { validateUpdateCustomer, type UpdateCustomerDto } from '../dtos/index.js';
+import {
+  validateUpdateCustomer,
+  type UpdateCustomerDto,
+} from '../dtos/index.js';
 import { RedisCacheService } from '@erp/shared';
 
 @Injectable()
@@ -36,12 +44,14 @@ export class UpdateCustomerCommand {
    * @throws NotFoundException nếu khách hàng không tồn tại
    * @throws ConflictException nếu mã số thuế mới đã được sử dụng
    */
-  async execute(dto: UpdateCustomerDto): Promise<Customer> {
-    // Validate dữ liệu đầu vào
+  async execute(dto: unknown): Promise<Customer> {
+    // Validate dữ liệu đầu vào (ZodError → ZodExceptionFilter → 400)
     const validatedData = validateUpdateCustomer(dto);
 
     // Load entity hiện tại từ DB
-    const existingCustomer = await this.customerRepository.findById(validatedData.id);
+    const existingCustomer = await this.customerRepository.findById(
+      validatedData.id,
+    );
     if (!existingCustomer) {
       throw new NotFoundException(
         `Không tìm thấy khách hàng với ID "${validatedData.id}"`,
@@ -49,7 +59,10 @@ export class UpdateCustomerCommand {
     }
 
     // Kiểm tra trùng lặp MST nếu đang thay đổi taxCode
-    if (validatedData.taxCode && validatedData.taxCode !== existingCustomer.taxCode) {
+    if (
+      validatedData.taxCode &&
+      validatedData.taxCode !== existingCustomer.taxCode
+    ) {
       const duplicateCustomer = await this.customerRepository.findByTaxCode(
         validatedData.taxCode,
       );
@@ -66,13 +79,11 @@ export class UpdateCustomerCommand {
     this.applyChanges(existingCustomer, validatedData);
 
     // Save entity qua repository (update + outbox event trong transaction)
-    const updatedCustomer = await this.customerRepository.save(existingCustomer);
+    const updatedCustomer =
+      await this.customerRepository.save(existingCustomer);
 
-    // Invalidate cache: cả cache detail lẫn search cache
-    await Promise.all([
-      this.cacheService.del(`customer:${validatedData.id}`),
-      this.cacheService.invalidatePattern('customers:search:*'),
-    ]);
+    // Invalidate cache detail (search KHÔNG được cache → không cần invalidate).
+    await this.cacheService.del(`customer:${validatedData.id}`);
 
     return updatedCustomer;
   }

@@ -3,6 +3,8 @@
 > Bản đồ tài liệu cho dự án ERP Prototype.
 > Đọc theo thứ tự từ trên xuống để hiểu toàn bộ hệ thống.
 
+> ⚠️ **Đọc trước:** [Implementation Status](IMPLEMENTATION-STATUS.md) — phần lớn docs viết theo _docs-first_ nên mô tả cả tính năng **chưa có code**. File status cho biết cái nào đã chạy (hiện chỉ `customer-service`). Roadmap củng cố: [improvement-plan.md](../improvement-plan.md).
+
 ---
 
 ## Hướng dẫn đọc
@@ -47,6 +49,7 @@
 ```
 docs/
 ├── README.md                    ← Bạn đang ở đây
+├── IMPLEMENTATION-STATUS.md     Cái gì đã code / cái gì mới là blueprint
 ├── overview/
 │   ├── project-goals.md         Mục tiêu, scope, success criteria
 │   ├── business-requirements.md User stories, business context
@@ -57,7 +60,7 @@ docs/
 │   ├── bounded-contexts.md      3 contexts, interaction rules
 │   ├── data-model.md            ER diagrams, table definitions
 │   ├── event-flows.md           Pub/Sub topics, saga flow
-│   ├── design-patterns.md       11 patterns áp dụng
+│   ├── design-patterns.md       14 patterns áp dụng
 │   └── rbac.md                  3 roles, permission matrix
 ├── api/
 │   ├── auth-endpoints.md        Auth: login, register, refresh

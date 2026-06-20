@@ -1,5 +1,7 @@
 # Order Service — API Endpoints
 
+> 🚧 **PLANNED — chưa implement.** `order-service` hiện chỉ là scaffold `Hello World!`. Tài liệu dưới đây là **blueprint thiết kế**, không phải mô tả code đang chạy. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu tham chiếu cho tất cả endpoints của **Order Service** (`localhost:3002`).
 > Service quản lý đơn hàng — từ tạo draft, thêm dòng hàng, submit (kích hoạt saga), đến fulfill/cancel. Áp dụng **CQRS**, **Saga**, **Outbox Pattern**, và **Optimistic Locking**.
 

@@ -13,16 +13,30 @@
 
 import { Redis } from '@upstash/redis';
 
-/** TTL mặc định cho key dedup (giây) — 1 ngày */
+/** TTL của trạng thái "done" (giây) — giữ lâu để dedup mọi redelivery sau */
 const DEFAULT_TTL_SECONDS = 86_400;
 
 /**
- * Chỉ chạy `handler` đúng 1 lần cho mỗi eventId.
+ * TTL của trạng thái "processing" (giây) — khoá tạm trong lúc handler chạy.
+ * Nếu process CRASH giữa chừng, khoá này HẾT HẠN sau PROCESSING_TTL → event
+ * được redeliver xử lý lại (không bị "kẹt done" vĩnh viễn → mất event).
+ */
+const PROCESSING_TTL_SECONDS = 300;
+
+/**
+ * Chỉ chạy `handler` đúng 1 lần cho mỗi eventId (Idempotent Consumer).
  *
- * @returns true  nếu đây là lần đầu (handler ĐÃ chạy)
- *          false nếu event đã xử lý trước đó (handler BỎ QUA)
+ * Cơ chế 2 trạng thái (an toàn hơn 1 cờ '1'):
+ *   1. SET key='processing' NX EX 300  → claim. Không claim được = đang/đã xử lý → skip.
+ *   2. handler() chạy.
+ *   3a. Thành công → SET key='done' EX 86400 (giữ lâu để chặn redelivery sau).
+ *   3b. Lỗi        → DEL key (cho redeliver retry NGAY).
  *
- * Nếu handler throw → xoá key dedup để Pub/Sub redeliver được (cho retry).
+ * Vì sao tốt hơn bản cũ? Bản cũ set '1' với TTL dài NGAY trước handler — nếu crash
+ * giữa chừng, key '1' tồn tại 1 ngày → event không bao giờ được xử lý lại (mất).
+ * Bản này dùng khoá 'processing' TTL ngắn → crash thì tự hết hạn, an toàn.
+ *
+ * @returns true nếu handler ĐÃ chạy (lần đầu); false nếu đã xử lý/đang xử lý (skip).
  */
 export async function withIdempotency(
   redis: Redis,
@@ -32,18 +46,23 @@ export async function withIdempotency(
 ): Promise<boolean> {
   const key = `processed:${eventId}`;
 
-  // SET ... NX: 'OK' nếu set được (lần đầu), null nếu key đã tồn tại
-  const fresh = await redis.set(key, '1', { nx: true, ex: ttlSeconds });
-  if (fresh !== 'OK') {
-    // Đã xử lý rồi → bỏ qua, KHÔNG chạy handler lần 2
+  // Claim: 'OK' nếu set được (lần đầu), null nếu key đã tồn tại ('processing' hoặc 'done')
+  const claimed = await redis.set(key, 'processing', {
+    nx: true,
+    ex: PROCESSING_TTL_SECONDS,
+  });
+  if (claimed !== 'OK') {
+    // Đã/đang xử lý → bỏ qua, KHÔNG chạy handler lần 2
     return false;
   }
 
   try {
     await handler();
+    // Chuyển sang 'done' với TTL dài để chặn mọi redelivery về sau
+    await redis.set(key, 'done', { ex: ttlSeconds });
     return true;
   } catch (error) {
-    // Xử lý thất bại → xoá key để cho phép redeliver + retry
+    // Xử lý thất bại → xoá key để cho phép redeliver + retry ngay
     await redis.del(key);
     throw error;
   }

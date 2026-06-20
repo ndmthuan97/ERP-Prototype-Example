@@ -1,23 +1,55 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-
 /**
- * Khởi động Inventory Service
- * - Port 3003 (hoặc PORT từ env)
- * - Service này quản lý bounded context "Inventory":
- *   + Quản lý items, warehouses, stock levels
- *   + Optimistic locking khi cập nhật stock (tránh race condition)
- *   + Reserve / release stock (phối hợp với Order Service qua Saga)
- *   + Movement log — ghi lại mọi thay đổi stock
- *   + Phát event qua Pub/Sub (outbox pattern)
+ * Entry point — Inventory Service
+ *
+ * Bounded Context "Inventory": quản lý tồn kho theo SKU với OPTIMISTIC LOCKING.
+ * - REST: tạo item, nhập kho, reserve/release (saga), kiểm tra tồn.
+ * - Outbox → Pub/Sub: inventory.reserved / inventory.released.
+ * Port: 3003
  */
+import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import helmet from 'helmet';
+import { StructuredLogger, CorrelationMiddleware } from '@erp/shared';
+import { AppModule } from './app.module';
+import { ZodExceptionFilter } from './common/zod-exception.filter';
+
+const DEFAULT_PORT = 3003;
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new StructuredLogger(),
+  });
+  const logger = new Logger('Bootstrap');
 
-  // Lấy port từ biến môi trường, mặc định 3003
-  const port = process.env.INVENTORY_SERVICE_PORT ?? 3003;
+  app.use(helmet());
 
+  const correlation = new CorrelationMiddleware();
+  app.use((req: Request, res: Response, next: () => void) =>
+    correlation.use(req, res, next),
+  );
+
+  app.useGlobalFilters(new ZodExceptionFilter());
+
+  const corsOrigins = process.env.CORS_ORIGINS?.trim();
+  app.enableCors({
+    origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
+    credentials: true,
+  });
+
+  const port = parseInt(
+    process.env.PORT ||
+      process.env.INVENTORY_SERVICE_PORT ||
+      String(DEFAULT_PORT),
+    10,
+  );
   await app.listen(port);
-  console.log(`🟢 Inventory Service đang chạy tại: http://localhost:${port}`);
+
+  logger.log(`🚀 Inventory Service đang chạy tại http://localhost:${port}`);
+  logger.log(`📦 Bounded Context: Inventory (Optimistic Locking)`);
+  logger.log(
+    `❤️  Health: /health (readiness) · /health/live  |  📊 Metrics: /metrics`,
+  );
 }
-bootstrap();
+
+void bootstrap();

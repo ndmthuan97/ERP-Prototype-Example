@@ -1,5 +1,7 @@
 # System Overview — Kiến trúc tổng quan
 
+> ⚠️ **Trạng thái hỗn hợp:** sơ đồ mô tả hệ thống đích (5 service + frontend), nhưng hiện chỉ `customer-service` + `@erp/shared` đã chạy; `order/inventory/auth/gateway/frontend` là scaffold/blueprint. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu mô tả kiến trúc tổng thể của ERP Prototype.
 > Liên quan: [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
 

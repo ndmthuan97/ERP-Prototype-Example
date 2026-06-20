@@ -1,23 +1,57 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-
 /**
- * Khởi động Order Service
- * - Port 3002 (hoặc PORT từ env)
- * - Service này quản lý bounded context "Order":
- *   + Tạo đơn hàng (Order Header + Order Lines) — Aggregate Root pattern
- *   + Quản lý lifecycle: draft → submitted → confirmed → fulfilled / cancelled
- *   + Saga orchestration: submit → reserve stock → credit check → confirm
- *   + CQRS: tách model ghi (headers) và đọc (lifecycle_view)
- *   + Phát event qua Pub/Sub (outbox pattern)
+ * Entry point — Order Service
+ *
+ * Bounded Context "Order": quản lý đơn hàng với Aggregate Root pattern.
+ * - REST: 7 endpoints (CRUD + submit + cancel + lifecycle)
+ * - Outbox → Pub/Sub: order.submitted / order.confirmed / order.cancelled
+ * - Subscriber ← Pub/Sub: inventory.reserved / inventory.reservation-failed (saga)
+ * - CQRS: lifecycle_view read model
+ * Port: 3002
  */
+import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import helmet from 'helmet';
+import { StructuredLogger, CorrelationMiddleware } from '@erp/shared';
+import { AppModule } from './app.module';
+import { ZodExceptionFilter } from './common/zod-exception.filter';
+
+const DEFAULT_PORT = 3002;
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new StructuredLogger(),
+  });
+  const logger = new Logger('Bootstrap');
 
-  // Lấy port từ biến môi trường, mặc định 3002
-  const port = process.env.ORDER_SERVICE_PORT ?? 3002;
+  app.use(helmet());
 
+  const correlation = new CorrelationMiddleware();
+  app.use((req: Request, res: Response, next: () => void) =>
+    correlation.use(req, res, next),
+  );
+
+  app.useGlobalFilters(new ZodExceptionFilter());
+
+  const corsOrigins = process.env.CORS_ORIGINS?.trim();
+  app.enableCors({
+    origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
+    credentials: true,
+  });
+
+  const port = parseInt(
+    process.env.PORT ||
+      process.env.ORDER_SERVICE_PORT ||
+      String(DEFAULT_PORT),
+    10,
+  );
   await app.listen(port);
-  console.log(`🟢 Order Service đang chạy tại: http://localhost:${port}`);
+
+  logger.log(`🚀 Order Service đang chạy tại http://localhost:${port}`);
+  logger.log(`📦 Bounded Context: Order (Aggregate Root + Saga + CQRS)`);
+  logger.log(
+    `❤️  Health: /health (readiness) · /health/live  |  📊 Metrics: /metrics`,
+  );
 }
-bootstrap();
+
+void bootstrap();

@@ -1,0 +1,126 @@
+// =============================================================================
+// PRISMA SCHEMA — Order Service
+// =============================================================================
+// Bounded context "Order": quản lý đơn hàng với Aggregate Root pattern.
+// Điểm nhấn:
+// - OrderHeader là Aggregate Root — quản lý OrderLine, status lifecycle
+// - StatusHistory: audit trail mọi chuyển trạng thái
+// - LifecycleView: CQRS denormalized read model (query nhanh, không JOIN)
+// - Outbox: claim SKIP LOCKED + retry/DLQ (giống customer/inventory)
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["order"]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// =============================================================================
+// MODEL: OrderHeader — Aggregate Root
+// =============================================================================
+// Tất cả thao tác trên OrderLine PHẢI đi qua OrderHeader (aggregate boundary).
+// Status transitions: draft → submitted → confirmed → fulfilled | cancelled
+model OrderHeader {
+  id           String    @id @default(uuid())
+  customerId   String    @map("customer_id")
+  status       String    @default("draft")
+  totalAmount  Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
+  cancelReason String?   @map("cancel_reason")
+  version      Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  lines         OrderLine[]
+  statusHistory StatusHistory[]
+
+  @@index([customerId], map: "idx_headers_customer_id")
+  @@index([status], map: "idx_headers_status")
+  @@index([createdAt], map: "idx_headers_created_at")
+  @@map("headers")
+  @@schema("order")
+}
+
+// =============================================================================
+// MODEL: OrderLine — Child entity (chỉ access qua Aggregate Root)
+// =============================================================================
+// Snapshot pattern: itemName copy tại thời điểm tạo — item đổi tên sau không
+// ảnh hưởng đơn hàng cũ.
+model OrderLine {
+  id        String   @id @default(uuid())
+  headerId  String   @map("header_id")
+  itemId    String   @map("item_id")
+  itemName  String   @map("item_name")
+  quantity  Int
+  unitPrice Decimal  @map("unit_price") @db.Decimal(15, 2)
+  lineTotal Decimal  @map("line_total") @db.Decimal(15, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  header OrderHeader @relation(fields: [headerId], references: [id])
+
+  @@index([headerId], map: "idx_lines_header_id")
+  @@map("lines")
+  @@schema("order")
+}
+
+// =============================================================================
+// MODEL: StatusHistory — Audit trail mọi chuyển trạng thái
+// =============================================================================
+model StatusHistory {
+  id         String   @id @default(uuid())
+  headerId   String   @map("header_id")
+  fromStatus String?  @map("from_status")
+  toStatus   String   @map("to_status")
+  changedBy  String   @map("changed_by")
+  changedAt  DateTime @default(now()) @map("changed_at")
+  reason     String?
+
+  header OrderHeader @relation(fields: [headerId], references: [id])
+
+  @@index([headerId], map: "idx_status_history_header_id")
+  @@map("status_history")
+  @@schema("order")
+}
+
+// =============================================================================
+// MODEL: LifecycleView — CQRS Read Model (denormalized)
+// =============================================================================
+// Write model (headers + status_history) tối ưu cho GHI.
+// Read model (lifecycle_view) tối ưu cho ĐỌC — 1 query lấy toàn bộ lifecycle,
+// không cần JOIN phức tạp. Cập nhật cùng transaction với write.
+model LifecycleView {
+  orderId          String    @id @map("order_id")
+  customerName     String    @default("") @map("customer_name")
+  status           String
+  totalAmount      Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
+  lineCount        Int       @default(0) @map("line_count")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  lastStatusChange DateTime? @map("last_status_change")
+
+  @@index([status], map: "idx_lifecycle_status")
+  @@map("lifecycle_view")
+  @@schema("order")
+}
+
+// =============================================================================
+// MODEL: Outbox — giống customer/inventory (claim SKIP LOCKED + retry/DLQ)
+// =============================================================================
+model Outbox {
+  id             String    @id @default(uuid())
+  aggregateType  String    @map("aggregate_type")
+  aggregateId    String    @map("aggregate_id")
+  eventType      String    @map("event_type")
+  payload        Json
+  createdAt      DateTime  @default(now()) @map("created_at")
+  publishedAt    DateTime? @map("published_at")
+  lockedUntil    DateTime? @map("locked_until")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  deadLetteredAt DateTime? @map("dead_lettered_at")
+
+  @@index([publishedAt], map: "idx_ord_outbox_unpublished")
+  @@map("outbox")
+  @@schema("order")
+}

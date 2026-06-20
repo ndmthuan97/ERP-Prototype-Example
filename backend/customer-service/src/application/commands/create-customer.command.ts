@@ -20,8 +20,7 @@ import {
   CUSTOMER_REPOSITORY,
   type ICustomerRepository,
 } from '../../domain/repositories/index.js';
-import { validateCreateCustomer, type CreateCustomerDto } from '../dtos/index.js';
-import { RedisCacheService } from '@erp/shared';
+import { validateCreateCustomer } from '../dtos/index.js';
 
 @Injectable()
 export class CreateCustomerCommand {
@@ -31,11 +30,13 @@ export class CreateCustomerCommand {
    * @Inject(CUSTOMER_REPOSITORY) — inject bằng token thay vì class cụ thể.
    * Nhờ vậy, khi thay đổi implementation (vd: từ Prisma sang MongoDB),
    * chỉ cần đổi provider registration, không sửa code ở đây.
+   *
+   * KHÔNG inject cache: tạo mới không có detail cache để xoá, và search KHÔNG
+   * được cache (xem SearchCustomersQuery) → không có gì để invalidate.
    */
   constructor(
     @Inject(CUSTOMER_REPOSITORY)
     private readonly customerRepository: ICustomerRepository,
-    private readonly cacheService: RedisCacheService,
   ) {}
 
   /**
@@ -49,11 +50,12 @@ export class CreateCustomerCommand {
    * 5. Invalidate cache danh sách (search cache)
    * 6. Return customer đã tạo
    *
-   * @param dto - Dữ liệu từ controller (đã parse sơ bộ từ request body)
+   * @param dto - Dữ liệu thô từ controller (request body) — validate bên trong
    * @returns Customer entity đã được lưu thành công
    * @throws ConflictException nếu mã số thuế đã tồn tại
+   * @throws ZodError nếu dữ liệu không hợp lệ (ZodExceptionFilter → 400)
    */
-  async execute(dto: CreateCustomerDto): Promise<Customer> {
+  async execute(dto: unknown): Promise<Customer> {
     // Bước 1: Validate dữ liệu — Zod throw error nếu không hợp lệ
     const validatedData = validateCreateCustomer(dto);
 
@@ -92,9 +94,6 @@ export class CreateCustomerCommand {
 
     // Bước 4: Lưu vào DB qua repository (upsert + outbox trong transaction)
     const savedCustomer = await this.customerRepository.save(customer);
-
-    // Bước 5: Invalidate cache danh sách (search results có thể thay đổi)
-    await this.cacheService.invalidatePattern('customers:search:*');
 
     return savedCustomer;
   }

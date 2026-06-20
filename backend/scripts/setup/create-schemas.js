@@ -16,8 +16,8 @@ const { Client } = require('pg');
 async function main() {
   // Thử DIRECT_URL trước (port 5432, direct connection)
   // Nếu không có, fallback sang DATABASE_URL (port 6543, pooler)
-  // CREATE SCHEMA chạy được trên cả 2, nhưng Prisma migrate cần direct
-  const connectionString = process.env.DATABASE_URL;
+  // CREATE SCHEMA chạy được trên cả 2, nhưng direct connection ổn định hơn cho DDL
+  const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
   if (!connectionString) {
     console.error('❌ Không tìm thấy DIRECT_URL hoặc DATABASE_URL trong .env');
@@ -35,9 +35,11 @@ async function main() {
     await client.connect();
     console.log('✅ Kết nối thành công!\n');
 
-    // Tạo 4 schemas — mỗi service sở hữu 1 schema riêng
-    // "order" cần ngoặc kép vì là reserved word trong SQL
-    const schemas = ['customer', '"order"', 'inventory'];
+    // Tạo 4 schemas — mỗi service sở hữu 1 schema riêng.
+    // LƯU Ý: Auth Service dùng "app_auth", KHÔNG dùng "auth" — schema "auth" do
+    // Supabase quản lý (đặt bảng app vào đó có thể bị ghi đè/khoá khi Supabase nâng cấp).
+    // "order" cần ngoặc kép vì là reserved word trong SQL.
+    const schemas = ['app_auth', 'customer', '"order"', 'inventory'];
 
     for (const schema of schemas) {
       const sql = `CREATE SCHEMA IF NOT EXISTS ${schema}`;
@@ -46,25 +48,12 @@ async function main() {
       console.log(`  ✅ Schema "${displayName}" — tạo thành công (hoặc đã tồn tại)`);
     }
 
-    // Schema "auth" — Supabase đã tạo sẵn cho Supabase Auth
-    // Kiểm tra trước, nếu đã có thì dùng luôn
-    const authCheck = await client.query(`
-      SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'auth'
-    `);
-
-    if (authCheck.rows.length > 0) {
-      console.log(`  ℹ️  Schema "auth" — đã tồn tại (Supabase tạo sẵn), dùng luôn`);
-    } else {
-      await client.query('CREATE SCHEMA IF NOT EXISTS auth');
-      console.log(`  ✅ Schema "auth" — tạo thành công`);
-    }
-
     // Verify — liệt kê tất cả schemas đã tạo
     console.log('\n📋 Verify — Danh sách schemas:');
     const result = await client.query(`
       SELECT schema_name
       FROM information_schema.schemata
-      WHERE schema_name IN ('auth', 'customer', 'order', 'inventory')
+      WHERE schema_name IN ('app_auth', 'customer', 'order', 'inventory')
       ORDER BY schema_name
     `);
 

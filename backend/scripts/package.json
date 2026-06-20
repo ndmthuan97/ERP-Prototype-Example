@@ -4,8 +4,7 @@
   "description": "Setup & utility scripts cho ERP prototype",
   "scripts": {
     "setup:schemas": "node setup/create-schemas.js",
-    "verify": "node verify/verify-connections.js",
-    "seed:admin": "node seed/create-admin.js"
+    "verify": "node verify/verify-connections.js"
   },
   "dependencies": {
     "pg": "^8.13.0",

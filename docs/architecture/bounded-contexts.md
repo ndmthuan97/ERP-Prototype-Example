@@ -1,5 +1,7 @@
 # Bounded Contexts — Ranh giới ngữ cảnh
 
+> ⚠️ **Trạng thái hỗn hợp:** chỉ context `Customer` đã implement; `Order`, `Inventory`, `Auth` mới là blueprint và chưa có subscriber nào tiêu thụ event. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu mô tả các Bounded Context trong hệ thống ERP Prototype, quy tắc tương tác giữa chúng, và sự kiện (events) mà mỗi context publish/consume.
 > Liên quan: [system-overview](system-overview.md) · [data-model](data-model.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
 

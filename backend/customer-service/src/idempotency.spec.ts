@@ -16,7 +16,11 @@ function makeFakeRedis() {
   return {
     store,
     set: jest.fn(
-      async (key: string, _value: string, opts?: { nx?: boolean; ex?: number }) => {
+      async (
+        key: string,
+        _value: string,
+        opts?: { nx?: boolean; ex?: number },
+      ) => {
         if (opts?.nx && store.has(key)) return null;
         store.add(key);
         return 'OK';
@@ -46,7 +50,9 @@ describe('withIdempotency (@erp/shared)', () => {
     const redis = makeFakeRedis();
     const handler = jest.fn().mockRejectedValue(new Error('boom'));
 
-    await expect(withIdempotency(redis as any, 'evt-2', handler)).rejects.toThrow('boom');
+    await expect(
+      withIdempotency(redis as any, 'evt-2', handler),
+    ).rejects.toThrow('boom');
     // Phải xoá key để Pub/Sub gửi lại được
     expect(redis.del).toHaveBeenCalledWith('processed:evt-2');
 

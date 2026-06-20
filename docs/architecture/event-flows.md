@@ -1,7 +1,32 @@
 # Event Flows — Luồng sự kiện
 
+> 🚧 **PHẦN LỚN LÀ PLANNED.** Chỉ Outbox của `customer-service` (publish `customer.*`) là đã chạy; **chưa có subscriber nào** và Saga order↔inventory↔customer **chưa implement**. Phần Saga/Pub-Sub liên-service là **blueprint thiết kế**. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu mô tả toàn bộ luồng event trong hệ thống ERP Prototype: Pub/Sub topics, event payload schemas, Saga orchestration, và Outbox pattern.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [design-patterns](design-patterns.md)
+
+---
+
+## 0. Event Envelope (CHUẨN — đã implement ở `@erp/shared`)
+
+Mọi message publish lên Pub/Sub được bọc trong **envelope versioned** (xem `EventEnvelope` trong `@erp/shared/contracts/events.ts`):
+
+```jsonc
+{
+  "eventId": "uuid-cua-dong-outbox",   // KHOÁ DEDUP ổn định cho consumer
+  "eventType": "customer.created",      // = tên topic
+  "eventVersion": 1,                    // tiến hoá schema không phá consumer cũ
+  "occurredAt": "2026-06-19T07:00:00.000Z",
+  "correlationId": "uuid-truy-vet",     // grep cả vòng đời xuyên service
+  "payload": { /* dữ liệu nghiệp vụ — xem từng event bên dưới */ }
+}
+```
+
+- `eventId` (= id dòng `outbox`) cũng được gắn vào **Pub/Sub message attributes** → consumer dedup/route mà không cần parse body.
+- **Idempotent Consumer:** consumer BẮT BUỘC gọi `withIdempotency(redis, envelope.eventId, handler)` — Pub/Sub là at-least-once và outbox có thể publish lại cùng `eventId`.
+- **Retry/DLQ:** outbox worker tăng `attempts` khi publish lỗi, chuyển dead-letter sau `MAX_ATTEMPTS` (xem [ADR-009](../overview/tech-decisions.md)).
+
+> Các "payload contract" mô tả ở các mục dưới là phần **`payload`** bên trong envelope này.
 
 ---
 

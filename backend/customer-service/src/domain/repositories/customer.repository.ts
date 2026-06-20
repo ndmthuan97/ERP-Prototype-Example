@@ -70,7 +70,11 @@ export interface ICustomerRepository {
    * @param limit - Số bản ghi mỗi trang
    * @returns Kết quả phân trang gồm data, total, page, limit
    */
-  search(query: string, page: number, limit: number): Promise<PaginatedResult<Customer>>;
+  search(
+    query: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<Customer>>;
 
   /**
    * Lưu (tạo mới hoặc cập nhật) khách hàng.

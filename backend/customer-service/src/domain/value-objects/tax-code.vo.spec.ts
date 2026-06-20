@@ -41,11 +41,15 @@ describe('TaxCode value object', () => {
 
   describe('equals', () => {
     it('hai TaxCode cùng value thì bằng nhau (value equality)', () => {
-      expect(new TaxCode('0312345678').equals(new TaxCode('0312345678'))).toBe(true);
+      expect(new TaxCode('0312345678').equals(new TaxCode('0312345678'))).toBe(
+        true,
+      );
     });
 
     it('khác value thì không bằng', () => {
-      expect(new TaxCode('0312345678').equals(new TaxCode('0312345678-001'))).toBe(false);
+      expect(
+        new TaxCode('0312345678').equals(new TaxCode('0312345678-001')),
+      ).toBe(false);
     });
   });
 });

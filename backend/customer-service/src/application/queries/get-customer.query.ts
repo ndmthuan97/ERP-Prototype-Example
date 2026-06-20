@@ -47,7 +47,8 @@ export class GetCustomerQuery {
   async execute(id: string): Promise<Customer> {
     // Bước 1: Thử đọc từ cache — key format: "customer:{uuid}"
     const cacheKey = `${CACHE_KEY_PREFIX}:${id}`;
-    const cachedData = await this.cacheService.get<Record<string, unknown>>(cacheKey);
+    const cachedData =
+      await this.cacheService.get<Record<string, unknown>>(cacheKey);
 
     if (cachedData) {
       // Cache hit — reconstruct entity từ cached data
@@ -59,9 +60,7 @@ export class GetCustomerQuery {
     const customer = await this.customerRepository.findById(id);
 
     if (!customer) {
-      throw new NotFoundException(
-        `Không tìm thấy khách hàng với ID "${id}"`,
-      );
+      throw new NotFoundException(`Không tìm thấy khách hàng với ID "${id}"`);
     }
 
     // Bước 3: Ghi cache cho các request sau — TTL mặc định 5 phút

@@ -1,5 +1,7 @@
 # Data Model — Mô hình dữ liệu
 
+> ⚠️ **Trạng thái hỗn hợp:** chỉ schema `customer` (bảng `cores`, `outbox`) đã tồn tại trong DB; `order/inventory/auth` mới là blueprint. Lưu ý bảng `customer.cores` ở code thật khác doc này một chút (`tax_code` **nullable, chưa unique**; có cột `deleted_at`) — code là nguồn chân lý. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu chi tiết cấu trúc database của ERP Prototype: 4 schemas, tất cả tables, columns, constraints và ER diagrams.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
 
@@ -11,7 +13,7 @@ Hệ thống sử dụng **một Supabase PostgreSQL instance** nhưng chia thà
 
 | Schema | Service sở hữu | Tables | Mục đích |
 |---|---|---|---|
-| `auth` | Auth Service `:3004` | `users`, `refresh_tokens` | Xác thực, phân quyền |
+| `app_auth` | Auth Service `:3004` | `users`, `refresh_tokens` | Xác thực, phân quyền (KHÔNG dùng `auth` — schema của Supabase, xem [ADR-014](../overview/tech-decisions.md)) |
 | `customer` | Customer Service `:3001` | `cores`, `outbox` | Quản lý khách hàng B2B |
 | `order` | Order Service `:3002` | `headers`, `lines`, `status_history`, `lifecycle_view`, `outbox` | Quản lý đơn hàng |
 | `inventory` | Inventory Service `:3003` | `items`, `warehouses`, `stock_levels`, `movements`, `outbox` | Quản lý kho hàng |
@@ -66,7 +68,7 @@ erDiagram
 
 ### 2.2. Chi tiết Tables
 
-#### `auth.users`
+#### `app_auth.users`
 
 | Column | Type | Constraints | Mô tả |
 |---|---|---|---|
@@ -81,7 +83,7 @@ erDiagram
 
 > **Lưu ý**: `role` lưu trực tiếp dạng string trong table users. Đây là thiết kế đơn giản cho prototype — không cần bảng `roles` hay `permissions` riêng. Trong production nên dùng RBAC table riêng.
 
-#### `auth.refresh_tokens`
+#### `app_auth.refresh_tokens`
 
 | Column | Type | Constraints | Mô tả |
 |---|---|---|---|
@@ -134,15 +136,16 @@ erDiagram
 |---|---|---|---|
 | `id` | `UUID` | PK | Customer ID |
 | `business_name` | `VARCHAR(255)` | NOT NULL | Tên doanh nghiệp |
-| `tax_code` | `VARCHAR(13)` | UNIQUE | Mã số thuế (Value Object — validate 10 hoặc 13 chữ số) |
-| `status` | `VARCHAR(50)` | NOT NULL | `prospect` → `active` → `suspended` / `archived` |
-| `credit_limit_amount` | `DECIMAL(15,2)` | DEFAULT `0` | Hạn mức tín dụng tối đa |
-| `credit_used_amount` | `DECIMAL(15,2)` | DEFAULT `0` | Tín dụng đã sử dụng |
+| `tax_code` | `TEXT` | NULLABLE, UNIQUE | Mã số thuế — duy nhất TOÀN CỤC (1 pháp nhân = 1 MST), `NULL` cho KH cá nhân. Validate 10 hoặc 13 chữ số (Value Object). Chống trùng ở DB + bắt `P2002` ([ADR-013](../overview/tech-decisions.md)) |
+| `status` | `VARCHAR(50)` | NOT NULL, DEFAULT `active` | `prospect` / `active` / `suspended` / `archived` |
+| `credit_limit_amount` | `DECIMAL(15,2)` | NULLABLE | Hạn mức tín dụng (số nguyên ĐỒNG; `NULL` = không giới hạn) — [ADR-011](../overview/tech-decisions.md) |
+| `credit_used_amount` | `DECIMAL(15,2)` | NOT NULL, DEFAULT `0` | Tín dụng đã sử dụng (số nguyên đồng) |
 | `contact_name` | `VARCHAR(255)` | NULLABLE | Tên người liên hệ |
 | `contact_phone` | `VARCHAR(20)` | NULLABLE | SĐT liên hệ |
 | `contact_email` | `VARCHAR(255)` | NULLABLE | Email liên hệ |
 | `created_at` | `TIMESTAMP` | DEFAULT `now()` | Thời điểm tạo |
 | `updated_at` | `TIMESTAMP` | DEFAULT `now()` | Thời điểm cập nhật cuối |
+| `deleted_at` | `TIMESTAMP` | NULLABLE | Soft delete — `!= NULL` → đã archived (có index) |
 
 **Status transitions:**
 
@@ -173,6 +176,12 @@ can_place_order  = available_credit >= order.total_amount
 | `payload` | `JSONB` | NOT NULL | Nội dung event (JSON) |
 | `created_at` | `TIMESTAMP` | DEFAULT `now()` | Thời điểm ghi event |
 | `published_at` | `TIMESTAMP` | NULLABLE | `NULL` = chưa publish, có giá trị = đã publish |
+| `locked_until` | `TIMESTAMP` | NULLABLE | Khoá tạm khi worker CLAIM (SKIP LOCKED) — an toàn đa-instance ([ADR-009](../overview/tech-decisions.md)) |
+| `attempts` | `INTEGER` | DEFAULT `0` | Số lần thử publish — retry có giới hạn |
+| `last_error` | `TEXT` | NULLABLE | Lỗi publish gần nhất (debug) |
+| `dead_lettered_at` | `TIMESTAMP` | NULLABLE | `!= NULL` → poison event đã ngừng retry (cần xử lý tay) |
+
+> Cấu trúc outbox này (claim + retry/DLQ) là bản đã implement ở `customer-service`. Các service `order`/`inventory` (blueprint) nên copy cùng cấu trúc.
 
 ---
 
@@ -462,9 +471,10 @@ erDiagram
 | 1 | Business operation | Service thực hiện thao tác business (vd: tạo customer) |
 | 2 | Write outbox | **Trong cùng transaction**, ghi row vào outbox với `published_at = NULL` |
 | 3 | Commit | Transaction commit → cả data + event đều được persist |
-| 4 | Worker poll | Outbox Worker query: `WHERE published_at IS NULL ORDER BY created_at` |
-| 5 | Publish | Worker publish event lên Pub/Sub |
-| 6 | Mark done | Worker update `published_at = now()` |
+| 4 | Worker CLAIM | `UPDATE ... WHERE id IN (SELECT ... WHERE published_at IS NULL AND dead_lettered_at IS NULL ORDER BY created_at FOR UPDATE SKIP LOCKED)` → đặt `locked_until` (an toàn đa-instance) |
+| 5 | Publish | Worker bọc payload trong EventEnvelope (kèm `eventId`) rồi publish lên Pub/Sub |
+| 6a | Mark done | Thành công → `published_at = now()`, nhả khoá |
+| 6b | Retry/DLQ | Lỗi → `attempts++`, nhả khoá; `attempts >= MAX` → `dead_lettered_at = now()` |
 
 ---
 
@@ -472,8 +482,8 @@ erDiagram
 
 | # | Schema | Table | Vai trò | Pattern áp dụng |
 |---|---|---|---|---|
-| 1 | `auth` | `users` | Lưu thông tin user | — |
-| 2 | `auth` | `refresh_tokens` | Lưu refresh tokens | — |
+| 1 | `app_auth` | `users` | Lưu thông tin user | — |
+| 2 | `app_auth` | `refresh_tokens` | Lưu refresh tokens (rotation + reuse detection) | — |
 | 3 | `customer` | `cores` | Lưu thông tin khách hàng | Value Object (TaxCode) |
 | 4 | `customer` | `outbox` | Event queue nội bộ | Outbox Pattern |
 | 5 | `order` | `headers` | Đơn hàng (Aggregate Root) | Aggregate Root |

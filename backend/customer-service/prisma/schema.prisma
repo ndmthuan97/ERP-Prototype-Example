@@ -33,14 +33,17 @@ generator client {
 // creditLimitAmount và creditUsedAmount dùng để kiểm tra tín dụng (credit check)
 // trước khi cho phép đặt hàng.
 model CustomerCore {
-  // ID dạng UUID, tự động sinh bởi PostgreSQL
+  // ID dạng UUID — sinh ở APPLICATION layer (uuidv4 trong command).
+  // @default(uuid()) chỉ là fallback nếu app không cung cấp id.
   id                  String    @id @default(uuid())
 
   // Tên doanh nghiệp / tên khách hàng — trường bắt buộc
   businessName        String    @map("business_name")
 
-  // Mã số thuế — tùy chọn, dùng để định danh pháp lý
-  taxCode             String?   @map("tax_code")
+  // Mã số thuế — tùy chọn, dùng để định danh pháp lý.
+  // @unique: mỗi pháp nhân có 1 MST duy nhất (NULL được phép trùng — KH cá nhân).
+  // Chống tạo trùng MST ngay ở tầng DB (không chỉ dựa vào check ở application).
+  taxCode             String?   @unique(map: "cores_tax_code_key") @map("tax_code")
 
   // Trạng thái khách hàng: prospect | active | suspended | archived
   // Mặc định "active" khi tạo mới
@@ -64,6 +67,15 @@ model CustomerCore {
 
   // Soft delete: nếu deletedAt != null → khách hàng đã bị "xóa" (archived)
   deletedAt           DateTime? @map("deleted_at")
+
+  // --- Indexes ---
+  // Mọi query đều filter "deleted_at IS NULL" → index tránh seq scan
+  @@index([deletedAt], map: "idx_cores_deleted_at")
+  // Danh sách mặc định sắp xếp theo created_at DESC
+  @@index([createdAt], map: "idx_cores_created_at")
+  // Lưu ý: tìm kiếm businessName dùng ILIKE '%q%' (leading wildcard) → btree vô dụng.
+  // Index trigram GIN được tạo riêng bằng raw SQL (Prisma schema chưa hỗ trợ
+  // pg_trgm/GIN ops). Xem prisma/sql/search-index.sql.
 
   // Map model name "CustomerCore" sang tên bảng "cores" trong DB
   @@map("cores")
@@ -100,6 +112,17 @@ model Outbox {
 
   // NULL = chưa được publish → worker sẽ xử lý
   publishedAt   DateTime? @map("published_at")
+
+  // --- Claim + retry/DLQ (an toàn khi chạy nhiều instance worker) ---
+  // Khoá tạm: worker đặt locked_until=now()+30s khi CLAIM; worker khác SKIP.
+  // Hết hạn (vd worker crash) → event được claim lại → at-least-once.
+  lockedUntil   DateTime? @map("locked_until")
+  // Số lần đã thử publish — chuyển dead-letter khi vượt ngưỡng
+  attempts      Int       @default(0)
+  // Thông báo lỗi lần publish gần nhất (cắt ngắn) — phục vụ debug
+  lastError     String?   @map("last_error")
+  // != NULL → "poison event" đã ngừng retry (cần can thiệp tay)
+  deadLetteredAt DateTime? @map("dead_lettered_at")
 
   // Index để worker query nhanh các event chưa publish
   @@index([publishedAt], map: "idx_outbox_unpublished")

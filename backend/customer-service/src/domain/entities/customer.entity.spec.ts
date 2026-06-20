@@ -32,13 +32,19 @@ function makeCustomer(overrides: Partial<CustomerProps> = {}): Customer {
 describe('Customer entity', () => {
   describe('canPlaceOrder', () => {
     it('cho phép khi active và còn đủ hạn mức', () => {
-      const customer = makeCustomer({ creditLimitAmount: 10_000_000, creditUsedAmount: 2_000_000 });
+      const customer = makeCustomer({
+        creditLimitAmount: 10_000_000,
+        creditUsedAmount: 2_000_000,
+      });
       // Còn lại 8tr → đặt 5tr OK
       expect(customer.canPlaceOrder(5_000_000)).toBe(true);
     });
 
     it('từ chối khi vượt hạn mức tín dụng còn lại', () => {
-      const customer = makeCustomer({ creditLimitAmount: 10_000_000, creditUsedAmount: 8_000_000 });
+      const customer = makeCustomer({
+        creditLimitAmount: 10_000_000,
+        creditUsedAmount: 8_000_000,
+      });
       // Còn lại 2tr → đặt 5tr phải bị từ chối
       expect(customer.canPlaceOrder(5_000_000)).toBe(false);
     });
@@ -54,7 +60,10 @@ describe('Customer entity', () => {
     });
 
     it('cho phép đúng bằng hạn mức còn lại (biên)', () => {
-      const customer = makeCustomer({ creditLimitAmount: 10_000_000, creditUsedAmount: 0 });
+      const customer = makeCustomer({
+        creditLimitAmount: 10_000_000,
+        creditUsedAmount: 0,
+      });
       expect(customer.canPlaceOrder(10_000_000)).toBe(true);
     });
   });
@@ -70,7 +79,10 @@ describe('Customer entity', () => {
 
   describe('activate', () => {
     it('chuyển về active và xoá deletedAt', () => {
-      const customer = makeCustomer({ status: 'archived', deletedAt: new Date() });
+      const customer = makeCustomer({
+        status: 'archived',
+        deletedAt: new Date(),
+      });
       customer.activate();
       expect(customer.status).toBe('active');
       expect(customer.deletedAt).toBeNull();
@@ -79,12 +91,18 @@ describe('Customer entity', () => {
 
   describe('getAvailableCredit', () => {
     it('trả về phần còn lại = limit - used', () => {
-      const customer = makeCustomer({ creditLimitAmount: 10_000_000, creditUsedAmount: 3_000_000 });
+      const customer = makeCustomer({
+        creditLimitAmount: 10_000_000,
+        creditUsedAmount: 3_000_000,
+      });
       expect(customer.getAvailableCredit()).toBe(7_000_000);
     });
 
     it('không bao giờ trả số âm (used > limit)', () => {
-      const customer = makeCustomer({ creditLimitAmount: 1_000_000, creditUsedAmount: 5_000_000 });
+      const customer = makeCustomer({
+        creditLimitAmount: 1_000_000,
+        creditUsedAmount: 5_000_000,
+      });
       expect(customer.getAvailableCredit()).toBe(0);
     });
 

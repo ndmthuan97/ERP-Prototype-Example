@@ -1,0 +1,16 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "roots": ["<rootDir>/test"],
+  "testEnvironment": "node",
+  "testRegex": ".int-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "setupFiles": ["dotenv/config", "reflect-metadata"],
+  "moduleNameMapper": {
+    "^uuid$": "<rootDir>/test/uuid-real.js",
+    "^@erp/shared$": "<rootDir>/../shared/src/index.ts",
+    "^(\\.{1,2}/.*)\\.js$": "$1"
+  }
+}

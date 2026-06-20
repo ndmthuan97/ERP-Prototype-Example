@@ -1,0 +1,142 @@
+# =============================================================================
+# CI — Build, lint, typecheck & test cho phần ĐÃ implement
+# =============================================================================
+# Hiện chỉ gate @erp/shared + customer-service (xem docs/IMPLEMENTATION-STATUS.md).
+# Khi build thêm service, thêm job tương ứng.
+#
+# Unit test KHÔNG cần DB/Redis (repo/cache được mock). E2E test (test:e2e) tự
+# skip khi thiếu DATABASE_URL nên không chạy ở đây.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Hủy run cũ khi push mới lên cùng nhánh/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (shared + customer-service)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # --- @erp/shared: cài + build (sinh dist để customer-service typecheck) ---
+      - name: Install @erp/shared
+        run: npm install --prefix shared
+
+      - name: Build @erp/shared
+        run: npm run build --prefix shared
+
+      # --- customer-service: cài + lint + build (typecheck) + unit test ---
+      - name: Install customer-service
+        run: npm install --prefix customer-service
+
+      # Hard gate STRICT: lint:check = eslint KHÔNG --fix → fail nếu code chưa
+      # format hoặc còn lỗi. (Dev chạy `npm run lint` để auto-format trước commit.)
+      - name: Lint customer-service (strict)
+        run: npm run lint:check --prefix customer-service
+
+      - name: Build (typecheck) customer-service
+        run: npm run build --prefix customer-service
+
+      # test:cov enforce ngưỡng coverage (coverageThreshold trong package.json)
+      - name: Unit test + coverage customer-service
+        run: npm run test:cov --prefix customer-service
+
+      # --- inventory-service ---
+      - name: Install inventory-service
+        run: npm install --prefix inventory-service
+
+      - name: Lint inventory-service (strict)
+        run: npm run lint:check --prefix inventory-service
+
+      - name: Build (typecheck) inventory-service
+        run: npm run build --prefix inventory-service
+
+      - name: Unit test + coverage inventory-service
+        run: npm run test:cov --prefix inventory-service
+
+  # ===========================================================================
+  # Integration tests — repository chạy trên Postgres THẬT (service container)
+  # ===========================================================================
+  integration:
+    name: integration (customer-service + Postgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build @erp/shared
+        run: npm install --prefix shared && npm run build --prefix shared
+
+      - name: Install customer-service
+        run: npm install --prefix customer-service
+
+      - name: Install inventory-service
+        run: npm install --prefix inventory-service
+
+      - name: Create schemas (customer + inventory)
+        working-directory: backend/customer-service
+        run: node -e "const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.DIRECT_URL});await c.connect();await c.query('CREATE SCHEMA IF NOT EXISTS customer');await c.query('CREATE SCHEMA IF NOT EXISTS inventory');await c.end();})().catch(e=>{console.error(e);process.exit(1)})"
+
+      - name: Push Prisma schema — customer
+        working-directory: backend/customer-service
+        run: npx prisma db push
+
+      - name: Push Prisma schema — inventory
+        working-directory: backend/inventory-service
+        run: npx prisma db push
+
+      - name: Integration tests — customer-service
+        working-directory: backend/customer-service
+        run: npm run test:int
+
+      - name: Integration tests — inventory-service (optimistic locking)
+        working-directory: backend/inventory-service
+        run: npm run test:int

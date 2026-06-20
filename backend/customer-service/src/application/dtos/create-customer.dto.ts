@@ -38,7 +38,10 @@ export const createCustomerSchema = z.object({
     .refine(
       // Nếu giá trị undefined/null → bỏ qua (optional), nếu có → phải hợp lệ
       (value) => !value || TaxCode.isValid(value),
-      { message: 'Mã số thuế không đúng định dạng (VD: 0312345678 hoặc 0312345678-001)' },
+      {
+        message:
+          'Mã số thuế không đúng định dạng (VD: 0312345678 hoặc 0312345678-001)',
+      },
     ),
 
   // Tên người liên hệ — tùy chọn
@@ -50,9 +53,11 @@ export const createCustomerSchema = z.object({
   // Email — tùy chọn, nếu có phải đúng format email
   contactEmail: z.string().email('Email không đúng định dạng').optional(),
 
-  // Hạn mức tín dụng — tùy chọn, phải là số dương nếu có
+  // Hạn mức tín dụng — tùy chọn. Tiền VND tính bằng ĐỒNG (số nguyên), không phần
+  // lẻ → ép .int() để tránh sai số dấu phẩy động (float drift) khi tính toán tín dụng.
   creditLimitAmount: z
     .number()
+    .int('Hạn mức tín dụng phải là số nguyên (đơn vị: đồng)')
     .positive('Hạn mức tín dụng phải là số dương')
     .optional(),
 });

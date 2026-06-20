@@ -13,7 +13,7 @@
 // Tuân thủ Liskov Substitution: có thể thay thế bằng bất kỳ implementation nào
 // khác (InMemory, MongoDB...) mà application layer không cần thay đổi.
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -82,11 +82,12 @@ export class PrismaCustomerRepository implements ICustomerRepository {
       taxCode: record.taxCode,
       // Cast string từ DB về CustomerStatus — DB lưu string, domain dùng union type
       status: record.status as CustomerStatus,
-      // Prisma.Decimal → number, null vẫn giữ null
+      // Prisma.Decimal → số nguyên đồng (Math.round phòng dữ liệu lẻ cũ), null giữ null.
+      // Tiền VND luôn là số nguyên; làm tròn để tránh artifact dấu phẩy động.
       creditLimitAmount: record.creditLimitAmount
-        ? record.creditLimitAmount.toNumber()
+        ? Math.round(record.creditLimitAmount.toNumber())
         : null,
-      creditUsedAmount: record.creditUsedAmount.toNumber(),
+      creditUsedAmount: Math.round(record.creditUsedAmount.toNumber()),
       contactName: record.contactName,
       contactPhone: record.contactPhone,
       contactEmail: record.contactEmail,
@@ -139,17 +140,16 @@ export class PrismaCustomerRepository implements ICustomerRepository {
   }
 
   /**
-   * Tìm khách hàng theo mã số thuế.
+   * Tìm khách hàng theo mã số thuế (kể cả bản ghi đã archived).
    * Dùng để kiểm tra trùng lặp trước khi tạo mới.
-   * Chỉ tìm trong bản ghi chưa bị soft delete.
+   *
+   * MST là @unique TOÀN CỤC ở DB (1 pháp nhân = 1 MST, kể cả khi đã archived).
+   * Vì vậy KHÔNG filter deletedAt — để check ở application layer khớp với ràng buộc
+   * DB, tránh trường hợp app báo "OK" nhưng DB ném P2002.
    */
   async findByTaxCode(taxCode: string): Promise<Customer | null> {
-    const record = await this.prisma.customerCore.findFirst({
-      where: {
-        taxCode,
-        // Loại trừ bản ghi đã archived — cho phép tái sử dụng MST nếu KH cũ đã archived
-        deletedAt: null,
-      },
+    const record = await this.prisma.customerCore.findUnique({
+      where: { taxCode },
     });
 
     if (!record) return null;
@@ -231,57 +231,77 @@ export class PrismaCustomerRepository implements ICustomerRepository {
   async save(customer: Customer): Promise<Customer> {
     const prismaData = this.toPrismaData(customer);
 
-    // Kiểm tra bản ghi đã tồn tại chưa để xác định event type
-    const existing = await this.prisma.customerCore.findUnique({
-      where: { id: customer.id },
-    });
-    const isCreating = !existing;
-    const eventType = isCreating ? EVENT.CUSTOMER_CREATED : EVENT.CUSTOMER_UPDATED;
+    try {
+      // Transaction đảm bảo upsert + outbox ghi cùng lúc (all-or-nothing).
+      // Kiểm tra tồn tại NẰM TRONG transaction → tránh TOCTOU + bớt 1 round-trip.
+      const { record, isCreating } = await this.prisma.$transaction(
+        async (tx) => {
+          const existing = await tx.customerCore.findUnique({
+            where: { id: customer.id },
+          });
+          const creating = !existing;
+          const eventType = creating
+            ? EVENT.CUSTOMER_CREATED
+            : EVENT.CUSTOMER_UPDATED;
 
-    // Transaction đảm bảo upsert + outbox ghi cùng lúc (all-or-nothing)
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Upsert: tạo mới nếu chưa có, cập nhật nếu đã tồn tại
-      const upsertedRecord = await tx.customerCore.upsert({
-        where: { id: customer.id },
-        // Dữ liệu khi CREATE — bao gồm cả id
-        create: {
-          id: customer.id,
-          ...prismaData,
+          // Upsert: tạo mới nếu chưa có, cập nhật nếu đã tồn tại
+          const upsertedRecord = await tx.customerCore.upsert({
+            where: { id: customer.id },
+            // Dữ liệu khi CREATE — bao gồm cả id
+            create: {
+              id: customer.id,
+              ...prismaData,
+            },
+            // Dữ liệu khi UPDATE — không bao gồm id (immutable)
+            update: prismaData,
+          });
+
+          // Ghi outbox event — worker sẽ publish lên Pub/Sub sau
+          await tx.outbox.create({
+            data: {
+              id: uuidv4(),
+              aggregateType: 'Customer',
+              aggregateId: customer.id,
+              eventType,
+              // Payload chứa toàn bộ state hiện tại của entity
+              // Downstream consumers sẽ dùng payload này để xử lý
+              payload: {
+                id: upsertedRecord.id,
+                businessName: upsertedRecord.businessName,
+                taxCode: upsertedRecord.taxCode,
+                status: upsertedRecord.status,
+                creditLimitAmount:
+                  upsertedRecord.creditLimitAmount?.toString() ?? null,
+                creditUsedAmount: upsertedRecord.creditUsedAmount.toString(),
+                // Metadata truy vết — correlationId để grep cả vòng đời xuyên service
+                _meta: buildEventMeta(),
+              },
+            },
+          });
+
+          return { record: upsertedRecord, isCreating: creating };
         },
-        // Dữ liệu khi UPDATE — không bao gồm id (immutable)
-        update: prismaData,
-      });
+      );
 
-      // Ghi outbox event — worker sẽ publish lên Pub/Sub sau
-      await tx.outbox.create({
-        data: {
-          id: uuidv4(),
-          aggregateType: 'Customer',
-          aggregateId: customer.id,
-          eventType,
-          // Payload chứa toàn bộ state hiện tại của entity
-          // Downstream consumers sẽ dùng payload này để xử lý
-          payload: {
-            id: upsertedRecord.id,
-            businessName: upsertedRecord.businessName,
-            taxCode: upsertedRecord.taxCode,
-            status: upsertedRecord.status,
-            creditLimitAmount: upsertedRecord.creditLimitAmount?.toString() ?? null,
-            creditUsedAmount: upsertedRecord.creditUsedAmount.toString(),
-            // Metadata truy vết — correlationId để grep cả vòng đời xuyên service
-            _meta: buildEventMeta(),
-          },
-        },
-      });
+      this.logger.log(
+        `Customer ${isCreating ? EVENT.CUSTOMER_CREATED : EVENT.CUSTOMER_UPDATED}: ` +
+          `id=${record.id}, name="${record.businessName}"`,
+      );
 
-      return upsertedRecord;
-    });
-
-    this.logger.log(
-      `Customer ${eventType}: id=${result.id}, name="${result.businessName}"`,
-    );
-
-    return this.toDomain(result);
+      return this.toDomain(record);
+    } catch (error) {
+      // Trùng MST (unique violation P2002) — kể cả khi check ở application miss
+      // do race condition giữa 2 request đồng thời. DB là chốt chặn cuối.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          `Mã số thuế "${customer.taxCode ?? ''}" đã được sử dụng bởi khách hàng khác`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**

@@ -5,6 +5,10 @@
 
 > Liên quan: [Coding Standards](./coding-standards.md) · [Auth Endpoints](../api/auth-endpoints.md)
 
+> ⚠️ **Trạng thái thực tế:** hiện **chỉ `customer-service` chạy được**. Các mục về `auth/order/inventory/api-gateway` (§6) và `frontend` (§7), seed admin (§9) là **blueprint cho tương lai** — đánh dấu 🚧 bên dưới, bỏ qua cho tới khi service đó được build. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+>
+> **Đường nhanh chỉ chạy customer-service:** §1 → §2 → §3 → §4 (chỉ cần schema `customer`) → §5 → §6 (chỉ phần Customer Service) → §8 (chỉ health 3001).
+
 ---
 
 ## 1. Prerequisites — Phần mềm cần cài đặt
@@ -80,35 +84,30 @@ erp-prototype-example/
 └── README.md
 ```
 
-### 3.3 Cấu hình `.env` cho mỗi service
+### 3.3 Cấu hình `.env`
 
-Mỗi service có file `.env.example`. Copy và điền giá trị thực:
+> Hiện có **1 file `.env` duy nhất ở `backend/`** (không phải mỗi service 1 file). Copy và điền giá trị thực:
 
 ```bash
-# Lặp lại cho mỗi service
-cd backend/auth-service
-cp .env.example .env
-# Mở .env và điền giá trị
+cp backend/.env.example backend/.env
+# Mở backend/.env và điền giá trị
 ```
 
-#### Bảng biến môi trường chung
+#### Bảng biến môi trường chung (theo `backend/.env.example` thật)
 
 | Biến                         | Mô tả                              | Ví dụ                                    |
 | ---------------------------- | ----------------------------------- | ---------------------------------------- |
-| `DATABASE_URL`               | Connection string PostgreSQL        | `postgresql://postgres:pass@db.xxx.supabase.co:5432/postgres?schema=auth` |
-| `JWT_SECRET`                 | Secret key cho JWT                  | `your-super-secret-key-min-32-chars`     |
-| `JWT_EXPIRATION`             | Thời hạn access token               | `15m`                                    |
-| `JWT_REFRESH_EXPIRATION`     | Thời hạn refresh token              | `7d`                                     |
+| `DATABASE_URL`               | Connection pooled (PgBouncer, 6543) — dùng cho runtime | `postgresql://postgres.[ref]:pass@...pooler.supabase.com:6543/postgres` |
+| `DIRECT_URL`                 | Connection direct (5432) — dùng cho `prisma migrate`/`db push` | `postgresql://postgres.[ref]:pass@db.[ref].supabase.co:5432/postgres` |
+| `JWT_SECRET`                 | Secret key cho JWT (auth-service tương lai) | `your-super-secret-key-min-32-chars`     |
+| `JWT_EXPIRES_IN`             | Thời hạn access token               | `15m`                                    |
+| `JWT_REFRESH_EXPIRES_IN`     | Thời hạn refresh token              | `7d`                                     |
 | `UPSTASH_REDIS_REST_URL`     | Upstash Redis URL                   | `https://xxx.upstash.io`                 |
 | `UPSTASH_REDIS_REST_TOKEN`   | Upstash Redis token                 | `AXxx...`                                |
 | `PUBSUB_EMULATOR_HOST`      | Pub/Sub Emulator host               | `localhost:8085`                          |
 | `PUBSUB_PROJECT_ID`         | GCP project ID (giả lập)            | `erp-prototype`                          |
 
-> **Quan trọng**: Mỗi service sử dụng **schema riêng** trong cùng 1 database Supabase. Đảm bảo `?schema=` đúng:
-> - Auth Service: `?schema=auth`
-> - Customer Service: `?schema=customer`
-> - Order Service: `?schema=order`
-> - Inventory Service: `?schema=inventory`
+> **Schema per service:** mỗi service quản lý 1 schema riêng (`customer`, `order`, `inventory`, ...) qua Prisma `schemas` trong `schema.prisma` — **không** truyền `?schema=` trên connection string. Hiện chỉ schema `customer` tồn tại.
 
 ---
 
@@ -190,53 +189,41 @@ flowchart LR
 
 Mở **terminal riêng** cho mỗi service:
 
-#### Auth Service
+> **Prerequisite (1 lần):** build thư viện dùng chung trước khi start service.
+> ```bash
+> cd backend
+> npm run install:shared && npm run build:shared
+> ```
 
-```bash
-cd backend/auth-service
-npm install
-npx prisma generate
-npx prisma db push          # Tạo tables từ schema.prisma
-npm run start:dev            # Chạy ở chế độ development (hot reload)
-```
-
-#### Customer Service
+#### Customer Service ✅ (chạy được)
 
 ```bash
 cd backend/customer-service
 npm install
 npx prisma generate
-npx prisma db push
-npm run start:dev
+npx prisma db push           # Tạo bảng + index trong schema "customer"
+npm run start:dev            # KHÔNG phải "npm run dev"
 ```
 
-#### Order Service
+> Tùy chọn (tối ưu tìm kiếm tên KH khi data lớn): tạo trigram GIN index —
+> `psql "$DIRECT_URL" -f prisma/sql/search-index.sql` (hoặc dán vào Supabase SQL Editor).
 
-```bash
-cd backend/order-service
-npm install
-npx prisma generate
-npx prisma db push
-npm run start:dev
-```
-
-#### Inventory Service
+#### Inventory Service ✅ (chạy được)
 
 ```bash
 cd backend/inventory-service
 npm install
 npx prisma generate
-npx prisma db push
-npm run start:dev
+npx prisma db push           # Tạo bảng trong schema "inventory"
+npm run start:dev            # Port 3003
 ```
 
-#### API Gateway
+> Optimistic locking demo: `POST /inventory/items` → `POST /inventory/items/:sku/reserve`
+> (nhiều request reserve đồng thời 1 SKU không gây lost update — xem `test:int`).
 
-```bash
-cd backend/api-gateway
-npm install
-npm run start:dev
-```
+#### Auth / Order / API Gateway 🚧 (chưa implement — bỏ qua)
+
+Các service này hiện chỉ là scaffold `Hello World!` (chưa có Prisma schema, business logic). Lệnh `prisma db push` sẽ lỗi vì chưa có `schema.prisma`. **Bỏ qua** cho tới khi được build theo [improvement-plan.md](../../improvement-plan.md) (Track C) / [prototype-development-plan.md](../../prototype-development-plan.md).
 
 ### Bảng ports tổng hợp
 
@@ -252,7 +239,9 @@ npm run start:dev
 
 ---
 
-## 7. Khởi động Frontend
+## 7. Khởi động Frontend 🚧 (chưa implement)
+
+> Thư mục `frontend/` hiện **rỗng** — chưa có `package.json` hay code. Bỏ qua mục này. Lệnh dưới là blueprint cho khi frontend được build (Next.js 15 + Ant Design 5).
 
 ```bash
 cd frontend
@@ -276,15 +265,16 @@ Truy cập `http://localhost:3000` để mở giao diện.
 
 ### Health Check các services
 
-Chạy lần lượt để đảm bảo mọi service đều respond:
+> Hiện chỉ `customer-service:3001` trả health thật. Các service khác (3002/3003/3004/3010) chưa chạy — 🚧 blueprint.
 
 ```bash
+# Customer Service ✅
+curl http://localhost:3001/health
+# Expected: {"status":"ok","time":...,"checks":[{"name":"postgres",...},{"name":"redis",...}]}
+
+# --- 🚧 các service dưới đây CHƯA implement ---
 # Auth Service
 curl http://localhost:3004/health
-# Expected: {"status":"ok"}
-
-# Customer Service
-curl http://localhost:3001/health
 # Expected: {"status":"ok"}
 
 # Order Service
@@ -314,7 +304,9 @@ curl http://localhost:3010/health
 
 ---
 
-## 9. Seed — Tạo admin user đầu tiên
+## 9. Seed — Tạo admin user đầu tiên 🚧 (chưa implement)
+
+> Mục này phụ thuộc `auth-service` (chưa code): chưa có schema `auth`, bảng `auth.users`, file `prisma/seed.ts`, hay script `seed/create-admin.js`. **Bỏ qua** cho tới khi auth-service được build. Lưu ý blueprint sẽ đổi schema `auth` (reserved của Supabase) → `app_auth`.
 
 Vì endpoint `POST /auth/register` yêu cầu admin token, bạn cần seed admin user trực tiếp vào database lần đầu tiên.
 

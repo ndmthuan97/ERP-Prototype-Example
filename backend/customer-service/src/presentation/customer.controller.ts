@@ -16,7 +16,6 @@ import {
   Body,
   Param,
   Query,
-  BadRequestException,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -47,18 +46,10 @@ export class CustomerController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() body: any) {
-    // Validation nằm trong Command (Zod) — controller không validate
-    // Nếu Zod throw error → catch và wrap thành BadRequestException
-    try {
-      return await this.createCustomerCommand.execute(body);
-    } catch (error) {
-      // Chỉ wrap Zod validation errors, các error khác throw nguyên bản
-      if (error.name === 'ZodError') {
-        throw new BadRequestException(error.errors);
-      }
-      throw error;
-    }
+  async create(@Body() body: unknown) {
+    // Validation nằm trong Command (Zod). ZodError được ZodExceptionFilter
+    // (toàn cục) dịch thành 400 → controller KHÔNG cần try/catch.
+    return this.createCustomerCommand.execute(body);
   }
 
   /**
@@ -71,11 +62,16 @@ export class CustomerController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    // Parse query params — mặc định page=1, limit=20
-    const pageNumber = Math.max(1, parseInt(page || '1', 10) || 1);
-    const limitNumber = Math.min(100, Math.max(1, parseInt(limit || '20', 10) || 20));
+    // Chỉ parse string → number; việc CLAMP (min/max) + default do SearchCustomersQuery
+    // đảm nhiệm (single source of truth) → tránh lặp magic number ở 2 nơi (DRY).
+    const pageNumber = Number.parseInt(page ?? '', 10);
+    const limitNumber = Number.parseInt(limit ?? '', 10);
 
-    return this.searchCustomersQuery.execute(query || '', pageNumber, limitNumber);
+    return this.searchCustomersQuery.execute(
+      query ?? '',
+      Number.isNaN(pageNumber) ? undefined : pageNumber,
+      Number.isNaN(limitNumber) ? undefined : limitNumber,
+    );
   }
 
   /**
@@ -92,19 +88,10 @@ export class CustomerController {
    * Chỉ cập nhật các field được gửi trong body (partial update)
    */
   @Patch(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() body: any,
-  ) {
-    try {
-      // Merge id từ URL param vào body — UpdateCommand expect { id, ...fields }
-      return await this.updateCustomerCommand.execute({ id, ...body });
-    } catch (error) {
-      if (error.name === 'ZodError') {
-        throw new BadRequestException(error.errors);
-      }
-      throw error;
-    }
+  async update(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    // Merge id từ URL param vào body — UpdateCommand validate { id, ...fields }.
+    // ZodError → ZodExceptionFilter → 400 (không cần try/catch).
+    return this.updateCustomerCommand.execute({ id, ...body });
   }
 
   /**

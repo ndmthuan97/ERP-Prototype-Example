@@ -1,5 +1,7 @@
 # RBAC — Phân quyền theo vai trò
 
+> 🚧 **PLANNED — chưa implement.** `auth-service` và `api-gateway` (nơi RBAC sống) hiện chỉ là scaffold. Tài liệu này là **blueprint thiết kế**. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md). Lưu ý: thiết kế "check 100% ở gateway" sẽ được điều chỉnh (gateway authn + authz thô, service enforce authz tài nguyên) — xem [improvement-plan.md](../../improvement-plan.md) Phase 5.
+
 > Tài liệu mô tả hệ thống phân quyền Role-Based Access Control trong ERP Prototype: 3 roles, permission matrix, JWT guard flow.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [design-patterns](design-patterns.md)
 

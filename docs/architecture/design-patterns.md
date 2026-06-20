@@ -1,5 +1,7 @@
 # Design Patterns — Các mẫu thiết kế
 
+> ⚠️ **Trạng thái hỗn hợp:** ~6/14 pattern đã có code thật (DDD Layers, Repository, Value Object, Outbox, Cache-Aside, Observability — ở `customer-service`/`@erp/shared`). Các pattern còn lại (Saga, CQRS đầy đủ, Optimistic Locking, RBAC+JWT, API Gateway, Idempotent Consumer đấu dây thật) **mới là blueprint**. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu mô tả 14 design patterns được áp dụng trong ERP Prototype. Mỗi pattern: giải thích, vấn đề nó giải quyết, nơi áp dụng, và code/diagram minh họa.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [event-flows](event-flows.md)
 

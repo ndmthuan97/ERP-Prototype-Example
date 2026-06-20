@@ -132,7 +132,9 @@ Cần PostgreSQL database. Có 2 lựa chọn chính: chạy Docker local hoặc
 
 ### Decision
 
-Chọn **Supabase PostgreSQL** (free tier) với **4 schemas** riêng biệt: `auth`, `customer`, `order`, `inventory`.
+Chọn **Supabase PostgreSQL** (free tier) với **4 schemas** riêng biệt: `app_auth`, `customer`, `order`, `inventory`.
+
+> ⚠️ Dùng `app_auth` (KHÔNG dùng `auth`) — schema `auth` do Supabase quản lý; xem [ADR-014](#adr-014-auth-schema--app_auth-không-dùng-auth-của-supabase).
 
 ### Alternatives Considered
 
@@ -319,6 +321,132 @@ Dùng **npm** (bundled with Node.js).
 
 ---
 
+## ADR-009: Outbox Worker an toàn đa-instance (SKIP LOCKED + DLQ)
+
+| Mục | Nội dung |
+|-----|----------|
+| **Status** | ✅ Accepted (2026 — improvement pass) |
+
+### Context
+
+Outbox Worker bản đầu poll bằng `SELECT ... WHERE published_at IS NULL` không khoá. Chạy ≥2 instance → mọi worker lấy cùng batch → publish trùng. Event "độc" (luôn fail) bị retry vô hạn.
+
+### Decision
+
+Claim batch bằng `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)` + cột `locked_until`; thêm `attempts`/`last_error`/`dead_lettered_at` để retry có giới hạn → dead-letter sau `MAX_ATTEMPTS`.
+
+### Consequences
+
+- **Tích cực:** Scale-out an toàn (worker khác SKIP dòng đã claim); poison event không kẹt vòng lặp; quan sát được qua `outbox_pending` (COUNT thật) + `events_dead_lettered_total`.
+- **Trade-off:** Logic store phức tạp hơn; cần raw SQL cho SKIP LOCKED (Prisma chưa hỗ trợ trực tiếp).
+
+---
+
+## ADR-010: Event Envelope versioned + `eventId` dedup
+
+| Mục | Nội dung |
+|-----|----------|
+| **Status** | ✅ Accepted (2026) |
+
+### Context
+
+Bản đầu publish payload trần, không kèm `eventId`. Outbox at-least-once có thể publish cùng 1 dòng >1 lần → consumer không có khoá dedup ổn định (Pub/Sub messageId đổi mỗi lần publish lại).
+
+### Decision
+
+Bọc mọi message trong `EventEnvelope { eventId, eventType, eventVersion, occurredAt, correlationId, payload }`. `eventId` = id dòng outbox; cũng gắn vào Pub/Sub message attributes. Consumer dedup bằng `withIdempotency(eventId)`.
+
+### Consequences
+
+- **Tích cực:** Idempotent Consumer hoạt động đúng; `eventVersion` cho phép tiến hoá schema; truy vết bằng correlationId.
+- **Trade-off:** Consumer phải đọc `envelope.payload` (thêm 1 lớp).
+
+---
+
+## ADR-011: Tiền tệ = số nguyên ĐỒNG (VND), không dùng float
+
+| Mục | Nội dung |
+|-----|----------|
+| **Status** | ✅ Accepted (2026) |
+
+### Context
+
+`creditLimitAmount`/`creditUsedAmount` map `Decimal` → `number` (float). VND không có phần lẻ; phép trừ trên float có rủi ro sai số.
+
+### Decision
+
+Ràng buộc tiền là **số nguyên đồng** (`z.number().int()`), làm tròn khi đọc từ Decimal. Khi nào cần đa tiền tệ có phần lẻ → chuyển sang `Decimal`/minor-unit `bigint`.
+
+### Consequences
+
+- **Tích cực:** Loại sai số float cho nghiệp vụ tín dụng; đơn giản.
+- **Trade-off:** Không hỗ trợ tiền có phần lẻ cho tới khi nâng cấp.
+
+---
+
+## ADR-012: Vị trí Authorization — Gateway thô + Service mịn
+
+| Mục | Nội dung |
+|-----|----------|
+| **Status** | ✅ Accepted (2026) — thay thế "check 100% ở Gateway" |
+
+### Context
+
+Blueprint RBAC ban đầu đặt toàn bộ kiểm tra quyền ở API Gateway. Gateway không biết ngữ cảnh tài nguyên (vd: "user chỉ sửa được KH thuộc team mình") → không enforce được rule cấp-bản-ghi.
+
+### Decision
+
+Gateway: xác thực (verify JWT) + authz **thô** theo route/role. Mỗi service: enforce authz **mịn** theo tài nguyên/domain (ownership, trạng thái).
+
+### Consequences
+
+- **Tích cực:** Bảo vệ đúng tầng; service vẫn an toàn nếu bị gọi trực tiếp (defense in depth).
+- **Trade-off:** Logic authz nằm ở 2 nơi → cần tài liệu rõ ranh giới.
+
+---
+
+## ADR-013: Prisma migrate qua DIRECT_URL; ràng buộc ở tầng DB
+
+| Mục | Nội dung |
+|-----|----------|
+| **Status** | ✅ Accepted (2026) |
+
+### Context
+
+Prisma CLI ban đầu dùng `DATABASE_URL` (PgBouncer 6543) → migrate dễ lỗi prepared statement. Tính duy nhất MST chỉ check ở application (race condition).
+
+### Decision
+
+Prisma CLI dùng `DIRECT_URL` (5432). Thêm `@unique` cho `tax_code` + index (`deleted_at`, `created_at`) ở DB; bắt `P2002` → `ConflictException`. Index trigram cho tìm kiếm tên (raw SQL).
+
+### Consequences
+
+- **Tích cực:** Migrate ổn định; DB là chốt chặn cuối chống trùng MST; query có index.
+- **Trade-off:** Một số index (GIN trigram, partial) phải quản lý bằng raw SQL ngoài schema.
+
+---
+
+## ADR-014: Auth schema = `app_auth` (không dùng `auth` của Supabase)
+
+| Mục | Nội dung |
+|-----|----------|
+| **Status** | ✅ Accepted (2026) |
+
+### Context
+
+Blueprint đặt bảng users của app vào schema `auth` — schema này do Supabase quản lý (Supabase Auth). Đặt bảng app vào đó có thể bị ghi đè/khoá khi Supabase nâng cấp.
+
+### Decision
+
+Auth Service dùng schema riêng `app_auth`. `create-schemas.js` tạo `app_auth` thay vì tái dùng `auth`.
+
+### Consequences
+
+- **Tích cực:** Tránh xung đột với Supabase; ranh giới sở hữu rõ ràng.
+- **Trade-off:** Cần cập nhật mọi tài liệu/đoạn cấu hình đang tham chiếu `auth`.
+
+---
+
 ## Tổng kết
 
 | Quyết định | Lựa chọn | Lý do chính |
@@ -331,6 +459,8 @@ Dùng **npm** (bundled with Node.js).
 | Auth | **Tự code** | Deep learning JWT, bcrypt, RBAC |
 | Frontend | **Next.js + Ant Design** | SSR-ready, ERP components sẵn |
 | Package Manager | **npm** | Simple, bundled, universal |
+
+> **Improvement pass (2026):** ADR-009 (outbox SKIP LOCKED + DLQ), ADR-010 (event envelope + eventId), ADR-011 (tiền = số nguyên đồng), ADR-012 (authz: gateway thô + service mịn), ADR-013 (migrate qua DIRECT_URL + ràng buộc DB), ADR-014 (schema `app_auth`). Xem [improvement-plan.md](../../improvement-plan.md).
 
 ---
 

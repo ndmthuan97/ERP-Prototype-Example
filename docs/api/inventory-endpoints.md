@@ -1,5 +1,7 @@
 # Inventory Service — API Endpoints
 
+> 🚧 **PLANNED — chưa implement.** `inventory-service` hiện chỉ là scaffold `Hello World!`. Tài liệu dưới đây là **blueprint thiết kế**, không phải mô tả code đang chạy. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu tham chiếu cho tất cả endpoints của **Inventory Service** (`localhost:3003`).
 > Service quản lý hàng hóa (items), kho hàng (warehouses), và tồn kho (stock) — bao gồm nhập kho, xuất kho, và truy vấn lịch sử movements.
 

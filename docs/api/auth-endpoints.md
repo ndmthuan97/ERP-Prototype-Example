@@ -1,9 +1,23 @@
 # Auth Service — API Endpoints
 
+> 🚧 **PLANNED — chưa implement.** `auth-service` hiện chỉ là scaffold `Hello World!`. Tài liệu dưới đây là **blueprint thiết kế**, không phải mô tả code đang chạy. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+
 > Tài liệu tham chiếu cho tất cả endpoints của **Auth Service** (`localhost:3004`).
 > Service chịu trách nhiệm xác thực (authentication), phân quyền (authorization), và quản lý phiên đăng nhập (session) thông qua JWT.
 
 > Liên quan: [Customer Endpoints](./customer-endpoints.md) · [Order Endpoints](./order-endpoints.md) · [Inventory Endpoints](./inventory-endpoints.md)
+
+---
+
+## Design notes (blueprint — chốt trước khi implement)
+
+Các quyết định bảo mật cần tuân theo khi build Auth Service (xem [ADR-012](../overview/tech-decisions.md), [ADR-014](../overview/tech-decisions.md)):
+
+- **Schema DB:** dùng `app_auth` (KHÔNG dùng `auth` của Supabase) — [ADR-014].
+- **Password:** bcrypt cost factor ≥ 12 (cân bằng an toàn/độ trễ); không bao giờ log password/hash.
+- **Refresh token rotation + reuse detection:** mỗi lần `/auth/refresh`, phát refresh token MỚI và **vô hiệu hoá token cũ** (rotation). Nếu một refresh token đã dùng lại bị trình ra lần nữa → coi là **token theft**, **thu hồi cả family** (mọi token của phiên đó). Chỉ blacklist là chưa đủ.
+- **Authorization placement:** Gateway verify JWT + authz thô theo role/route; mỗi service tự enforce authz mịn theo tài nguyên (ownership) — [ADR-012]. KHÔNG dồn toàn bộ check về Gateway.
+- **Lưu refresh token:** lưu hash của refresh token (không lưu plaintext) + `family_id`/`jti` để rotation/reuse-detection.
 
 ---
 
