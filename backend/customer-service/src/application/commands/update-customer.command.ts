@@ -74,9 +74,9 @@ export class UpdateCustomerCommand {
       }
     }
 
-    // Apply các thay đổi lên entity
-    // Chỉ cập nhật field có giá trị trong DTO (undefined = giữ nguyên)
-    this.applyChanges(existingCustomer, validatedData);
+    // Apply changes through entity method (DDD encapsulation)
+    const { id: _id, ...changes } = validatedData;
+    existingCustomer.update(changes);
 
     // Save entity qua repository (update + outbox event trong transaction)
     const updatedCustomer =
@@ -86,40 +86,5 @@ export class UpdateCustomerCommand {
     await this.cacheService.del(`customer:${validatedData.id}`);
 
     return updatedCustomer;
-  }
-
-  /**
-   * Apply partial changes lên entity hiện tại.
-   * Chỉ cập nhật field có giá trị (không phải undefined) trong DTO.
-   * Tách method riêng để giữ execute() ngắn gọn (SRP).
-   *
-   * @param customer - Entity hiện tại (sẽ bị mutate)
-   * @param changes  - Các field cần thay đổi
-   */
-  private applyChanges(
-    customer: Customer,
-    changes: Omit<UpdateCustomerDto, 'id'>,
-  ): void {
-    if (changes.businessName !== undefined) {
-      customer.businessName = changes.businessName;
-    }
-    if (changes.taxCode !== undefined) {
-      customer.taxCode = changes.taxCode;
-    }
-    if (changes.contactName !== undefined) {
-      customer.contactName = changes.contactName;
-    }
-    if (changes.contactPhone !== undefined) {
-      customer.contactPhone = changes.contactPhone;
-    }
-    if (changes.contactEmail !== undefined) {
-      customer.contactEmail = changes.contactEmail;
-    }
-    if (changes.creditLimitAmount !== undefined) {
-      customer.creditLimitAmount = changes.creditLimitAmount;
-    }
-
-    // Cập nhật timestamp khi có bất kỳ thay đổi nào
-    customer.updatedAt = new Date();
   }
 }

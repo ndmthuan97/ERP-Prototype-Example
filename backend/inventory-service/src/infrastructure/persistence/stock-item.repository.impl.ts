@@ -15,6 +15,7 @@ import {
   OptimisticLockError,
   type OutboxEventInput,
   type PaginatedResult,
+  type StockMovementInput,
 } from '../../domain/repositories/index.js';
 import { PrismaService } from './prisma.service.js';
 import { getCorrelationId } from '@erp/shared';
@@ -169,6 +170,66 @@ export class PrismaStockItemRepository implements IStockItemRepository {
         where: { id: item.id },
       });
       return this.toDomain(updated);
+    });
+  }
+
+  async saveWithMovement(
+    item: StockItem,
+    movement: StockMovementInput,
+    event?: OutboxEventInput,
+  ): Promise<StockItem> {
+    return this.prisma.$transaction(async (tx) => {
+      const res = await tx.stockItem.updateMany({
+        where: { id: item.id, version: item.version },
+        data: {
+          name: item.name,
+          quantityAvailable: item.quantityAvailable,
+          quantityReserved: item.quantityReserved,
+          version: { increment: 1 },
+          updatedAt: item.updatedAt,
+        },
+      });
+
+      if (res.count === 0) {
+        throw new OptimisticLockError(item.id);
+      }
+
+      await tx.stockMovement.create({
+        data: {
+          itemId: movement.itemId,
+          type: movement.type,
+          quantity: movement.quantity,
+          reason: movement.reason,
+          reference: movement.reference ?? null,
+        },
+      });
+
+      if (event) {
+        await tx.outbox.create({ data: this.buildOutboxData(item, event) });
+      }
+
+      const updated = await tx.stockItem.findUniqueOrThrow({
+        where: { id: item.id },
+      });
+      this.logger.log(
+        `StockItem ${movement.type}: sku="${item.sku}" qty=${movement.quantity} reason="${movement.reason}"`,
+      );
+      return this.toDomain(updated);
+    });
+  }
+
+  async createOutboxEvent(event: OutboxEventInput): Promise<void> {
+    await this.prisma.outbox.create({
+      data: {
+        id: uuidv4(),
+        aggregateType: 'StockItem',
+        aggregateId: 'saga',
+        eventType: event.eventType,
+        payload: {
+          ...event.payload,
+          _meta: buildEventMeta(),
+        } as Prisma.InputJsonObject,
+      },
     });
   }
 }

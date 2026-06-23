@@ -1,0 +1,57 @@
+// =============================================================================
+// PRISMA SCHEMA — Catalog Service
+// =============================================================================
+// Catalog Service owns the "catalog" schema with 2 tables:
+//   1. products  — Product aggregate root
+//   2. outbox    — Outbox Pattern for reliable event delivery
+
+datasource db {
+  provider  = "postgresql"
+  schemas   = ["catalog"]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// =============================================================================
+// MODEL: Product — Aggregate Root of bounded context "Catalog"
+// =============================================================================
+model Product {
+  id                String    @id @default(uuid())
+  sku               String    @unique(map: "products_sku_key") @map("sku")
+  name              String
+  unit              String    @default("PCS")
+  defaultSalePrice  Decimal   @default(0) @map("default_sale_price") @db.Decimal(15, 2)
+  isActive          Boolean   @default(true) @map("is_active")
+  version           Int       @default(0)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([isActive], map: "idx_products_is_active")
+  @@index([createdAt], map: "idx_products_created_at")
+  @@map("products")
+  @@schema("catalog")
+}
+
+// =============================================================================
+// MODEL: Outbox — Outbox Pattern for Event-Driven Architecture
+// =============================================================================
+model Outbox {
+  id             String    @id @default(uuid())
+  aggregateType  String    @map("aggregate_type")
+  aggregateId    String    @map("aggregate_id")
+  eventType      String    @map("event_type")
+  payload        Json
+  createdAt      DateTime  @default(now()) @map("created_at")
+  publishedAt    DateTime? @map("published_at")
+  lockedUntil    DateTime? @map("locked_until")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  deadLetteredAt DateTime? @map("dead_lettered_at")
+
+  @@index([publishedAt], map: "idx_outbox_unpublished")
+  @@map("outbox")
+  @@schema("catalog")
+}

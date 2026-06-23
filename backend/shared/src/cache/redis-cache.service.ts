@@ -31,7 +31,7 @@ export class RedisCacheService {
       token: process.env.UPSTASH_REDIS_REST_TOKEN ?? '',
     });
 
-    this.logger.log('Redis Cache Service khởi tạo (Upstash REST API)');
+    this.logger.log('Redis Cache Service initialized (Upstash REST API)');
   }
 
   /**
@@ -62,7 +62,7 @@ export class RedisCacheService {
     } catch (error) {
       // Cache lỗi không nên crash app — log và fallback DB
       this.logger.warn(
-        `Cache GET lỗi cho key="${key}":`,
+        `Cache GET error for key="${key}":`,
         error instanceof Error ? error.message : error,
       );
       return null;
@@ -78,7 +78,7 @@ export class RedisCacheService {
       await this.redis.set(key, value, { ex: ttl });
     } catch (error) {
       this.logger.warn(
-        `Cache SET lỗi cho key="${key}":`,
+        `Cache SET error for key="${key}":`,
         error instanceof Error ? error.message : error,
       );
     }
@@ -92,7 +92,7 @@ export class RedisCacheService {
       await this.redis.del(key);
     } catch (error) {
       this.logger.warn(
-        `Cache DEL lỗi cho key="${key}":`,
+        `Cache DEL error for key="${key}":`,
         error instanceof Error ? error.message : error,
       );
     }
@@ -125,12 +125,12 @@ export class RedisCacheService {
 
       if (totalDeleted > 0) {
         this.logger.debug(
-          `Invalidated ${totalDeleted} cache key(s) khớp pattern "${pattern}"`,
+          `Invalidated ${totalDeleted} cache key(s) matching pattern "${pattern}"`,
         );
       }
     } catch (error) {
       this.logger.warn(
-        `Cache invalidatePattern lỗi cho pattern="${pattern}":`,
+        `Cache invalidatePattern error for pattern="${pattern}":`,
         error instanceof Error ? error.message : error,
       );
     }

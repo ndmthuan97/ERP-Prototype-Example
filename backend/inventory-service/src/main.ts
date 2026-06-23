@@ -29,6 +29,11 @@ async function bootstrap() {
     correlation.use(req, res, next),
   );
 
+  // API versioning: all business routes under /v1, observability at root
+  app.setGlobalPrefix('v1', {
+    exclude: ['health', 'health/live', 'metrics'],
+  });
+
   app.useGlobalFilters(new ZodExceptionFilter());
 
   const corsOrigins = process.env.CORS_ORIGINS?.trim();
@@ -43,7 +48,7 @@ async function bootstrap() {
       String(DEFAULT_PORT),
     10,
   );
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 Inventory Service đang chạy tại http://localhost:${port}`);
   logger.log(`📦 Bounded Context: Inventory (Optimistic Locking)`);

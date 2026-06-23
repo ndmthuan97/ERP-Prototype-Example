@@ -1,0 +1,123 @@
+// =============================================================================
+// PRISMA SCHEMA — Sales Service
+// =============================================================================
+// Bounded context "Sales": quản lý đơn hàng với Aggregate Root pattern.
+// Điểm nhấn:
+// - SalesOrder là Aggregate Root — quản lý SalesOrderLine, status lifecycle
+// - StatusHistory: audit trail mọi chuyển trạng thái
+// - LifecycleView: CQRS denormalized read model (query nhanh, không JOIN)
+// - Outbox: claim SKIP LOCKED + retry/DLQ (giống customer/inventory)
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["sales"]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// =============================================================================
+// MODEL: SalesOrder — Aggregate Root
+// =============================================================================
+// Tất cả thao tác trên SalesOrderLine PHẢI đi qua SalesOrder (aggregate boundary).
+// Status transitions: draft → submitted → confirmed → fulfilled | cancelled
+model SalesOrder {
+  id           String    @id @default(uuid())
+  customerId   String    @map("customer_id")
+  status       String    @default("draft")
+  totalAmount  Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
+  cancelReason String?   @map("cancel_reason")
+  version      Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  lines         SalesOrderLine[]
+  statusHistory StatusHistory[]
+
+  @@index([customerId], map: "idx_headers_customer_id")
+  @@index([status], map: "idx_headers_status")
+  @@index([createdAt], map: "idx_headers_created_at")
+  @@map("headers")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: SalesOrderLine — Child entity (chỉ access qua Aggregate Root)
+// =============================================================================
+// Snapshot pattern: itemName copy tại thời điểm tạo — item đổi tên sau không
+// ảnh hưởng đơn hàng cũ.
+model SalesOrderLine {
+  id        String   @id @default(uuid())
+  headerId  String   @map("header_id")
+  itemId    String   @map("item_id")
+  itemName  String   @map("item_name")
+  quantity  Int
+  unitPrice Decimal  @map("unit_price") @db.Decimal(15, 2)
+  lineTotal Decimal  @map("line_total") @db.Decimal(15, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  header SalesOrder @relation(fields: [headerId], references: [id])
+
+  @@index([headerId], map: "idx_lines_header_id")
+  @@map("lines")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: StatusHistory — Audit trail mọi chuyển trạng thái
+// =============================================================================
+model StatusHistory {
+  id         String   @id @default(uuid())
+  headerId   String   @map("header_id")
+  fromStatus String?  @map("from_status")
+  toStatus   String   @map("to_status")
+  changedBy  String   @map("changed_by")
+  changedAt  DateTime @default(now()) @map("changed_at")
+  reason     String?
+
+  header SalesOrder @relation(fields: [headerId], references: [id])
+
+  @@index([headerId], map: "idx_status_history_header_id")
+  @@map("status_history")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: LifecycleView — CQRS Read Model (denormalized)
+// =============================================================================
+model LifecycleView {
+  orderId          String    @id @map("order_id")
+  customerName     String    @default("") @map("customer_name")
+  status           String
+  totalAmount      Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
+  lineCount        Int       @default(0) @map("line_count")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  lastStatusChange DateTime? @map("last_status_change")
+
+  @@index([status], map: "idx_lifecycle_status")
+  @@map("lifecycle_view")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: Outbox — giống customer/inventory (claim SKIP LOCKED + retry/DLQ)
+// =============================================================================
+model Outbox {
+  id             String    @id @default(uuid())
+  aggregateType  String    @map("aggregate_type")
+  aggregateId    String    @map("aggregate_id")
+  eventType      String    @map("event_type")
+  payload        Json
+  createdAt      DateTime  @default(now()) @map("created_at")
+  publishedAt    DateTime? @map("published_at")
+  lockedUntil    DateTime? @map("locked_until")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  deadLetteredAt DateTime? @map("dead_lettered_at")
+
+  @@index([publishedAt], map: "idx_sales_outbox_unpublished")
+  @@map("outbox")
+  @@schema("sales")
+}

@@ -94,6 +94,27 @@ export class StockItem {
     this.touch();
   }
 
+  /**
+   * Issue stock — reduce available quantity (outbound shipment).
+   * If reserved stock is being fulfilled, also reduce reserved accordingly.
+   * @throws InsufficientStockError if not enough available stock
+   */
+  issue(quantity: number, reference?: string): void {
+    this.assertPositive(quantity);
+    if (this.quantityAvailable < quantity) {
+      throw new InsufficientStockError(
+        this.sku,
+        quantity,
+        this.quantityAvailable,
+      );
+    }
+    this.quantityAvailable -= quantity;
+    // If there's reserved stock being fulfilled, also reduce reserved
+    const reservedToRelease = Math.min(this.quantityReserved, quantity);
+    this.quantityReserved -= reservedToRelease;
+    this.touch();
+  }
+
   /** Tổng tồn (khả dụng + đang giữ) — phục vụ báo cáo. */
   totalQuantity(): number {
     return this.quantityAvailable + this.quantityReserved;

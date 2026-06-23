@@ -9,6 +9,7 @@ import { Module } from '@nestjs/common';
 
 import {
   PubSubPublisher,
+  PubSubSubscriber,
   OutboxWorkerService,
   OUTBOX_STORE,
   MetricsService,
@@ -28,6 +29,13 @@ import { CreateItemCommand } from './application/commands/create-item.command';
 import { ReceiveStockCommand } from './application/commands/receive-stock.command';
 import { ReserveStockCommand } from './application/commands/reserve-stock.command';
 import { ReleaseStockCommand } from './application/commands/release-stock.command';
+import { IssueStockCommand } from './application/commands/issue-stock.command';
+import { HandleSalesOrderSubmittedCommand } from './application/commands/handle-sales-order-submitted.command';
+import { HandleSalesOrderCancelledCommand } from './application/commands/handle-sales-order-cancelled.command';
+import { HandleProductCreatedCommand } from './application/commands/handle-product-created.command';
+import { HandleGoodsReceivedCommand } from './application/commands/handle-goods-received.command';
+import { HandleSalesOrderFulfilledCommand } from './application/commands/handle-sales-order-fulfilled.command';
+import { InventoryEventSubscriber } from './infrastructure/messaging/inventory-event.subscriber';
 import { GetItemQuery } from './application/queries/get-item.query';
 import { SearchItemsQuery } from './application/queries/search-items.query';
 import { CheckAvailabilityQuery } from './application/queries/check-availability.query';
@@ -55,6 +63,15 @@ import { InventoryController } from './presentation/inventory.controller';
     },
     OutboxWorkerService,
 
+    // Pub/Sub subscriber for event handlers
+    PubSubSubscriber,
+    InventoryEventSubscriber,
+    HandleSalesOrderSubmittedCommand,
+    HandleSalesOrderCancelledCommand,
+    HandleProductCreatedCommand,
+    HandleGoodsReceivedCommand,
+    HandleSalesOrderFulfilledCommand,
+
     // Health: chỉ kiểm tra Postgres
     {
       provide: HEALTH_INDICATORS,
@@ -75,6 +92,7 @@ import { InventoryController } from './presentation/inventory.controller';
     ReceiveStockCommand,
     ReserveStockCommand,
     ReleaseStockCommand,
+    IssueStockCommand,
     GetItemQuery,
     SearchItemsQuery,
     CheckAvailabilityQuery,

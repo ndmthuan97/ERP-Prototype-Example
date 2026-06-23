@@ -69,7 +69,7 @@ export class PubSubPublisher {
       const [exists] = await topic.exists();
       if (!exists) {
         await topic.create();
-        this.logger.log(`Tạo mới Pub/Sub topic: "${eventType}"`);
+        this.logger.log(`Created new Pub/Sub topic: "${eventType}"`);
       }
       this.ensuredTopics.add(eventType);
     }

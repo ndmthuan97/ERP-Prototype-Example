@@ -38,8 +38,7 @@ async function main() {
     // Tạo 4 schemas — mỗi service sở hữu 1 schema riêng.
     // LƯU Ý: Auth Service dùng "app_auth", KHÔNG dùng "auth" — schema "auth" do
     // Supabase quản lý (đặt bảng app vào đó có thể bị ghi đè/khoá khi Supabase nâng cấp).
-    // "order" cần ngoặc kép vì là reserved word trong SQL.
-    const schemas = ['app_auth', 'customer', '"order"', 'inventory'];
+    const schemas = ['app_auth', 'customer', 'sales', 'inventory'];
 
     for (const schema of schemas) {
       const sql = `CREATE SCHEMA IF NOT EXISTS ${schema}`;
@@ -53,7 +52,7 @@ async function main() {
     const result = await client.query(`
       SELECT schema_name
       FROM information_schema.schemata
-      WHERE schema_name IN ('app_auth', 'customer', 'order', 'inventory')
+      WHERE schema_name IN ('app_auth', 'customer', 'sales', 'inventory')
       ORDER BY schema_name
     `);
 

@@ -1,24 +1,62 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-
 /**
- * Khởi động Auth Service
- * - Port 3004 (hoặc PORT từ env)
- * - Service này quản lý authentication & authorization:
- *   + Đăng ký user (chỉ admin được tạo)
- *   + Đăng nhập (email + password) → trả JWT token
- *   + Refresh token — cấp lại access token khi hết hạn
- *   + Verify JWT — API Gateway gọi để kiểm tra token
- *   + Hash password bằng bcrypt, sign JWT bằng jsonwebtoken
- *   + 3 roles: admin (full quyền), manager (CRUD + approve), staff (xem + tạo)
+ * Entry point — Auth Service
+ *
+ * Service manages the Auth Bounded Context in DDD architecture:
+ * - User registration (admin-only)
+ * - Login with email/password → JWT tokens
+ * - Refresh token rotation
+ * - JWT verification for API Gateway
+ *
+ * Port: 3004 (configured in .env)
+ * Architecture: DDD 4 layers (domain → application → infrastructure → presentation)
  */
+import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import helmet from 'helmet';
+import { StructuredLogger, CorrelationMiddleware } from '@erp/shared';
+import { AppModule } from './app.module.js';
+import { ZodExceptionFilter } from './common/zod-exception.filter.js';
+import { DomainExceptionFilter } from './common/domain-exception.filter.js';
+
+const DEFAULT_PORT = 3004;
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new StructuredLogger(),
+  });
+  const logger = new Logger('Bootstrap');
 
-  // Lấy port từ biến môi trường, mặc định 3004
-  const port = process.env.AUTH_SERVICE_PORT ?? 3004;
+  // Security headers
+  app.use(helmet());
 
-  await app.listen(port);
-  console.log(`🟢 Auth Service đang chạy tại: http://localhost:${port}`);
+  // Correlation middleware — attach x-correlation-id for distributed tracing
+  const correlation = new CorrelationMiddleware();
+  app.use((req: Request, res: Response, next: () => void) =>
+    correlation.use(req, res, next),
+  );
+
+  // API versioning: all business routes under /v1, observability at root
+  app.setGlobalPrefix('v1', {
+    exclude: ['health', 'health/live', 'metrics'],
+  });
+
+  // Global exception filters
+  app.useGlobalFilters(new ZodExceptionFilter(), new DomainExceptionFilter());
+
+  // CORS
+  const corsOrigins = process.env.CORS_ORIGINS?.trim();
+  app.enableCors({
+    origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
+    credentials: true,
+  });
+
+  const port = parseInt(process.env.AUTH_SERVICE_PORT || String(DEFAULT_PORT), 10);
+  await app.listen(port, '0.0.0.0');
+
+  logger.log(`🚀 Auth Service running at http://localhost:${port}`);
+  logger.log(`🔐 Bounded Context: Auth (DDD 4 layers)`);
+  logger.log(`❤️  Health: /health (readiness) · /health/live (liveness)  |  📊 Metrics: /metrics`);
 }
-bootstrap();
+
+void bootstrap();

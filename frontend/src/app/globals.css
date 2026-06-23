@@ -1,0 +1,154 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Card hover lift effect — matching design reference */
+.card-hover {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Table row hover-reveal actions */
+.table-hover-actions .ant-table-row .row-actions {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.table-hover-actions .ant-table-row:hover .row-actions {
+  opacity: 1;
+}
+
+/* CSS bar chart container */
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 200px;
+  padding: 0 8px;
+}
+.bar-chart .bar {
+  flex: 1;
+  border-radius: 4px 4px 0 0;
+  transition: all 0.3s ease;
+  position: relative;
+  min-width: 24px;
+}
+.bar-chart .bar:hover {
+  opacity: 0.85;
+  transform: scaleY(1.02);
+  transform-origin: bottom;
+}
+.bar-chart .bar-label {
+  text-align: center;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 8px;
+}
+.bar-chart .bar-value {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: #262626;
+  white-space: nowrap;
+}
+
+/* CSS donut chart */
+.donut-chart {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  position: relative;
+  margin: 0 auto;
+}
+.donut-chart .donut-hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.donut-chart .donut-hole .donut-total {
+  font-size: 24px;
+  font-weight: 700;
+  color: #262626;
+}
+.donut-chart .donut-hole .donut-label {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+/* Legend dot */
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+/* Stat card icon circle */
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+/* Steps pulse animation */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Ensure Ant Row with stretch alignment has equal-height children */
+.ant-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+.ant-row > .ant-col {
+  display: flex;
+  flex-direction: column;
+}
+.ant-row > .ant-col > .ant-card {
+  flex: 1;
+}
+
+/* Consistent table card styles */
+.ant-table-wrapper {
+  border-radius: 0 0 12px 12px;
+}
+
+/* Fix table header alignment */
+.ant-table-thead > tr > th {
+  white-space: nowrap;
+}

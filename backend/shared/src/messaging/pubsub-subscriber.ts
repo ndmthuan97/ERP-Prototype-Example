@@ -62,7 +62,7 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     // Chỉ subscribe nếu PUBSUB_EMULATOR_HOST hoặc credential đã set
     if (!process.env.PUBSUB_EMULATOR_HOST && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      this.logger.warn('Pub/Sub chưa cấu hình — subscriber TẮT');
+      this.logger.warn('Pub/Sub not configured — subscriber DISABLED');
       return;
     }
 
@@ -76,7 +76,7 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
       sub.close();
     }
     this.activeSubscriptions = [];
-    this.logger.log('Tất cả Pub/Sub subscription đã đóng ✅');
+    this.logger.log('All Pub/Sub subscriptions closed');
   }
 
   private async startListening(reg: SubscriptionRegistration): Promise<void> {
@@ -86,7 +86,7 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
     const [topicExists] = await topic.exists();
     if (!topicExists) {
       await topic.create();
-      this.logger.log(`Tạo mới topic: "${reg.topic}"`);
+      this.logger.log(`Created new topic: "${reg.topic}"`);
     }
 
     // Auto-create subscription nếu chưa tồn tại
@@ -94,25 +94,25 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
     const [subExists] = await subscription.exists();
     if (!subExists) {
       await subscription.create();
-      this.logger.log(`Tạo mới subscription: "${reg.subscription}" → topic "${reg.topic}"`);
+      this.logger.log(`Created new subscription: "${reg.subscription}" → topic "${reg.topic}"`);
     }
 
     // Bắt đầu lắng nghe (pull-based streaming)
     subscription.on('message', (message: Message) => {
       this.handleMessage(message, reg.handler).catch((err) => {
         this.logger.error(
-          `Lỗi không xử lý được ở subscription "${reg.subscription}":`,
+          `Unhandled error in subscription "${reg.subscription}":`,
           err instanceof Error ? err.message : err,
         );
       });
     });
 
     subscription.on('error', (err: Error) => {
-      this.logger.error(`Subscription "${reg.subscription}" lỗi: ${err.message}`);
+      this.logger.error(`Subscription "${reg.subscription}" error: ${err.message}`);
     });
 
     this.activeSubscriptions.push(subscription);
-    this.logger.log(`🔔 Lắng nghe: "${reg.subscription}" ← topic "${reg.topic}"`);
+    this.logger.log(`Listening: "${reg.subscription}" ← topic "${reg.topic}"`);
   }
 
   /**
@@ -127,7 +127,7 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
       envelope = JSON.parse(message.data.toString()) as EventEnvelope;
     } catch {
       // Message không parse được → dead message, ack luôn để không block queue
-      this.logger.error(`Message không parse được JSON — ack để bỏ qua (id=${message.id})`);
+      this.logger.error(`Message is not valid JSON — ack to skip (id=${message.id})`);
       message.ack();
       return;
     }
@@ -160,7 +160,7 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       // Handler lỗi → nack để Pub/Sub redeliver (withIdempotency đã xoá key)
       this.logger.error(
-        `❌ Handler lỗi: type="${envelope.eventType}", eventId="${eventId}" — nack để retry`,
+        `Handler error: type="${envelope.eventType}", eventId="${eventId}" — nack for retry`,
         err instanceof Error ? err.message : err,
       );
       message.nack();

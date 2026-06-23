@@ -48,6 +48,11 @@ async function bootstrap() {
     correlation.use(req, res, next),
   );
 
+  // API versioning: all business routes under /v1, observability at root
+  app.setGlobalPrefix('v1', {
+    exclude: ['health', 'health/live', 'metrics'],
+  });
+
   // ZodError (validate trong command) → 400 nhất quán cho mọi route
   app.useGlobalFilters(new ZodExceptionFilter());
 
@@ -60,7 +65,7 @@ async function bootstrap() {
   });
 
   const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 Customer Service đang chạy tại http://localhost:${port}`);
   logger.log(`📦 Bounded Context: Customer (DDD 4 layers)`);

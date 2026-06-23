@@ -18,15 +18,28 @@ export const EVENT = {
   CUSTOMER_UPDATED: 'customer.updated',
   CUSTOMER_DELETED: 'customer.deleted',
 
-  // --- Order context ---
-  ORDER_SUBMITTED: 'order.submitted',
-  ORDER_CONFIRMED: 'order.confirmed',
-  ORDER_CANCELLED: 'order.cancelled',
+  // --- Sales context ---
+  SALES_ORDER_SUBMITTED: 'sales-order.submitted',
+  SALES_ORDER_CONFIRMED: 'sales-order.confirmed',
+  SALES_ORDER_FULFILLED: 'sales-order.fulfilled',
+  SALES_ORDER_CANCELLED: 'sales-order.cancelled',
+
+  // --- Catalog context ---
+  PRODUCT_CREATED: 'product.created',
+  PRODUCT_UPDATED: 'product.updated',
+  PRODUCT_DEACTIVATED: 'product.deactivated',
+  PRODUCT_ACTIVATED: 'product.activated',
 
   // --- Inventory context ---
   INVENTORY_RESERVED: 'inventory.reserved',
   INVENTORY_RESERVATION_FAILED: 'inventory.reservation-failed',
   INVENTORY_RELEASED: 'inventory.released',
+  INVENTORY_ISSUED: 'inventory.issued',
+
+  // --- Purchasing context ---
+  PURCHASE_ORDER_PLACED: 'purchase-order.placed',
+  PURCHASE_ORDER_CANCELLED: 'purchase-order.cancelled',
+  GOODS_RECEIVED: 'goods.received',
 } as const;
 
 /** Union của tất cả tên event hợp lệ — dùng làm kiểu cho tham số eventType */
@@ -92,27 +105,57 @@ export interface CustomerDeletedPayload {
   _meta?: EventMetadata;
 }
 
-export interface OrderLineRef {
+export interface ProductCreatedPayload {
+  id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  defaultSalePrice: string;
+  isActive: boolean;
+  _meta?: EventMetadata;
+}
+
+export type ProductUpdatedPayload = ProductCreatedPayload;
+
+export interface ProductDeactivatedPayload {
+  id: string;
+  sku: string;
+  name: string;
+  _meta?: EventMetadata;
+}
+
+export type ProductActivatedPayload = ProductDeactivatedPayload;
+
+export interface SalesOrderLineRef {
   itemId: string;
   quantity: number;
 }
 
-export interface OrderSubmittedPayload {
+export interface SalesOrderSubmittedPayload {
   orderId: string;
   customerId: string;
   totalAmount: number;
-  lines: OrderLineRef[];
+  lines: SalesOrderLineRef[];
   _meta?: EventMetadata;
 }
 
-export interface OrderConfirmedPayload {
+export interface SalesOrderConfirmedPayload {
   orderId: string;
   _meta?: EventMetadata;
 }
 
-export interface OrderCancelledPayload {
+export interface SalesOrderFulfilledPayload {
+  orderId: string;
+  customerId: string;
+  lines: SalesOrderLineRef[];
+  _meta?: EventMetadata;
+}
+
+export interface SalesOrderCancelledPayload {
   orderId: string;
   reason: string;
+  /** Line items for inventory compensation (release reserved stock) */
+  lines: SalesOrderLineRef[];
   _meta?: EventMetadata;
 }
 
@@ -131,5 +174,42 @@ export interface InventoryReservationFailedPayload {
 export interface InventoryReleasedPayload {
   orderId: string;
   reservationId: string;
+  _meta?: EventMetadata;
+}
+
+export interface InventoryIssuedPayload {
+  sku: string;
+  quantity: number;
+  reason: string;
+  reference?: string;
+  _meta?: EventMetadata;
+}
+
+export interface PurchaseOrderPlacedPayload {
+  orderId: string;
+  supplierId: string;
+  totalCost: number;
+  lineCount: number;
+  _meta?: EventMetadata;
+}
+
+export interface PurchaseOrderCancelledPayload {
+  orderId: string;
+  reason: string | null;
+  _meta?: EventMetadata;
+}
+
+export interface GoodsReceivedReceiptRef {
+  lineId: string;
+  productId: string;
+  sku: string;
+  quantity: number;
+}
+
+export interface GoodsReceivedPayload {
+  orderId: string;
+  supplierId: string;
+  receipts: GoodsReceivedReceiptRef[];
+  newStatus: string;
   _meta?: EventMetadata;
 }

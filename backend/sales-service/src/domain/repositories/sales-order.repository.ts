@@ -1,0 +1,83 @@
+﻿// =============================================================================
+// ORDER REPOSITORY — Port (DDD/Hexagonal)
+// =============================================================================
+import { SalesOrder } from '../entities/index.js';
+
+export const SALES_ORDER_REPOSITORY = 'SALES_ORDER_REPOSITORY';
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface SearchOrdersParams {
+  status?: string;
+  page: number;
+  limit: number;
+}
+
+/** Event ghi vào outbox CÙNG transaction với thay đổi business (Outbox Pattern) */
+export interface OutboxEventInput {
+  eventType: string;
+  payload: Record<string, unknown>;
+}
+
+/** Dữ liệu ghi vào status_history khi chuyển trạng thái */
+export interface StatusHistoryInput {
+  fromStatus: string | null;
+  toStatus: string;
+  changedBy: string;
+  reason?: string;
+}
+
+/** Dòng trong status_history trả về cho query */
+export interface StatusHistoryEntry {
+  id: string;
+  fromStatus: string | null;
+  toStatus: string;
+  changedBy: string;
+  changedAt: Date;
+  reason: string | null;
+}
+
+/** Dữ liệu cho upsert lifecycle_view (CQRS read model) */
+export interface LifecycleViewData {
+  customerName: string;
+  status: string;
+  totalAmount: number;
+  lineCount: number;
+  createdAt: Date;
+  lastStatusChange: Date;
+}
+
+export interface ISalesOrderRepository {
+  findById(id: string): Promise<SalesOrder | null>;
+  findByIdWithLines(id: string): Promise<SalesOrder | null>;
+
+  search(params: SearchOrdersParams): Promise<PaginatedResult<SalesOrder>>;
+
+  /** INSERT order mới + optional outbox event trong 1 transaction */
+  create(order: SalesOrder, event?: OutboxEventInput): Promise<SalesOrder>;
+
+  /**
+   * UPDATE order + ghi outbox event(s) + status_history + upsert lifecycle_view
+   * trong 1 transaction. Version sẽ auto increment.
+   */
+  update(
+    order: SalesOrder,
+    events?: OutboxEventInput[],
+    statusEntry?: StatusHistoryInput,
+    lifecycleData?: LifecycleViewData,
+  ): Promise<SalesOrder>;
+
+  /** Thêm SalesOrderLine vào header + outbox (nếu có) trong 1 transaction */
+  addLine(
+    order: SalesOrder,
+    lifecycleData?: LifecycleViewData,
+  ): Promise<SalesOrder>;
+
+  /** Lấy lịch sử chuyển trạng thái (CQRS read — status_history) */
+  getLifecycle(orderId: string): Promise<StatusHistoryEntry[]>;
+}

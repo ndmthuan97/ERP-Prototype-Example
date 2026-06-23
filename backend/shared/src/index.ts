@@ -5,6 +5,7 @@
 //   import { EVENT, OutboxWorkerService, withIdempotency, StructuredLogger } from '@erp/shared';
 
 export * from './contracts';
+export * from './domain';
 export * from './messaging';
 export * from './cache';
 export * from './persistence';

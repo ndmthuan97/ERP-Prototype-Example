@@ -1,0 +1,81 @@
+// =============================================================================
+// PRISMA SCHEMA — Purchasing Service
+// =============================================================================
+// Bounded context "Purchasing": manages purchase orders with Aggregate Root pattern.
+// Schema "purchasing" with 3 tables:
+//   1. headers      — PurchaseOrder aggregate root
+//   2. lines        — PurchaseOrderLine child entities
+//   3. outbox       — Outbox pattern for reliable event publishing
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["purchasing"]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// =============================================================================
+// MODEL: PurchaseOrder — Aggregate Root
+// =============================================================================
+// Status lifecycle: draft → placed → partially_received → received
+//                   draft/placed → cancelled
+model PurchaseOrder {
+  id         String   @id @default(uuid())
+  supplierId String   @map("supplier_id")
+  status     String   @default("draft")
+  version    Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  lines PurchaseOrderLine[]
+
+  @@index([supplierId], map: "idx_po_headers_supplier_id")
+  @@index([status], map: "idx_po_headers_status")
+  @@index([createdAt], map: "idx_po_headers_created_at")
+  @@map("headers")
+  @@schema("purchasing")
+}
+
+// =============================================================================
+// MODEL: PurchaseOrderLine — Child entity (access via Aggregate Root only)
+// =============================================================================
+// Snapshot pattern: productName copied at creation time.
+model PurchaseOrderLine {
+  id          String  @id @default(uuid())
+  headerId    String  @map("header_id")
+  productId   String  @map("product_id")
+  productName String  @map("product_name")
+  orderedQty  Int     @map("ordered_qty")
+  receivedQty Int     @default(0) @map("received_qty")
+  unitCost    Decimal @map("unit_cost") @db.Decimal(15, 2)
+
+  header PurchaseOrder @relation(fields: [headerId], references: [id])
+
+  @@index([headerId], map: "idx_po_lines_header_id")
+  @@map("lines")
+  @@schema("purchasing")
+}
+
+// =============================================================================
+// MODEL: Outbox — claim SKIP LOCKED + retry/DLQ (same pattern as other services)
+// =============================================================================
+model Outbox {
+  id             String    @id @default(uuid())
+  aggregateType  String    @map("aggregate_type")
+  aggregateId    String    @map("aggregate_id")
+  eventType      String    @map("event_type")
+  payload        Json
+  createdAt      DateTime  @default(now()) @map("created_at")
+  publishedAt    DateTime? @map("published_at")
+  lockedUntil    DateTime? @map("locked_until")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  deadLetteredAt DateTime? @map("dead_lettered_at")
+
+  @@index([publishedAt], map: "idx_purchasing_outbox_unpublished")
+  @@map("outbox")
+  @@schema("purchasing")
+}

@@ -1,10 +1,13 @@
+// =============================================================================
+// AppModule — API Gateway root module (simplified)
+// =============================================================================
+// Gateway uses Express middleware for proxy routing.
+// No controllers or services needed — all routing is handled in main.ts.
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 
 @Module({
   imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}

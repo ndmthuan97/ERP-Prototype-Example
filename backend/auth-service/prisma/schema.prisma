@@ -1,0 +1,54 @@
+// =============================================================================
+// PRISMA SCHEMA — Auth Service
+// =============================================================================
+// Prisma v7: url/directUrl are configured in prisma.config.ts
+// This schema only declares provider, models, and schemas.
+//
+// Auth Service owns the "auth" schema with 2 tables:
+//   1. users          — User accounts with hashed passwords and roles
+//   2. refresh_tokens — JWT refresh tokens for token rotation
+
+datasource db {
+  provider  = "postgresql"
+  schemas   = ["app_auth"]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// =============================================================================
+// MODEL: User — Core identity entity for authentication & authorization
+// =============================================================================
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  role         String   @default("staff")  // admin | manager | staff
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+  @@schema("app_auth")
+}
+
+// =============================================================================
+// MODEL: RefreshToken — Secure token rotation for JWT refresh flow
+// =============================================================================
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+  @@schema("app_auth")
+}

@@ -16,8 +16,9 @@ export class ReceiveStockCommand {
   ) {}
 
   /**
-   * Nhập kho theo SKU (tăng quantityAvailable). Optimistic lock + retry.
-   * @throws NotFoundException nếu SKU không tồn tại
+   * Receive stock by SKU (increase quantityAvailable). Optimistic lock + retry.
+   * Records a StockMovement IN for audit trail.
+   * @throws NotFoundException if SKU does not exist
    */
   async execute(sku: string, dto: unknown): Promise<StockItem> {
     const { quantity } = validateReceiveStock(dto);
@@ -28,8 +29,12 @@ export class ReceiveStockCommand {
         throw new NotFoundException(`Không tìm thấy mặt hàng SKU "${sku}"`);
       }
       item.receive(quantity);
-      // Nhập kho là thao tác nội bộ → không phát event saga
-      return this.repo.updateWithLock(item);
+      return this.repo.saveWithMovement(item, {
+        itemId: item.id,
+        type: 'IN',
+        quantity,
+        reason: 'purchase_receive',
+      });
     });
   }
 }

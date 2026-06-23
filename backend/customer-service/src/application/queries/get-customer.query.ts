@@ -11,9 +11,10 @@
 // 2. Nếu cache miss → đọc DB → ghi vào cache → trả về
 // 3. Nếu cache hit → trả về ngay, không cần DB query
 
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+import { z } from 'zod';
 
-import { Customer } from '../../domain/entities/index.js';
+import { Customer, type CustomerStatus } from '../../domain/entities/index.js';
 import {
   CUSTOMER_REPOSITORY,
   type ICustomerRepository,
@@ -23,8 +24,26 @@ import { RedisCacheService } from '@erp/shared';
 /** Prefix cho cache key — tổ chức key theo namespace */
 const CACHE_KEY_PREFIX = 'customer';
 
+/** Zod schema for validating cached customer data */
+const CachedCustomerSchema = z.object({
+  id: z.string(),
+  businessName: z.string(),
+  taxCode: z.string().nullable(),
+  status: z.string(),
+  creditLimitAmount: z.number().nullable(),
+  creditUsedAmount: z.number(),
+  contactName: z.string().nullable(),
+  contactPhone: z.string().nullable(),
+  contactEmail: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deletedAt: z.string().nullable(),
+});
+
 @Injectable()
 export class GetCustomerQuery {
+  private readonly logger = new Logger(GetCustomerQuery.name);
+
   constructor(
     @Inject(CUSTOMER_REPOSITORY)
     private readonly customerRepository: ICustomerRepository,
@@ -51,9 +70,13 @@ export class GetCustomerQuery {
       await this.cacheService.get<Record<string, unknown>>(cacheKey);
 
     if (cachedData) {
-      // Cache hit — reconstruct entity từ cached data
-      // Cần convert lại Date vì JSON serialize sẽ chuyển Date → string
-      return this.reconstructFromCache(cachedData);
+      // Cache hit — validate + reconstruct entity from cached data
+      const customer = this.reconstructFromCache(cachedData);
+      if (customer) return customer;
+
+      // Cache corrupted — invalidate and fall through to DB
+      this.logger.warn(`Cache corrupted for key="${cacheKey}", invalidating`);
+      await this.cacheService.del(cacheKey);
     }
 
     // Bước 2: Cache miss — query database
@@ -91,23 +114,20 @@ export class GetCustomerQuery {
   }
 
   /**
-   * Reconstruct Customer entity từ cached data.
-   * Convert ISO string → Date object lại để entity hoạt động đúng.
+   * Reconstruct Customer entity from cached data with Zod validation.
+   * Returns null if cache data is corrupted — caller falls back to DB.
    */
-  private reconstructFromCache(data: Record<string, unknown>): Customer {
+  private reconstructFromCache(data: unknown): Customer | null {
+    const result = CachedCustomerSchema.safeParse(data);
+    if (!result.success) {
+      return null;
+    }
     return new Customer({
-      id: data.id as string,
-      businessName: data.businessName as string,
-      taxCode: (data.taxCode as string) ?? null,
-      status: data.status as Customer['status'],
-      creditLimitAmount: (data.creditLimitAmount as number) ?? null,
-      creditUsedAmount: (data.creditUsedAmount as number) ?? 0,
-      contactName: (data.contactName as string) ?? null,
-      contactPhone: (data.contactPhone as string) ?? null,
-      contactEmail: (data.contactEmail as string) ?? null,
-      createdAt: new Date(data.createdAt as string),
-      updatedAt: new Date(data.updatedAt as string),
-      deletedAt: data.deletedAt ? new Date(data.deletedAt as string) : null,
+      ...result.data,
+      createdAt: new Date(result.data.createdAt),
+      updatedAt: new Date(result.data.updatedAt),
+      deletedAt: result.data.deletedAt ? new Date(result.data.deletedAt) : null,
+      status: result.data.status as CustomerStatus,
     });
   }
 }

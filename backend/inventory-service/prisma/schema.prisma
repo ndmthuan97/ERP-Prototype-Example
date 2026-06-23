@@ -39,8 +39,29 @@ model StockItem {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
+  movements         StockMovement[]
+
   @@index([name], map: "idx_stock_items_name")
   @@map("stock_items")
+  @@schema("inventory")
+}
+
+// =============================================================================
+// MODEL: StockMovement — Audit trail for every stock change (IN / OUT)
+// =============================================================================
+model StockMovement {
+  id         String   @id @default(uuid())
+  itemId     String   @map("item_id")
+  type       String   // "IN" | "OUT"
+  quantity   Int
+  reason     String   // "purchase_receive" | "sales_issue" | "manual_adjust" | "initial"
+  reference  String?  // PO id or SO id for traceability
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  item StockItem @relation(fields: [itemId], references: [id])
+
+  @@index([itemId])
+  @@map("stock_movements")
   @@schema("inventory")
 }
 

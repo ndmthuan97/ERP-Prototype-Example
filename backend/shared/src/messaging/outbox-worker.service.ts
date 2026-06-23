@@ -89,13 +89,13 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.logger.log(
-      `Outbox Worker bắt đầu — poll mỗi ${POLL_INTERVAL_MS}ms, batch ${BATCH_SIZE}`,
+      `Outbox Worker started — polling every ${POLL_INTERVAL_MS}ms, batch size ${BATCH_SIZE}`,
     );
 
     this.pollInterval = setInterval(() => {
       // Bắt lỗi tại đây để unhandled rejection không crash process
       this.processOutbox().catch((error) => {
-        this.logger.error('Lỗi không mong đợi trong processOutbox:', error);
+        this.logger.error('Unexpected error in processOutbox:', error);
       });
     }, POLL_INTERVAL_MS);
   }
@@ -104,7 +104,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
-      this.logger.log('Outbox Worker đã dừng ✅');
+      this.logger.log('Outbox Worker stopped');
     }
   }
 
@@ -126,7 +126,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       const pending = await this.store.fetchUnpublished(BATCH_SIZE);
       if (pending.length === 0) return;
 
-      this.logger.debug(`Claim ${pending.length} event cần publish`);
+      this.logger.debug(`Claimed ${pending.length} event(s) to publish`);
 
       for (const event of pending) {
         try {
@@ -148,7 +148,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
           const message = error instanceof Error ? error.message : String(error);
           this.metrics?.inc('events_publish_failed_total', { event: event.eventType });
           this.logger.error(
-            `Lỗi publish event id="${event.id}", type="${event.eventType}" (attempt ${(event.attempts ?? 0) + 1}/${MAX_ATTEMPTS}):`,
+            `Failed to publish event id="${event.id}", type="${event.eventType}" (attempt ${(event.attempts ?? 0) + 1}/${MAX_ATTEMPTS}):`,
             message,
           );
           try {
@@ -156,12 +156,12 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
             if ((event.attempts ?? 0) + 1 >= MAX_ATTEMPTS) {
               this.metrics?.inc('events_dead_lettered_total', { event: event.eventType });
               this.logger.error(
-                `Event id="${event.id}" đã chuyển DEAD-LETTER sau ${MAX_ATTEMPTS} lần thất bại`,
+                `Event id="${event.id}" moved to DEAD-LETTER after ${MAX_ATTEMPTS} failed attempts`,
               );
             }
           } catch (markErr) {
             this.logger.error(
-              `Không markFailed được event id="${event.id}":`,
+              `Failed to markFailed event id="${event.id}":`,
               markErr instanceof Error ? markErr.message : markErr,
             );
           }

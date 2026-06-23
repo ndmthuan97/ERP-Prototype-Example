@@ -19,6 +19,7 @@ import { CreateItemCommand } from '../application/commands/create-item.command';
 import { ReceiveStockCommand } from '../application/commands/receive-stock.command';
 import { ReserveStockCommand } from '../application/commands/reserve-stock.command';
 import { ReleaseStockCommand } from '../application/commands/release-stock.command';
+import { IssueStockCommand } from '../application/commands/issue-stock.command';
 import { GetItemQuery } from '../application/queries/get-item.query';
 import { SearchItemsQuery } from '../application/queries/search-items.query';
 import { CheckAvailabilityQuery } from '../application/queries/check-availability.query';
@@ -30,6 +31,7 @@ export class InventoryController {
     private readonly receiveStockCommand: ReceiveStockCommand,
     private readonly reserveStockCommand: ReserveStockCommand,
     private readonly releaseStockCommand: ReleaseStockCommand,
+    private readonly issueStockCommand: IssueStockCommand,
     private readonly getItemQuery: GetItemQuery,
     private readonly searchItemsQuery: SearchItemsQuery,
     private readonly checkAvailabilityQuery: CheckAvailabilityQuery,
@@ -93,5 +95,11 @@ export class InventoryController {
   @Post(':sku/release')
   async release(@Param('sku') sku: string, @Body() body: unknown) {
     return this.releaseStockCommand.execute(sku, body);
+  }
+
+  /** POST /inventory/items/:sku/issue — issue stock (outbound shipment) */
+  @Post(':sku/issue')
+  async issue(@Param('sku') sku: string, @Body() body: unknown) {
+    return this.issueStockCommand.execute(sku, body);
   }
 }

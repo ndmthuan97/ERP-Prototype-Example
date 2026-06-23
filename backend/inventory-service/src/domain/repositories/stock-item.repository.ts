@@ -28,6 +28,15 @@ export interface OutboxEventInput {
   payload: Record<string, unknown>;
 }
 
+/** Input for recording a stock movement within a transaction */
+export interface StockMovementInput {
+  itemId: string;
+  type: 'IN' | 'OUT';
+  quantity: number;
+  reason: string;
+  reference?: string;
+}
+
 export interface IStockItemRepository {
   findById(id: string): Promise<StockItem | null>;
   findBySku(sku: string): Promise<StockItem | null>;
@@ -46,4 +55,17 @@ export interface IStockItemRepository {
    * Ghi outbox event (nếu có) trong cùng transaction.
    */
   updateWithLock(item: StockItem, event?: OutboxEventInput): Promise<StockItem>;
+
+  /**
+   * UPDATE + record StockMovement + outbox event in a single transaction.
+   * Combines optimistic locking with movement audit trail.
+   */
+  saveWithMovement(
+    item: StockItem,
+    movement: StockMovementInput,
+    event?: OutboxEventInput,
+  ): Promise<StockItem>;
+
+  /** Write outbox event independently (not tied to a stock item update) */
+  createOutboxEvent(event: OutboxEventInput): Promise<void>;
 }

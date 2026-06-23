@@ -9,6 +9,7 @@ function makeRepoMock(): jest.Mocked<IStockItemRepository> {
     search: jest.fn(),
     create: jest.fn(),
     updateWithLock: jest.fn(),
+    createOutboxEvent: jest.fn(),
   };
 }
 

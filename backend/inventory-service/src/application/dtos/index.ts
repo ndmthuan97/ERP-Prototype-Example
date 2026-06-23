@@ -53,3 +53,13 @@ export type ReleaseStockDto = z.infer<typeof releaseStockSchema>;
 export function validateReleaseStock(data: unknown): ReleaseStockDto {
   return releaseStockSchema.parse(data);
 }
+
+export const issueStockSchema = z.object({
+  quantity: positiveInt('Issue quantity must be a positive integer'),
+  reference: z.string().optional(),
+  reason: z.string().default('manual_adjust'),
+});
+export type IssueStockDto = z.infer<typeof issueStockSchema>;
+export function validateIssueStock(data: unknown): IssueStockDto {
+  return issueStockSchema.parse(data);
+}

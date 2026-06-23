@@ -12,6 +12,19 @@
     "test:customer": "npm test --prefix customer-service",
     "install:inventory": "npm install --prefix inventory-service",
     "dev:inventory": "npm run start:dev --prefix inventory-service",
-    "test:inventory": "npm test --prefix inventory-service"
+    "test:inventory": "npm test --prefix inventory-service",
+    "install:sales": "npm install --prefix sales-service",
+    "dev:sales": "npm run start:dev --prefix sales-service",
+    "install:auth": "npm install --prefix auth-service",
+    "dev:auth": "npm run start:dev --prefix auth-service",
+    "install:catalog": "npm install --prefix catalog-service",
+    "dev:catalog": "npm run start:dev --prefix catalog-service",
+    "install:purchasing": "npm install --prefix purchasing-service",
+    "dev:purchasing": "npm run start:dev --prefix purchasing-service",
+    "prisma:catalog": "cd catalog-service && npx prisma generate",
+    "prisma:purchasing": "cd purchasing-service && npx prisma generate",
+    "install:all": "npm run install:shared && npm run install:customer && npm run install:inventory && npm run install:sales && npm run install:auth && npm run install:catalog && npm run install:purchasing",
+    "dev:all": "concurrently \"npm run dev:customer\" \"npm run dev:inventory\" \"npm run dev:sales\" \"npm run dev:auth\" \"npm run dev:catalog\" \"npm run dev:purchasing\"",
+    "prisma:all": "cd customer-service && npx prisma generate && cd ../inventory-service && npx prisma generate && cd ../sales-service && npx prisma generate && cd ../catalog-service && npx prisma generate && cd ../purchasing-service && npx prisma generate"
   }
 }
