@@ -23,20 +23,37 @@ function createConfirmedOrder(): SalesOrder {
   return order;
 }
 
-describe('SalesOrder.fulfil()', () => {
-  it('should transition from confirmed to fulfilled', () => {
+describe('SalesOrder.recordDelivery()', () => {
+  it('should transition from confirmed to fully_delivered when all lines delivered', () => {
     const order = createConfirmedOrder();
 
-    order.fulfil();
+    order.recordDelivery(true);
 
-    expect(order.status).toBe('fulfilled');
+    expect(order.status).toBe('fully_delivered');
+  });
+
+  it('should transition from confirmed to partially_delivered when not all lines delivered', () => {
+    const order = createConfirmedOrder();
+
+    order.recordDelivery(false);
+
+    expect(order.status).toBe('partially_delivered');
+  });
+
+  it('should transition from partially_delivered to fully_delivered', () => {
+    const order = createConfirmedOrder();
+    order.recordDelivery(false);
+    expect(order.status).toBe('partially_delivered');
+
+    order.recordDelivery(true);
+    expect(order.status).toBe('fully_delivered');
   });
 
   it('should update updatedAt timestamp', () => {
     const order = createConfirmedOrder();
     const beforeFulfil = order.updatedAt;
 
-    order.fulfil();
+    order.recordDelivery(true);
 
     expect(order.updatedAt.getTime()).toBeGreaterThanOrEqual(beforeFulfil.getTime());
   });
@@ -44,7 +61,7 @@ describe('SalesOrder.fulfil()', () => {
   it('should throw InvalidStatusTransitionError when status is draft', () => {
     const order = SalesOrder.createDraft('order-1', 'customer-1');
 
-    expect(() => order.fulfil()).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
   });
 
   it('should throw InvalidStatusTransitionError when status is submitted', () => {
@@ -52,20 +69,29 @@ describe('SalesOrder.fulfil()', () => {
     order.addLine(createLine());
     order.submit();
 
-    expect(() => order.fulfil()).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
   });
 
   it('should throw InvalidStatusTransitionError when status is cancelled', () => {
     const order = SalesOrder.createDraft('order-1', 'customer-1');
     order.cancel('test reason');
 
-    expect(() => order.fulfil()).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
   });
 
-  it('should throw InvalidStatusTransitionError when already fulfilled', () => {
+  it('should throw InvalidStatusTransitionError when already fully_delivered', () => {
     const order = createConfirmedOrder();
-    order.fulfil();
+    order.recordDelivery(true);
 
-    expect(() => order.fulfil()).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
+  });
+
+  it('should allow cancel from partially_delivered status', () => {
+    const order = createConfirmedOrder();
+    order.recordDelivery(false);
+    expect(order.status).toBe('partially_delivered');
+
+    order.cancel('customer request');
+    expect(order.status).toBe('cancelled');
   });
 });

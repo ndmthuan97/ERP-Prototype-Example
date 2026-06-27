@@ -41,6 +41,9 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
   /** Handler đăng ký trước khi init — tích lũy qua register() */
   private registrations: SubscriptionRegistration[] = [];
 
+  /** Track whether startListening has been called */
+  private initialized = false;
+
   constructor() {
     this.pubsub = new PubSub({
       projectId: process.env.PUBSUB_PROJECT_ID ?? 'erp-prototype',
@@ -52,11 +55,20 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Đăng ký handler cho 1 topic. Gọi TRƯỚC onModuleInit (trong constructor
-   * của service/module). Handler sẽ bắt đầu nhận message khi init xong.
+   * Đăng ký handler cho 1 topic. Gọi trong onModuleInit() của service subscriber.
+   * Nếu PubSubSubscriber đã initialized → lắng nghe ngay. Nếu chưa → queue lại.
    */
   register(reg: SubscriptionRegistration): void {
     this.registrations.push(reg);
+
+    // Late registration: if onModuleInit already ran, start listening immediately
+    if (this.initialized) {
+      this.startListening(reg).catch((err) => {
+        this.logger.error(
+          `Failed to start listening for late registration "${reg.subscription}": ${err instanceof Error ? err.message : err}`,
+        );
+      });
+    }
   }
 
   async onModuleInit(): Promise<void> {
@@ -66,9 +78,13 @@ export class PubSubSubscriber implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    // Process any registrations that were queued before init
     for (const reg of this.registrations) {
       await this.startListening(reg);
     }
+
+    this.initialized = true;
+    this.logger.log(`PubSub subscriber initialized — ${this.activeSubscriptions.length} subscription(s) active`);
   }
 
   onModuleDestroy(): void {

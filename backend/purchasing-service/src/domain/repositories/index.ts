@@ -5,3 +5,9 @@ export {
   type SearchPurchaseOrdersParams,
   type OutboxEventInput,
 } from './purchase-order.repository';
+
+export {
+  SUPPLIER_REPOSITORY,
+  type ISupplierRepository,
+  type SearchSuppliersParams,
+} from './supplier.repository';

@@ -2,10 +2,11 @@
 // PRISMA SCHEMA — Purchasing Service
 // =============================================================================
 // Bounded context "Purchasing": manages purchase orders with Aggregate Root pattern.
-// Schema "purchasing" with 3 tables:
-//   1. headers      — PurchaseOrder aggregate root
-//   2. lines        — PurchaseOrderLine child entities
-//   3. outbox       — Outbox pattern for reliable event publishing
+// Schema "purchasing" with 4 tables:
+//   1. suppliers    — Supplier entity
+//   2. headers      — PurchaseOrder aggregate root
+//   3. lines        — PurchaseOrderLine child entities
+//   4. outbox       — Outbox pattern for reliable event publishing
 
 datasource db {
   provider = "postgresql"
@@ -30,7 +31,8 @@ model PurchaseOrder {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  lines PurchaseOrderLine[]
+  lines    PurchaseOrderLine[]
+  supplier Supplier @relation(fields: [supplierId], references: [id])
 
   @@index([supplierId], map: "idx_po_headers_supplier_id")
   @@index([status], map: "idx_po_headers_status")
@@ -48,14 +50,36 @@ model PurchaseOrderLine {
   headerId    String  @map("header_id")
   productId   String  @map("product_id")
   productName String  @map("product_name")
-  orderedQty  Int     @map("ordered_qty")
-  receivedQty Int     @default(0) @map("received_qty")
+  orderedQty  Decimal @map("ordered_qty") @db.Decimal(18, 4)
+  receivedQty Decimal @default(0) @map("received_qty") @db.Decimal(18, 4)
   unitCost    Decimal @map("unit_cost") @db.Decimal(15, 2)
 
   header PurchaseOrder @relation(fields: [headerId], references: [id])
 
   @@index([headerId], map: "idx_po_lines_header_id")
   @@map("lines")
+  @@schema("purchasing")
+}
+
+// =============================================================================
+// MODEL: Supplier — Vendor entity
+// =============================================================================
+model Supplier {
+  id              String    @id @default(uuid())
+  name            String
+  taxCode         String?   @map("tax_code")
+  contactName     String?   @map("contact_name")
+  contactPhone    String?   @map("contact_phone")
+  contactEmail    String?   @map("contact_email")
+  paymentTermDays Int       @default(30) @map("payment_term_days")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([isActive])
+  @@map("suppliers")
   @@schema("purchasing")
 }
 

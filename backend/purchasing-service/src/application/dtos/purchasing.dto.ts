@@ -24,7 +24,6 @@ export const addLinePOSchema = z.object({
     .min(1, 'productName must not be empty'),
   orderedQty: z
     .number({ error: 'orderedQty must be a number' })
-    .int('orderedQty must be an integer')
     .positive('orderedQty must be positive'),
   unitCost: z
     .number({ error: 'unitCost must be a number' })
@@ -40,7 +39,6 @@ const receiptItemSchema = z.object({
   lineId: z.string().min(1, 'lineId must not be empty'),
   quantity: z
     .number()
-    .int('quantity must be an integer')
     .positive('quantity must be positive'),
 });
 
@@ -70,3 +68,34 @@ export const searchPOsSchema = z.object({
   limit: z.number().int().positive().max(100).optional(),
 });
 export type SearchPOsDto = z.infer<typeof searchPOsSchema>;
+
+// --- CreateSupplier ---
+export const createSupplierSchema = z.object({
+  name: z
+    .string({ error: 'name is required' })
+    .min(1, 'name must not be empty'),
+  taxCode: z.string().optional().nullable(),
+  contactName: z.string().optional().nullable(),
+  contactPhone: z.string().optional().nullable(),
+  contactEmail: z.string().email('contactEmail must be a valid email').optional().nullable(),
+  paymentTermDays: z.number().int().min(0).optional(),
+});
+export type CreateSupplierDto = z.infer<typeof createSupplierSchema>;
+export function validateCreateSupplier(data: unknown): CreateSupplierDto {
+  return createSupplierSchema.parse(data);
+}
+
+// --- UpdateSupplier ---
+export const updateSupplierSchema = z.object({
+  name: z.string().min(1, 'name must not be empty').optional(),
+  taxCode: z.string().optional().nullable(),
+  contactName: z.string().optional().nullable(),
+  contactPhone: z.string().optional().nullable(),
+  contactEmail: z.string().email('contactEmail must be a valid email').optional().nullable(),
+  paymentTermDays: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateSupplierDto = z.infer<typeof updateSupplierSchema>;
+export function validateUpdateSupplier(data: unknown): UpdateSupplierDto {
+  return updateSupplierSchema.parse(data);
+}

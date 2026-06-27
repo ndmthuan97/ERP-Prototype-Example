@@ -12,6 +12,7 @@ function makeRepoMock(): jest.Mocked<IStockItemRepository> {
     search: jest.fn(),
     create: jest.fn(),
     updateWithLock: jest.fn(),
+    saveWithMovement: jest.fn(),
     createOutboxEvent: jest.fn(),
   };
 }
@@ -33,16 +34,16 @@ function makeItem(available: number, reserved = 0): StockItem {
 }
 
 describe('ReceiveStockCommand', () => {
-  it('nhập kho tăng available + updateWithLock', async () => {
+  it('nhập kho tăng available + saveWithMovement', async () => {
     const repo = makeRepoMock();
     repo.findBySku.mockResolvedValue(makeItem(10));
-    repo.updateWithLock.mockImplementation(async (item) => item);
+    repo.saveWithMovement.mockImplementation(async (item) => item);
 
     const command = new ReceiveStockCommand(repo);
     const result = await command.execute('SKU-001', { quantity: 5 });
 
     expect(result.quantityAvailable).toBe(15);
-    expect(repo.updateWithLock).toHaveBeenCalledTimes(1);
+    expect(repo.saveWithMovement).toHaveBeenCalledTimes(1);
   });
 
   it('SKU không tồn tại → NotFoundException', async () => {

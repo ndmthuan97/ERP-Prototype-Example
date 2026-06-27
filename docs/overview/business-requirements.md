@@ -1,3 +1,11 @@
+---
+type: Business Rule
+title: "ERP Business Requirements"
+description: "Business context, user personas, RBAC matrix, and user stories for all bounded contexts"
+tags: [business-rule, requirements, user-stories, erp]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Business Requirements
 
 > Tài liệu mô tả bối cảnh nghiệp vụ, đối tượng người dùng, và các user stories cho hệ thống ERP Prototype. Tất cả requirements được thiết kế để phục vụ mục tiêu chính: **validate architectural patterns** qua các use case thực tế.
@@ -139,7 +147,28 @@ stateDiagram-v2
 | **AUTH-03** | Là user, tôi muốn **refresh token** khi access token hết hạn | - Gửi refresh token → nhận access token mới <br> - Refresh token cũ bị invalidate (rotation) | JWT |
 | **AUTH-04** | Là admin, tôi muốn **quản lý users** (tạo, đổi role, deactivate) | - Chỉ admin mới có quyền <br> - Không thể deactivate chính mình | RBAC |
 
+### 3.5. Catalog Context — User Stories
+
+| ID | User Story | Acceptance Criteria | Pattern |
+|---|---|---|---|
+| **CAT-01** | Là manager, tôi muốn **tạo product** mới vào catalog | - Nhập SKU, name, unit, price, taxRate <br> - SKU validated via Value Object, immutable sau tạo <br> - Event `product.created` → Inventory auto-create stock | Outbox, Event-driven |
+| **CAT-02** | Là manager, tôi muốn **cập nhật** thông tin product | - Đổi name, price, taxRate, unit <br> - SKU không đổi được <br> - taxRate chỉ chấp nhận 0/5/8/10% | DDD |
+| **CAT-03** | Là manager, tôi muốn **deactivate** product không còn bán | - Product bị deactivate không xuất hiện trong active list <br> - Event `product.deactivated` được publish | Outbox |
+| **CAT-04** | Là staff, tôi muốn **tìm kiếm** products | - Search by name hoặc SKU <br> - Pagination + filter by isActive | — |
+
+### 3.6. Purchasing Context — User Stories
+
+| ID | User Story | Acceptance Criteria | Pattern |
+|---|---|---|---|
+| **PUR-01** | Là manager, tôi muốn **tạo supplier** mới | - Nhập tên, contact info <br> - Supplier mặc định isActive = true | DDD |
+| **PUR-02** | Là staff, tôi muốn **tạo Purchase Order** | - Chọn supplier → PO draft được tạo <br> - PO number auto-generated: PO-YYYYMMDD-NNN | DDD |
+| **PUR-03** | Là staff, tôi muốn **thêm/xóa lines** vào PO draft | - Chỉ thêm/xóa khi PO ở trạng thái `draft` <br> - Mỗi line: itemId, quantity, unitPrice | DDD |
+| **PUR-04** | Là manager, tôi muốn **place PO** (đặt hàng nhà cung cấp) | - PO phải có ≥ 1 line <br> - Chuyển status: draft → placed | DDD |
+| **PUR-05** | Là manager, tôi muốn **receive goods** (nhận hàng) | - PO phải ở status `placed` <br> - Chuyển status: placed → received <br> - Event `goods.received` → Inventory tăng stock | Outbox, Event-driven |
+| **PUR-06** | Là manager, tôi muốn **cancel PO** | - PO ở draft hoặc placed mới cancel được <br> - Kèm lý do cancel | DDD |
+
 ---
+
 
 ## 4. Non-functional Requirements
 

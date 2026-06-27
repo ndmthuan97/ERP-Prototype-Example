@@ -1,9 +1,18 @@
+---
+type: Technical Review
+title: "Technical Review Board — ERP Prototype"
+description: "Comprehensive technical review covering architecture, code quality, security, and production readiness"
+tags: [review, architecture, security, quality]
+timestamp: "2026-06-23T00:00:00+07:00"
+---
+
 # 🏛️ Technical Review Board — ERP Prototype Example
 
-> **Review Date:** 2026-06-23  
+> **Review Date:** 2026-06-23 (updated: 2026-06-26)  
 > **Board:** Software Architect · Staff Engineer · Tech Lead · Backend/Frontend/Mobile/Database/Security/QA/DevOps/SRE Engineers · UI/UX Designer · Product Manager · Engineering Manager · Technical Writer  
 > **Project:** ERP Prototype — Microservices architecture learning project  
-> **Commit Context:** Production-readiness assessment based on full source code analysis
+> **Commit Context:** Production-readiness assessment based on full source code analysis  
+> **Updates:** Circuit Breaker, API Versioning, Rate Limiting đã implement. FE đã hoàn thiện đầy đủ.
 
 ---
 
@@ -44,9 +53,9 @@
 ERP core modules: **Customer Management**, **Sales Orders** (with saga), **Inventory** (optimistic locking), **Catalog** (product master), **Purchasing** (purchase orders + goods receipt), **Auth** (JWT + RBAC).
 
 ### Quy mô hệ thống
-- **~8 bounded contexts** separated by database schema
-- **~60+ source files** across backend services
-- **~15 frontend pages/components**
+- **~9 bounded contexts** separated by database schema
+- **~80+ source files** across backend services
+- **~20+ frontend pages/components**
 - **Single PostgreSQL database** with multi-schema isolation
 
 ### Các dependency chính
@@ -129,7 +138,7 @@ presentation/    → NestJS Controllers (HTTP layer)
 | **Single Database** cho tất cả services | 🟠 HIGH | Toàn bộ backend dùng 1 Supabase instance |
 | **Shared DB = Distributed Monolith risk** | 🟡 MEDIUM | Multi-schema trên cùng 1 PostgreSQL |
 | **No service discovery** | 🟡 MEDIUM | Hardcoded URLs trong docker-compose |
-| **No circuit breaker** | 🟡 MEDIUM | HTTP call giữa services (sales → customer) |
+| ~~**No circuit breaker**~~ | ✅ FIXED | Đã implement opossum circuit breaker (sales → customer) |
 | **Polling-based outbox** (setInterval) | 🟢 LOW | Acceptable cho prototype |
 
 ### Bottleneck
@@ -138,7 +147,7 @@ presentation/    → NestJS Controllers (HTTP layer)
 
 ### Rủi ro dài hạn
 - **Database coupling**: dù dùng multi-schema nhưng shared connection pool → 1 service heavy load ảnh hưởng tất cả
-- **No API versioning**: breaking changes trên API sẽ ảnh hưởng frontend ngay lập tức
+- ~~**No API versioning**~~: ✅ Đã implement API versioning `/v1/` trên tất cả services + gateway proxy
 
 ### Kết luận kiến trúc
 > Kiến trúc hiện tại **PHÙ HỢP cho mục tiêu prototype/learning**. KHÔNG cần thay đổi kiến trúc tổng thể. Cần bổ sung: circuit breaker, retry pattern cho inter-service HTTP calls, và tách database khi scale.
@@ -500,7 +509,7 @@ frontend/src/
 |---|---|:---:|
 | 1 | **No Dockerfile** per service | 🟡 MEDIUM |
 | 2 | **No production docker-compose** | 🟡 MEDIUM |
-| 3 | **`docker-compose.dev.yml` runs `npm ci` on every startup** | 🟡 MEDIUM — slow cold start |
+| 3 | ~~`docker-compose.dev.yml` runs `npm ci` on every startup~~ | ✅ RESOLVED — file removed, dev uses native `npm run dev:all` |
 | 4 | **No staging/production environment** | 🟠 HIGH |
 | 5 | **No deployment pipeline** (only CI, no CD) | 🟡 MEDIUM |
 | 6 | **`prisma db push` instead of `prisma migrate deploy`** | 🟡 MEDIUM — no migration history |
@@ -617,7 +626,7 @@ frontend/src/
 |---|:---:|---|
 | **README** | ⭐⭐⭐⭐ | Clear, honest about status. Quick start works. |
 | **IMPLEMENTATION-STATUS.md** | ⭐⭐⭐⭐⭐ | Excellent source of truth — rare to see in projects |
-| **API Documentation** | ⭐⭐ | Blueprint-first (docs mô tả API chưa implement), misleading |
+| **API Documentation** | ⭐⭐⭐⭐ | Docs now match implementation; all endpoints documented and working |
 | **Architecture Documentation** | ⭐⭐⭐ | Sequence diagrams, data model exist but may be stale |
 | **Setup Guide** | ⭐⭐⭐⭐ | Docker Compose dev setup works |
 | **Deployment Guide** | ⭐ | None exists |

@@ -7,6 +7,7 @@ export interface Product {
   name: string;
   unit: string;
   defaultSalePrice: number;
+  taxRate: number;
   isActive: boolean;
   version: number;
   createdAt: string;

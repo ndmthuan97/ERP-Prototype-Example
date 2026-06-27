@@ -30,10 +30,22 @@ describe('StockItem entity', () => {
       expect(item.quantityAvailable).toBe(15);
     });
 
+    it('should accept decimal quantity', () => {
+      const item = makeItem({ quantityAvailable: 10 });
+      item.receive(2.5);
+      expect(item.quantityAvailable).toBe(12.5);
+    });
+
     it('từ chối số lượng không dương', () => {
       const item = makeItem();
       expect(() => item.receive(0)).toThrow();
       expect(() => item.receive(-3)).toThrow();
+    });
+
+    it('should reject non-finite quantity', () => {
+      const item = makeItem();
+      expect(() => item.receive(NaN)).toThrow();
+      expect(() => item.receive(Infinity)).toThrow();
     });
   });
 
@@ -43,6 +55,13 @@ describe('StockItem entity', () => {
       item.reserve(30);
       expect(item.quantityAvailable).toBe(70);
       expect(item.quantityReserved).toBe(30);
+    });
+
+    it('should accept decimal reserve quantity', () => {
+      const item = makeItem({ quantityAvailable: 100, quantityReserved: 0 });
+      item.reserve(2.5);
+      expect(item.quantityAvailable).toBe(97.5);
+      expect(item.quantityReserved).toBe(2.5);
     });
 
     it('ném InsufficientStockError khi thiếu', () => {

@@ -4,7 +4,7 @@
 // =============================================================================
 // Pagination uses PaginatedMeta<T> (nested meta) — different from Customer/Inventory.
 // Create draft: pick customer via async search → createDraft → navigate to detail.
-// Submit/Cancel buttons are saga-gated (SAGA_ENABLED = false) — not shown on list.
+// Submit/Cancel actions are on the order detail page.
 
 import { useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -51,7 +51,8 @@ const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   draft: 'default',
   submitted: 'processing',
   confirmed: 'success',
-  fulfilled: 'cyan',
+  partially_delivered: 'warning',
+  fully_delivered: 'cyan',
   cancelled: 'error',
 };
 
@@ -60,7 +61,8 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'draft', label: 'Draft' },
   { value: 'submitted', label: 'Submitted' },
   { value: 'confirmed', label: 'Confirmed' },
-  { value: 'fulfilled', label: 'Fulfilled' },
+  { value: 'partially_delivered', label: 'Giao một phần' },
+  { value: 'fully_delivered', label: 'Đã giao đủ' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 

@@ -63,3 +63,28 @@ export type IssueStockDto = z.infer<typeof issueStockSchema>;
 export function validateIssueStock(data: unknown): IssueStockDto {
   return issueStockSchema.parse(data);
 }
+
+// --- Batch operations (HTTP reserve/release for synchronous submit flow) ---
+
+const batchLineSchema = z.object({
+  itemId: z.string().uuid('itemId must be a UUID'),
+  quantity: z.number().positive('Quantity must be positive'),
+});
+
+export const reserveBatchSchema = z.object({
+  orderId: z.string().uuid('orderId must be a UUID'),
+  lines: z.array(batchLineSchema).min(1, 'At least one line is required'),
+});
+export type ReserveBatchDto = z.infer<typeof reserveBatchSchema>;
+export function validateReserveBatch(data: unknown): ReserveBatchDto {
+  return reserveBatchSchema.parse(data);
+}
+
+export const releaseBatchSchema = z.object({
+  orderId: z.string().uuid('orderId must be a UUID'),
+  lines: z.array(batchLineSchema).min(1, 'At least one line is required'),
+});
+export type ReleaseBatchDto = z.infer<typeof releaseBatchSchema>;
+export function validateReleaseBatch(data: unknown): ReleaseBatchDto {
+  return releaseBatchSchema.parse(data);
+}

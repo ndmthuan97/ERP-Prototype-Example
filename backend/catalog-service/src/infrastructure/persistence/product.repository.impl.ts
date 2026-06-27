@@ -33,6 +33,7 @@ type ProductRecord = {
   name: string;
   unit: string;
   defaultSalePrice: Prisma.Decimal;
+  taxRate: Prisma.Decimal;
   isActive: boolean;
   version: number;
   createdAt: Date;
@@ -56,6 +57,7 @@ export class PrismaProductRepository implements IProductRepository {
       name: record.name,
       unit: record.unit,
       defaultSalePrice: record.defaultSalePrice.toNumber(),
+      taxRate: record.taxRate.toNumber(),
       isActive: record.isActive,
       version: record.version,
       createdAt: record.createdAt,

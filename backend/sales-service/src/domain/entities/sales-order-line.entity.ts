@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // ORDER LINE ENTITY — Child entity thuộc Aggregate Root SalesOrder
 // =============================================================================
 // KHÔNG tạo trực tiếp — phải qua SalesOrder.addLine().
@@ -11,6 +11,8 @@ export interface SalesOrderLineProps {
   itemName: string;
   quantity: number;
   unitPrice: number;
+  taxRate: number;
+  taxAmount: number;
   lineTotal: number;
   createdAt: Date;
 }
@@ -21,6 +23,8 @@ export class SalesOrderLine {
   readonly itemName: string;
   readonly quantity: number;
   readonly unitPrice: number;
+  readonly taxRate: number;
+  readonly taxAmount: number;
   readonly lineTotal: number;
   readonly createdAt: Date;
 
@@ -30,13 +34,17 @@ export class SalesOrderLine {
     this.itemName = props.itemName;
     this.quantity = props.quantity;
     this.unitPrice = props.unitPrice;
+    this.taxRate = props.taxRate;
+    this.taxAmount = props.taxAmount;
     this.lineTotal = props.lineTotal;
     this.createdAt = props.createdAt;
   }
 
   /**
-   * Factory method: tạo line mới với lineTotal = quantity × unitPrice.
-   * Validate đầu vào: quantity phải là số nguyên > 0, unitPrice > 0.
+   * Factory method: create a new line with tax calculation.
+   * subtotal = quantity × unitPrice
+   * taxAmount = subtotal × taxRate
+   * lineTotal = subtotal + taxAmount
    */
   static create(
     id: string,
@@ -44,20 +52,25 @@ export class SalesOrderLine {
     itemName: string,
     quantity: number,
     unitPrice: number,
+    taxRate: number = 0,
   ): SalesOrderLine {
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      throw new Error('Số lượng phải là số nguyên dương');
+    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0) {
+      throw new Error('Quantity must be a positive number');
     }
-    if (unitPrice <= 0) {
-      throw new Error('Đơn giá phải là số dương');
+    if (typeof unitPrice !== 'number' || !Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new Error('Unit price must not be negative');
     }
-    const lineTotal = quantity * unitPrice;
+    const subtotal = Math.round(quantity * unitPrice);
+    const taxAmount = Math.round(subtotal * taxRate);
+    const lineTotal = subtotal + taxAmount;
     return new SalesOrderLine({
       id,
       itemId,
       itemName,
       quantity,
       unitPrice,
+      taxRate,
+      taxAmount,
       lineTotal,
       createdAt: new Date(),
     });

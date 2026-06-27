@@ -32,8 +32,8 @@ type StockItemRecord = {
   id: string;
   sku: string;
   name: string;
-  quantityAvailable: number;
-  quantityReserved: number;
+  quantityAvailable: Prisma.Decimal;
+  quantityReserved: Prisma.Decimal;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -50,8 +50,8 @@ export class PrismaStockItemRepository implements IStockItemRepository {
       id: record.id,
       sku: record.sku,
       name: record.name,
-      quantityAvailable: record.quantityAvailable,
-      quantityReserved: record.quantityReserved,
+      quantityAvailable: record.quantityAvailable.toNumber(),
+      quantityReserved: record.quantityReserved.toNumber(),
       version: record.version,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
@@ -219,11 +219,12 @@ export class PrismaStockItemRepository implements IStockItemRepository {
   }
 
   async createOutboxEvent(event: OutboxEventInput): Promise<void> {
+    const orderId = (event.payload as Record<string, unknown>).orderId;
     await this.prisma.outbox.create({
       data: {
         id: uuidv4(),
         aggregateType: 'StockItem',
-        aggregateId: 'saga',
+        aggregateId: typeof orderId === 'string' ? orderId : 'unknown',
         eventType: event.eventType,
         payload: {
           ...event.payload,

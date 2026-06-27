@@ -1,3 +1,11 @@
+---
+type: Architecture Decision
+title: "Technology Decision Records (ADR)"
+description: "Architecture Decision Records for all technology choices: NestJS, Prisma, Supabase, Upstash, Pub/Sub, Auth, Frontend, npm"
+tags: [architecture, decision, adr, tech-stack]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Tech Decisions
 
 > Tài liệu ghi lại các quyết định công nghệ (Architecture Decision Records — ADR) cho dự án ERP Prototype. Mỗi quyết định được trình bày theo format: **Context → Decision → Alternatives → Consequences**, giúp hiểu rõ _tại sao_ chọn công nghệ này thay vì công nghệ khác.

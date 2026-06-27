@@ -1,6 +1,14 @@
+---
+type: System Component
+title: "Bounded Contexts"
+description: "6 bounded contexts with context map, interaction rules, data ownership, and event contracts"
+tags: [system, component, ddd, bounded-context]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Bounded Contexts — Ranh giới ngữ cảnh
 
-> ⚠️ **Trạng thái hỗn hợp:** chỉ context `Customer` đã implement; `Order`, `Inventory`, `Auth` mới là blueprint và chưa có subscriber nào tiêu thụ event. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Trạng thái:** Tất cả 6 bounded contexts đã implement đầy đủ. Xem chi tiết: [Implementation Status](../IMPLEMENTATION-STATUS.md).
 
 > Tài liệu mô tả các Bounded Context trong hệ thống ERP Prototype, quy tắc tương tác giữa chúng, và sự kiện (events) mà mỗi context publish/consume.
 > Liên quan: [system-overview](system-overview.md) · [data-model](data-model.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
@@ -36,8 +44,13 @@ flowchart TB
 
     subgraph Core Contexts
         Customer["Customer Context\n:3001\nschema: customer"]
-        Order["Order Context\n:3002\nschema: order"]
+        Order["Sales Context\n:3002\nschema: sales"]
         Inventory["Inventory Context\n:3003\nschema: inventory"]
+    end
+
+    subgraph Extended Contexts
+        Catalog["Catalog Context\n:3005\nschema: catalog"]
+        Purchasing["Purchasing Context\n:3006\nschema: purchasing"]
     end
 
     GW["API Gateway :3010"]
@@ -47,14 +60,18 @@ flowchart TB
     GW -- "HTTP proxy" --> Customer
     GW -- "HTTP proxy" --> Order
     GW -- "HTTP proxy" --> Inventory
+    GW -- "HTTP proxy" --> Catalog
+    GW -- "HTTP proxy" --> Purchasing
 
     Customer -- "customer.created\ncustomer.updated" --> PS
-    Order -- "order.submitted\norder.confirmed\norder.cancelled" --> PS
-    Inventory -- "inventory.reserved\ninventory.reservation-failed" --> PS
+    Order -- "sales-order.submitted\nsales-order.confirmed\nsales-order.cancelled" --> PS
+    Purchasing -- "goods.received" --> PS
 
-    PS -. "order.submitted\norder.cancelled" .-> Inventory
-    PS -. "inventory.reserved\ninventory.reservation-failed" .-> Order
+    PS -. "sales-order.cancelled\nsales-order.fulfilled" .-> Inventory
+    PS -. "product.created" .-> Inventory
+    PS -. "goods.received" .-> Inventory
 
+    Order -- "HTTP: reserve/release" --> Inventory
     Order -- "HTTP: credit-check" --> Customer
 ```
 
@@ -123,40 +140,42 @@ Auth không chứa business logic cốt lõi của ERP (không liên quan đến
 
 ---
 
-### 3.3. Order Context (Core Context)
+### 3.3. Sales Context (Core Context)
 
 | Thuộc tính | Chi tiết |
 |---|---|
-| **Vai trò** | Core Context — quản lý đơn hàng, điều phối Saga |
-| **Service** | Order Service `:3002` |
-| **Schema** | `order` |
+| **Vai trò** | Core Context — quản lý đơn hàng, điều phối submit flow |
+| **Service** | Sales Service `:3002` |
+| **Schema** | `sales` |
 | **Tables** | `headers`, `lines`, `status_history`, `lifecycle_view`, `outbox` |
-| **Events published** | `order.submitted`, `order.confirmed`, `order.cancelled` |
-| **Events consumed** | `inventory.reserved`, `inventory.reservation-failed` |
+| **Events published** | `sales-order.submitted`, `sales-order.confirmed`, `sales-order.cancelled` |
+| **Events consumed** | Không có (uses HTTP for cross-service calls) |
 
 **Responsibilities:**
 
 1. CRUD đơn hàng (header + lines) — Aggregate Root pattern
 2. Quản lý lifecycle: `draft` → `submitted` → `confirmed` / `cancelled` → `fulfilled`
 3. Ghi lịch sử thay đổi trạng thái (status_history)
-4. **Saga Orchestrator**: điều phối luồng submit → reserve stock → credit check → confirm/compensate
+4. **Synchronous Submit**: HTTP reserve stock (Inventory) → HTTP credit-check (Customer) → confirm/cancel
 5. CQRS: write model (headers + lines) vs read model (lifecycle_view)
-6. Gọi Customer Service (HTTP) để credit-check
+6. Gọi Inventory Service (HTTP) để reserve/release stock
+7. Gọi Customer Service (HTTP) để credit-check
 
 **Events Published:**
 
 | Event | Trigger | Payload chính |
 |---|---|---|
-| `order.submitted` | User submit đơn hàng | `orderId`, `customerId`, `items[]`, `totalAmount` |
-| `order.confirmed` | Saga hoàn thành thành công | `orderId`, `customerId`, `confirmedAt` |
-| `order.cancelled` | Saga thất bại hoặc user cancel | `orderId`, `reason`, `cancelledAt` |
+| `sales-order.submitted` | User submit đơn hàng | `orderId`, `customerId`, `items[]`, `totalAmount` |
+| `sales-order.confirmed` | Reserve + credit-check thành công | `orderId` |
+| `sales-order.cancelled` | Reserve hoặc credit-check thất bại, hoặc user cancel | `orderId`, `reason`, `lines[]` |
 
-**Events Consumed:**
+**HTTP Calls (Outbound):**
 
-| Event | Source | Hành động |
+| Callee | Endpoint | Purpose |
 |---|---|---|
-| `inventory.reserved` | Inventory Service | Tiếp tục Saga → credit check → confirm |
-| `inventory.reservation-failed` | Inventory Service | Đánh dấu đơn hàng thất bại |
+| Inventory Service | `POST /v1/inventory/items/batch/reserve` | Reserve stock for order |
+| Inventory Service | `POST /v1/inventory/items/batch/release` | Compensate: release on credit fail |
+| Customer Service | `GET /v1/customers/:id/credit-check` | Check credit limit |
 
 ---
 
@@ -167,34 +186,78 @@ Auth không chứa business logic cốt lõi của ERP (không liên quan đến
 | **Vai trò** | Core Context — quản lý kho hàng, tồn kho |
 | **Service** | Inventory Service `:3003` |
 | **Schema** | `inventory` |
-| **Tables** | `items`, `warehouses`, `stock_levels`, `movements`, `outbox` |
-| **Events published** | `inventory.reserved`, `inventory.reservation-failed` |
-| **Events consumed** | `order.submitted`, `order.cancelled` |
+| **Tables** | `items`, `movements`, `outbox` |
+| **HTTP endpoints** | Batch reserve/release (called by Sales Service) |
+| **Events consumed** | `sales-order.cancelled`, `sales-order.fulfilled`, `product.created`, `goods.received` |
 
 **Responsibilities:**
 
 1. CRUD items (sản phẩm) và warehouses (kho)
-2. Quản lý stock levels: `on_hand_quantity`, `reserved_quantity`
+2. Quản lý stock levels: `quantity_available`, `quantity_reserved`
 3. Nhập kho (inbound) / xuất kho (outbound)
-4. Reserve stock khi nhận event `order.submitted`
-5. Release stock khi nhận event `order.cancelled` (compensation)
-6. **Optimistic Locking**: dùng column `version` để tránh concurrent update
+4. **HTTP reserve/release**: batch endpoints for synchronous stock operations
+5. Release stock khi nhận event `sales-order.cancelled` (Pub/Sub compensation)
+6. Issue stock khi nhận event `sales-order.fulfilled`
+7. **Optimistic Locking**: dùng column `version` để tránh concurrent update
 
-**Events Published:**
+**HTTP Endpoints (Inbound):**
 
-| Event | Trigger | Payload chính |
+| Endpoint | Caller | Purpose |
 |---|---|---|
-| `inventory.reserved` | Reserve stock thành công | `orderId`, `items[]`, `reservedAt` |
-| `inventory.reservation-failed` | Không đủ stock | `orderId`, `failedItems[]`, `reason` |
+| `POST /v1/inventory/items/batch/reserve` | Sales Service | Atomic multi-item reserve |
+| `POST /v1/inventory/items/batch/release` | Sales Service | Release reserved stock |
 
 **Events Consumed:**
 
 | Event | Source | Hành động |
 |---|---|---|
-| `order.submitted` | Order Service | Reserve stock cho tất cả items trong đơn |
-| `order.cancelled` | Order Service | Release (giải phóng) stock đã reserve |
+| `sales-order.cancelled` | Sales Service | Release stock đã reserve |
+| `sales-order.fulfilled` | Sales Service | Issue stock for shipment |
+| `product.created` | Catalog Service | Auto-create stock item |
+| `goods.received` | Purchasing Service | Receive stock from PO |
 
 ---
+
+### 3.5. Catalog Context (Extended Context)
+
+| Thuộc tính | Chi tiết |
+|---|---|
+| **Vai trò** | Extended Context — quản lý danh mục sản phẩm |
+| **Service** | Catalog Service `:3005` |
+| **Schema** | `catalog` |
+| **Tables** | `products`, `outbox` |
+| **Events published** | `product.created`, `product.deactivated` |
+| **Events consumed** | Không có |
+
+**Trách nhiệm:**
+1. Product CRUD (tạo, cập nhật, tìm kiếm, xem chi tiết)
+2. SKU validation via Value Object (immutable sau tạo)
+3. Quản lý taxRate per product (VN rates: 0%, 5%, 8%, 10%)
+4. Activate/deactivate products
+5. Publish event `product.created` → Inventory auto-create stock item
+
+---
+
+### 3.6. Purchasing Context (Extended Context)
+
+| Thuộc tính | Chi tiết |
+|---|---|
+| **Vai trò** | Extended Context — quản lý quy trình mua hàng |
+| **Service** | Purchasing Service `:3006` |
+| **Schema** | `purchasing` |
+| **Tables** | `purchase_orders`, `po_lines`, `suppliers`, `outbox` |
+| **Events published** | `goods.received` |
+| **Events consumed** | Không có |
+
+**Trách nhiệm:**
+1. Supplier CRUD (tạo, cập nhật, tìm kiếm, activate/deactivate)
+2. Purchase Order lifecycle (draft → placed → received → cancelled)
+3. PO Line management (thêm/xóa dòng hàng khi draft)
+4. Goods receipt — khi nhận hàng, publish `goods.received` → Inventory tăng stock
+5. Auto-generate PO number format `PO-YYYYMMDD-NNN`
+
+---
+
 
 ## 4. Quy tắc tương tác giữa các Context
 
@@ -217,9 +280,9 @@ Auth không chứa business logic cốt lõi của ERP (không liên quan đến
 |---|---|---|
 | **Cần response ngay** | ✅ Dùng HTTP | ❌ Không phù hợp |
 | **Fire-and-forget** | ❌ Overhead không cần thiết | ✅ Dùng Event |
-| **Failure tolerance** | Caller bị block nếu callee down | Event nằm trong queue, retry sau |
+| **Failure tolerance** | Caller bị block nếu callee down (Circuit Breaker giảm thiệu) | Event nằm trong queue, retry sau |
 | **Coupling** | Coupling cao hơn (cần biết URL) | Loose coupling (chỉ biết topic name) |
-| **Ví dụ trong project** | Order → Customer (credit-check) | Order → Pub/Sub → Inventory (reserve) |
+| **Ví dụ trong project** | Sales → Inventory (reserve/release), Sales → Customer (credit-check) | Sales → Pub/Sub → Inventory (cancel release, issue stock) |
 
 ### 4.3. Bảng tương tác chi tiết
 
@@ -227,13 +290,14 @@ Auth không chứa business logic cốt lõi của ERP (không liên quan đến
 |---|---|---|---|
 | API Gateway | Auth Service | HTTP | Verify JWT token |
 | API Gateway | Customer Service | HTTP Proxy | Forward CRUD requests |
-| API Gateway | Order Service | HTTP Proxy | Forward CRUD requests |
+| API Gateway | Sales Service | HTTP Proxy | Forward CRUD requests |
 | API Gateway | Inventory Service | HTTP Proxy | Forward CRUD requests |
-| Order Service | Customer Service | HTTP | Credit check (kiểm tra hạn mức) |
-| Order Service | Inventory Service | Pub/Sub event | Reserve stock (qua `order.submitted`) |
-| Inventory Service | Order Service | Pub/Sub event | Trả kết quả reserve (qua `inventory.reserved` / `inventory.reservation-failed`) |
-| Order Service | Inventory Service | Pub/Sub event | Compensation (qua `order.cancelled`) |
+| Sales Service | Inventory Service | **HTTP** | Reserve/release stock (batch, synchronous) |
+| Sales Service | Customer Service | **HTTP** | Credit check (kiểm tra hạn mức) |
+| Sales Service | Inventory Service | Pub/Sub event | Release stock (qua `sales-order.cancelled`) |
+| Sales Service | Inventory Service | Pub/Sub event | Issue stock (qua `sales-order.fulfilled`) |
 | Customer Service | — | Pub/Sub event | Broadcast thay đổi (customer.created/updated) |
+| Purchasing Service | Inventory Service | Pub/Sub event | Receive stock (qua `goods.received`) |
 
 ---
 
@@ -278,35 +342,36 @@ flowchart LR
 ```mermaid
 flowchart LR
     C["Customer"]
-    O["Order"]
+    S["Sales"]
     I["Inventory"]
+    PUR["Purchasing"]
     PS["Pub/Sub"]
 
     C -- "customer.created" --> PS
     C -- "customer.updated" --> PS
-    O -- "order.submitted" --> PS
-    O -- "order.confirmed" --> PS
-    O -- "order.cancelled" --> PS
-    I -- "inventory.reserved" --> PS
-    I -- "inventory.reservation-failed" --> PS
+    S -- "sales-order.confirmed" --> PS
+    S -- "sales-order.cancelled" --> PS
+    S -- "sales-order.fulfilled" --> PS
+    PUR -- "goods.received" --> PS
 
-    PS -. "order.submitted" .-> I
-    PS -. "order.cancelled" .-> I
-    PS -. "inventory.reserved" .-> O
-    PS -. "inventory.reservation-failed" .-> O
+    PS -. "sales-order.cancelled" .-> I
+    PS -. "sales-order.fulfilled" .-> I
+    PS -. "goods.received" .-> I
+
+    S -- "HTTP: reserve/release" --> I
+    S -- "HTTP: credit-check" --> C
 ```
 
 | Topic | Publisher | Subscriber(s) | Mục đích |
 |---|---|---|---|
 | `customer.created` | Customer | (chưa có) | Thông báo customer mới |
 | `customer.updated` | Customer | (chưa có) | Thông báo thay đổi customer |
-| `order.submitted` | Order | Inventory | Yêu cầu reserve stock |
-| `order.confirmed` | Order | (chưa có) | Thông báo đơn hàng đã xác nhận |
-| `order.cancelled` | Order | Inventory | Yêu cầu release stock (compensation) |
-| `inventory.reserved` | Inventory | Order | Báo reserve thành công → tiếp tục Saga |
-| `inventory.reservation-failed` | Inventory | Order | Báo reserve thất bại → fail Saga |
+| `sales-order.confirmed` | Sales | (chưa có) | Thông báo đơn hàng đã xác nhận |
+| `sales-order.cancelled` | Sales | Inventory | Release stock (compensation) |
+| `sales-order.fulfilled` | Sales | Inventory | Issue stock for shipment |
+| `goods.received` | Purchasing | Inventory | Receive stock from PO |
 
-> **Lưu ý**: `customer.created` và `customer.updated` hiện chưa có subscriber. Trong tương lai, Order Service có thể subscribe để cache thông tin customer locally (giảm HTTP calls).
+> **Lưu ý**: `customer.created` và `customer.updated` hiện chưa có subscriber. Trong tương lai, Sales Service có thể subscribe để cache thông tin customer locally.
 
 ---
 

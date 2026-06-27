@@ -15,6 +15,7 @@ export interface ProductProps {
   name: string;
   unit: string;
   defaultSalePrice: number;
+  taxRate: number;
   isActive: boolean;
   version: number;
   createdAt: Date;
@@ -27,6 +28,7 @@ export class Product extends AggregateRoot {
   name: string;
   unit: string;
   defaultSalePrice: number;
+  taxRate: number;
   isActive: boolean;
   version: number;
   readonly createdAt: Date;
@@ -39,6 +41,7 @@ export class Product extends AggregateRoot {
     this.name = props.name;
     this.unit = props.unit;
     this.defaultSalePrice = props.defaultSalePrice;
+    this.taxRate = props.taxRate;
     this.isActive = props.isActive;
     this.version = props.version;
     this.createdAt = props.createdAt;
@@ -55,6 +58,7 @@ export class Product extends AggregateRoot {
     name: string,
     unit: string,
     price: number,
+    taxRate: number = 0.10,
   ): Product {
     // Validate SKU format via Value Object (throws if invalid)
     SKU.create(sku);
@@ -66,6 +70,11 @@ export class Product extends AggregateRoot {
       throw new Error('Product price must be >= 0');
     }
 
+    const validRates = [0, 0.05, 0.08, 0.10];
+    if (!validRates.includes(taxRate)) {
+      throw new Error('Tax rate must be one of: 0%, 5%, 8%, 10%');
+    }
+
     const now = new Date();
     return new Product({
       id,
@@ -73,6 +82,7 @@ export class Product extends AggregateRoot {
       name: name.trim(),
       unit: unit || 'PCS',
       defaultSalePrice: price,
+      taxRate,
       isActive: true,
       version: 0,
       createdAt: now,
@@ -95,6 +105,16 @@ export class Product extends AggregateRoot {
       throw new Error('Product price must be >= 0');
     }
     this.defaultSalePrice = price;
+    this.touch();
+  }
+
+  /** Change the tax rate. Must be one of: 0%, 5%, 8%, 10%. */
+  changeTaxRate(rate: number): void {
+    const validRates = [0, 0.05, 0.08, 0.10];
+    if (!validRates.includes(rate)) {
+      throw new Error('Tax rate must be one of: 0%, 5%, 8%, 10%');
+    }
+    this.taxRate = rate;
     this.touch();
   }
 

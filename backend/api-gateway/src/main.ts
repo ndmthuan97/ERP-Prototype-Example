@@ -47,31 +47,34 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('APIGateway');
 
-  // CORS for frontend
+  // CORS for frontend — restrict to allowed origins (fix: was `origin: true`)
+  const corsOrigins = process.env.CORS_ORIGINS?.trim();
   app.enableCors({
-    origin: true,
+    origin: corsOrigins
+      ? corsOrigins.split(',').map((o) => o.trim())
+      : ['http://localhost:3000'],
     credentials: true,
   });
 
   // Security headers
   app.use(helmet());
 
-  // Global rate limit: 100 requests / 15 min per IP
+  // Global rate limit: configurable via env (default: 100 req / 15 min)
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 100,
+      max: parseInt(process.env.GLOBAL_RATE_LIMIT || '100', 10),
       standardHeaders: true,
       legacyHeaders: false,
     }),
   );
 
-  // Strict rate limit for auth login: 5 attempts / 15 min
+  // Strict rate limit for auth login: configurable via env (default: 5 / 15 min)
   app.use(
     '/api/auth/login',
     rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 5,
+      max: parseInt(process.env.LOGIN_RATE_LIMIT || '5', 10),
       message: {
         statusCode: 429,
         error: 'Too Many Requests',
@@ -148,6 +151,7 @@ async function bootstrap() {
   app.use('/api/inventory', createProxy(serviceUrls.inventory, '/v1/inventory'));
   app.use('/api/catalog', createProxy(serviceUrls.catalog, '/v1/catalog'));
   app.use('/api/purchasing', createProxy(serviceUrls.purchasing, '/v1/purchasing'));
+  app.use('/api/suppliers', createProxy(serviceUrls.purchasing, '/v1/suppliers'));
 
   const port = parseInt(process.env.API_GATEWAY_PORT || '3010', 10);
   await app.listen(port, '0.0.0.0');
@@ -161,6 +165,7 @@ async function bootstrap() {
   logger.log(`   /api/inventory/*  → Inventory Service (${serviceUrls.inventory})`);
   logger.log(`   /api/catalog/*    → Catalog Service   (${serviceUrls.catalog})`);
   logger.log(`   /api/purchasing/* → Purchasing Service (${serviceUrls.purchasing})`);
+  logger.log(`   /api/suppliers/*  → Purchasing Service (${serviceUrls.purchasing})`);
 }
 
 bootstrap();

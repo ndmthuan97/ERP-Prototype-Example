@@ -42,24 +42,27 @@ const ORDER_STATUS_COLOR: Record<string, string> = {
   draft: 'default',
   submitted: 'processing',
   confirmed: 'success',
-  fulfilled: 'cyan',
+  partially_delivered: 'warning',
+  fully_delivered: 'cyan',
   cancelled: 'error',
 };
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   draft: 'Nháp',
   submitted: 'Đang xử lý',
-  confirmed: 'Hoàn thành',
-  fulfilled: 'Đã giao',
+  confirmed: 'Xác nhận',
+  partially_delivered: 'Giao một phần',
+  fully_delivered: 'Đã giao đủ',
   cancelled: 'Đã hủy',
 };
 
 // Color mapping for donut chart segments by order status
 const STATUS_DONUT_CONFIG: Record<string, { label: string; color: string }> = {
-  confirmed: { label: 'Hoàn thành', color: '#52c41a' },
+  confirmed: { label: 'Xác nhận', color: '#52c41a' },
   submitted: { label: 'Đang xử lý', color: '#1677ff' },
   draft: { label: 'Nháp', color: '#8c8c8c' },
-  fulfilled: { label: 'Đã giao', color: '#faad14' },
+  partially_delivered: { label: 'Giao một phần', color: '#faad14' },
+  fully_delivered: { label: 'Đã giao đủ', color: '#13c2c2' },
   cancelled: { label: 'Đã hủy', color: '#ff4d4f' },
 };
 
@@ -98,7 +101,7 @@ export default function DashboardPage() {
   // Larger fetch for donut chart status breakdown
   const { data: allOrdersData } = useQuery({
     queryKey: ['dashboard', 'orders-all'],
-    queryFn: () => salesApi.list({ limit: 200 }),
+    queryFn: () => salesApi.list({ limit: 20 }),
     staleTime: 60_000,
   });
 

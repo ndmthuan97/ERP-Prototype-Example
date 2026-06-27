@@ -1,6 +1,14 @@
+---
+type: System Component
+title: "RBAC — Role-Based Access Control"
+description: "RBAC system with 3 roles (admin/manager/staff), permission matrix, JWT guard flow, and authorization placement"
+tags: [system, component, rbac, security, auth]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # RBAC — Phân quyền theo vai trò
 
-> 🚧 **PLANNED — chưa implement.** `auth-service` và `api-gateway` (nơi RBAC sống) hiện chỉ là scaffold. Tài liệu này là **blueprint thiết kế**. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md). Lưu ý: thiết kế "check 100% ở gateway" sẽ được điều chỉnh (gateway authn + authz thô, service enforce authz tài nguyên) — xem [improvement-plan.md](../../improvement-plan.md) Phase 5.
+> ✅ **Đã implement.** `auth-service` (JWT login/refresh/logout, bcrypt) + `api-gateway` (JWT verification, proxy routing) đã chạy. RBAC 3 roles (admin/manager/staff). Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
 
 > Tài liệu mô tả hệ thống phân quyền Role-Based Access Control trong ERP Prototype: 3 roles, permission matrix, JWT guard flow.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [design-patterns](design-patterns.md)

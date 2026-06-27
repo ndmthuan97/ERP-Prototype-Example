@@ -27,10 +27,10 @@ model StockItem {
   name              String
 
   // Số lượng khả dụng (có thể bán/giữ chỗ)
-  quantityAvailable Int      @default(0) @map("quantity_available")
+  quantityAvailable Decimal  @default(0) @map("quantity_available") @db.Decimal(18, 4)
 
   // Số lượng đã giữ chỗ (reserved cho đơn hàng chưa hoàn tất)
-  quantityReserved  Int      @default(0) @map("quantity_reserved")
+  quantityReserved  Decimal  @default(0) @map("quantity_reserved") @db.Decimal(18, 4)
 
   // OPTIMISTIC LOCKING: mỗi lần UPDATE phải khớp version cũ → version+1.
   // Update khác ghi đè giữa chừng → version lệch → 0 row affected → retry.
@@ -53,7 +53,7 @@ model StockMovement {
   id         String   @id @default(uuid())
   itemId     String   @map("item_id")
   type       String   // "IN" | "OUT"
-  quantity   Int
+  quantity   Decimal  @db.Decimal(18, 4)
   reason     String   // "purchase_receive" | "sales_issue" | "manual_adjust" | "initial"
   reference  String?  // PO id or SO id for traceability
   occurredAt DateTime @default(now()) @map("occurred_at")

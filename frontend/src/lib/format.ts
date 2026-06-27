@@ -18,3 +18,11 @@ export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('vi-VN');
 }
+
+export function formatTaxRate(rate: number): string {
+  return `${(rate * 100).toFixed(0)}%`;
+}
+
+export function formatQuantity(qty: number): string {
+  return Number.isInteger(qty) ? String(qty) : qty.toFixed(2);
+}

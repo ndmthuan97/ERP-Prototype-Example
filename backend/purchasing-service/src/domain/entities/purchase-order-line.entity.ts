@@ -65,8 +65,8 @@ export class PurchaseOrderLine {
     orderedQty: number,
     unitCost: number,
   ): PurchaseOrderLine {
-    if (!Number.isInteger(orderedQty) || orderedQty <= 0) {
-      throw new Error('orderedQty must be a positive integer');
+    if (typeof orderedQty !== 'number' || !Number.isFinite(orderedQty) || orderedQty <= 0) {
+      throw new Error('orderedQty must be a positive number');
     }
     if (unitCost <= 0) {
       throw new Error('unitCost must be a positive number');

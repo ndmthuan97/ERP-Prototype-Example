@@ -1,6 +1,14 @@
+---
+type: Database Schema
+title: "ERP Data Model"
+description: "Complete database schema across 8 PostgreSQL schemas with ER diagrams, table definitions, columns, and constraints"
+tags: [database, schema, postgresql, data-model]
+timestamp: "2026-06-26T00:00:00+07:00"
+---
+
 # Data Model — Mô hình dữ liệu
 
-> ⚠️ **Trạng thái hỗn hợp:** chỉ schema `customer` (bảng `cores`, `outbox`) đã tồn tại trong DB; `order/inventory/auth` mới là blueprint. Lưu ý bảng `customer.cores` ở code thật khác doc này một chút (`tax_code` **nullable, chưa unique**; có cột `deleted_at`) — code là nguồn chân lý. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Tất cả schemas đã implement:** `customer`, `sales` (headers, lines, delivery, returns), `inventory`, `catalog`, `purchasing` (PO + suppliers), `app_auth`. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
 
 > Tài liệu chi tiết cấu trúc database của ERP Prototype: 4 schemas, tất cả tables, columns, constraints và ER diagrams.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)

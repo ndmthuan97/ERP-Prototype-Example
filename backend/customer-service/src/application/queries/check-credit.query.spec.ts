@@ -40,7 +40,7 @@ function makeCustomer(
 }
 
 describe('CheckCreditQuery', () => {
-  it('trả thông tin tín dụng + canOrder=true khi active', async () => {
+  it('trả thông tin tín dụng + canOrder=true khi active (no pending)', async () => {
     const repo = makeRepoMock();
     repo.findById.mockResolvedValue(makeCustomer());
 
@@ -51,9 +51,31 @@ describe('CheckCreditQuery', () => {
       customerId: ID,
       creditLimit: 10_000_000,
       creditUsed: 3_000_000,
+      pendingAmount: 0,
       available: 7_000_000,
       canOrder: true,
     });
+  });
+
+  it('should deduct pendingOrdersTotal from available credit', async () => {
+    const repo = makeRepoMock();
+    repo.findById.mockResolvedValue(makeCustomer());
+
+    const query = new CheckCreditQuery(repo);
+    const result = await query.execute(ID, 1_000_000, 2_000_000);
+
+    expect(result.pendingAmount).toBe(2_000_000);
+    expect(result.available).toBe(5_000_000); // 7M - 2M pending
+  });
+
+  it('should clamp available to 0 when pending exceeds raw available', async () => {
+    const repo = makeRepoMock();
+    repo.findById.mockResolvedValue(makeCustomer());
+
+    const query = new CheckCreditQuery(repo);
+    const result = await query.execute(ID, 0, 10_000_000);
+
+    expect(result.available).toBe(0);
   });
 
   it('canOrder=false khi suspended', async () => {

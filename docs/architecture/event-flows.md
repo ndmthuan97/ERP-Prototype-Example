@@ -1,6 +1,14 @@
+﻿---
+type: System Component
+title: "Event Flows & Saga"
+description: "Event-driven architecture: Pub/Sub topics, event envelope, Outbox worker, Saga choreography, and idempotent consumer"
+tags: [system, component, event-driven, saga, outbox]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Event Flows — Luồng sự kiện
 
-> 🚧 **PHẦN LỚN LÀ PLANNED.** Chỉ Outbox của `customer-service` (publish `customer.*`) là đã chạy; **chưa có subscriber nào** và Saga order↔inventory↔customer **chưa implement**. Phần Saga/Pub-Sub liên-service là **blueprint thiết kế**. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Đã implement đầy đủ.** Outbox + Pub/Sub + Saga choreography (sales ↔ inventory ↔ customer) đã chạy ổn định. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
 
 > Tài liệu mô tả toàn bộ luồng event trong hệ thống ERP Prototype: Pub/Sub topics, event payload schemas, Saga orchestration, và Outbox pattern.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [design-patterns](design-patterns.md)
@@ -49,38 +57,47 @@ Hệ thống sử dụng **GCP Pub/Sub Emulator** (chạy trong Docker, port `:8
 flowchart TB
     subgraph Publishers
         CS["Customer Service"]
-        OS["Order Service"]
+        OS["Sales Service"]
         IS["Inventory Service"]
+        PUR["Purchasing Service"]
     end
 
-    subgraph Pub/Sub Emulator
+    subgraph "Pub/Sub Emulator (Notifications)"
         T1["customer.created"]
         T2["customer.updated"]
-        T3["order.submitted"]
-        T4["order.confirmed"]
-        T5["order.cancelled"]
-        T6["inventory.reserved"]
-        T7["inventory.reservation-failed"]
+        T4["sales-order.confirmed"]
+        T5["sales-order.cancelled"]
+        T8["sales-order.fulfilled"]
+        T9["product.created"]
+        T10["goods.received"]
     end
 
     subgraph Subscribers
-        OS2["Order Service"]
         IS2["Inventory Service"]
     end
 
     CS --> T1
     CS --> T2
-    OS --> T3
     OS --> T4
     OS --> T5
-    IS --> T6
-    IS --> T7
+    OS --> T8
+    PUR --> T10
 
-    T3 -. "sub" .-> IS2
     T5 -. "sub" .-> IS2
-    T6 -. "sub" .-> OS2
-    T7 -. "sub" .-> OS2
+    T8 -. "sub" .-> IS2
+    T9 -. "sub" .-> IS2
+    T10 -. "sub" .-> IS2
+
+    OS -- "HTTP: reserve-batch" --> IS
+    OS -- "HTTP: release-batch" --> IS
+    OS -- "HTTP: credit-check" --> CS
 ```
+
+> [!IMPORTANT]
+> **Hybrid Communication (v2):** Stock reservation and release use **synchronous HTTP** calls
+> (Sales → Inventory) for immediate user feedback. Pub/Sub is used only for
+> **notifications and side-effects** (e.g., cancel → release, fulfilled → issue stock).
+> The old `inventory.reserved` / `inventory.reservation-failed` topics are no longer used.
 
 ---
 
@@ -92,20 +109,33 @@ flowchart TB
 |---|---|---|---|---|
 | 1 | `customer.created` | Customer Service | (chưa có) | Thông báo tạo customer mới |
 | 2 | `customer.updated` | Customer Service | (chưa có) | Thông báo cập nhật customer |
-| 3 | `order.submitted` | Order Service | Inventory Service | Yêu cầu reserve stock |
-| 4 | `order.confirmed` | Order Service | (chưa có) | Thông báo đơn hàng xác nhận |
-| 5 | `order.cancelled` | Order Service | Inventory Service | Yêu cầu release stock |
-| 6 | `inventory.reserved` | Inventory Service | Order Service | Báo reserve thành công |
-| 7 | `inventory.reservation-failed` | Inventory Service | Order Service | Báo reserve thất bại |
+| 3 | `sales-order.submitted` | Sales Service | (notification only) | Audit trail — đơn hàng đã submit |
+| 4 | `sales-order.confirmed` | Sales Service | (chưa có) | Thông báo đơn hàng xác nhận |
+| 5 | `sales-order.cancelled` | Sales Service | Inventory Service | Release stock (compensation) |
+| 6 | `sales-order.fulfilled` | Sales Service | Inventory Service | Issue stock for shipment |
+| 7 | `product.created` | Catalog Service | Inventory Service | Auto-create stock item |
+| 8 | `goods.received` | Purchasing Service | Inventory Service | Receive stock from PO |
 
-### 2.2. Subscriptions
+> [!NOTE]
+> **Removed topics:** `inventory.reserved` and `inventory.reservation-failed` are no longer used.
+> Stock reservation is now handled synchronously via HTTP POST `/v1/inventory/items/batch/reserve`.
+
+### 2.2. HTTP Endpoints (Synchronous Cross-Service)
+
+| Caller | Callee | Endpoint | Purpose |
+|---|---|---|---|
+| Sales Service | Inventory Service | `POST /v1/inventory/items/batch/reserve` | Reserve stock for order |
+| Sales Service | Inventory Service | `POST /v1/inventory/items/batch/release` | Compensate: release on credit fail |
+| Sales Service | Customer Service | `GET /v1/customers/:id/credit-check` | Check credit limit |
+
+### 2.3. Subscriptions (Pub/Sub)
 
 | Subscription | Topic | Service | Cơ chế |
 |---|---|---|---|
-| `order-service.inventory.reserved` | `inventory.reserved` | Order Service | Pull subscription |
-| `order-service.inventory.reservation-failed` | `inventory.reservation-failed` | Order Service | Pull subscription |
-| `inventory-service.order.submitted` | `order.submitted` | Inventory Service | Pull subscription |
-| `inventory-service.order.cancelled` | `order.cancelled` | Inventory Service | Pull subscription |
+| `inventory-service.sales-order.cancelled` | `sales-order.cancelled` | Inventory Service | Pull subscription |
+| `inventory-service.sales-order.fulfilled` | `sales-order.fulfilled` | Inventory Service | Pull subscription |
+| `inventory-service.product.created` | `product.created` | Inventory Service | Pull subscription |
+| `inventory-service.goods.received` | `goods.received` | Inventory Service | Pull subscription |
 
 **Naming convention**: `<subscriber-service>.<topic-name>`
 
@@ -252,257 +282,147 @@ interface InventoryReservationFailedEvent extends BaseEvent {
 
 ---
 
-## 4. Saga Flow — Order Submit Orchestration
+## 4. Order Submit Flow — Synchronous HTTP (v2)
 
-### 4.1. Saga là gì?
+> [!IMPORTANT]
+> **Architecture change (v2):** The original Saga choreography (4-step async via Pub/Sub) has been
+> replaced with synchronous HTTP calls. The user now gets an immediate confirmed/cancelled
+> response (~100-500ms instead of 4-8s).
 
-**Saga** là pattern quản lý distributed transaction. Thay vì dùng 2-Phase Commit (2PC) — phức tạp và chậm — Saga chia transaction thành chuỗi local transactions. Nếu một bước thất bại, Saga thực hiện **compensation** (hoàn tác) các bước đã thành công.
+### 4.1. Why HTTP over Saga for Submit?
 
-| 2-Phase Commit | Saga |
+| Saga (v1 — removed) | HTTP Direct (v2 — current) |
 |---|---|
-| Lock tất cả resources cùng lúc | Mỗi bước lock riêng, release ngay |
-| Cần coordinator trung tâm | Dùng events để phối hợp |
-| Blocking: tất cả services phải online | Non-blocking: event nằm trong queue |
-| Đảm bảo ACID cross-service | Đảm bảo Eventual Consistency |
+| 4-8s latency (user sees "Processing...") | ~100-500ms (immediate result) |
+| Order stuck in `submitted` if consumer dies | No stuck state — fail = cancel immediately |
+| Non-atomic reserve (item-by-item) | Atomic batch reserve with rollback |
+| Outbox event outside transaction (C1 bug) | No outbox for reserve — HTTP response |
+| Complex: 4 steps + 2 events + 2 subscriptions | Simple: 1 request with try/catch |
 
-### 4.2. Các bước trong Saga
+### 4.2. Current Flow — Happy Path
 
-| Bước | Service | Hành động | Compensation |
+```mermaid
+sequenceDiagram
+    actor User
+    participant SO as Sales Service
+    participant INV as Inventory Service
+    participant CUS as Customer Service
+    participant PS as Pub/Sub
+
+    User->>SO: POST /orders/{id}/submit
+    SO->>SO: Validate order has lines
+    SO->>SO: status = submitted
+    SO->>SO: Write status_history + lifecycle_view
+
+    SO->>INV: HTTP POST /v1/inventory/items/batch/reserve
+    INV->>INV: Reserve ALL items (optimistic lock + retry)
+    INV-->>SO: 200 {reserved: true, reservationId}
+
+    SO->>CUS: HTTP GET /v1/customers/{id}/credit-check
+    CUS-->>SO: {sufficient: true, available: 50000}
+
+    SO->>SO: status = confirmed
+    SO->>SO: Write outbox (sales-order.confirmed)
+    SO->>SO: Write status_history + lifecycle_view
+    SO-->>User: 200 {id, status: confirmed}
+
+    Note over SO: Outbox Worker (async)
+    SO->>PS: Publish sales-order.confirmed
+```
+
+### 4.3. Compensation — Insufficient Stock
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant SO as Sales Service
+    participant INV as Inventory Service
+
+    User->>SO: POST /orders/{id}/submit
+    SO->>SO: status = submitted
+
+    SO->>INV: HTTP POST /v1/inventory/items/batch/reserve
+    INV->>INV: Check available stock
+    Note over INV: available < requested!
+    INV-->>SO: 409 Conflict (insufficient stock)
+
+    SO->>SO: status = cancelled
+    SO->>SO: cancel_reason = "Insufficient stock"
+    SO-->>User: 200 {id, status: cancelled, reason: "Insufficient stock"}
+```
+
+### 4.4. Compensation — Credit Check Failed
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant SO as Sales Service
+    participant INV as Inventory Service
+    participant CUS as Customer Service
+
+    User->>SO: POST /orders/{id}/submit
+    SO->>SO: status = submitted
+
+    SO->>INV: HTTP POST /v1/inventory/items/batch/reserve
+    INV-->>SO: 200 {reserved: true}
+
+    SO->>CUS: HTTP GET /credit-check
+    CUS-->>SO: {sufficient: false, available: 1000}
+
+    Note over SO: Compensation begins
+    SO->>INV: HTTP POST /v1/inventory/items/batch/release
+    INV-->>SO: 200 {released: true}
+
+    SO->>SO: status = cancelled
+    SO->>SO: cancel_reason = "Insufficient credit"
+    SO->>SO: Write outbox (sales-order.cancelled)
+    SO-->>User: 200 {id, status: cancelled, reason: "Insufficient credit"}
+
+    Note over SO: Outbox Worker (async)
+    SO->>PS: Publish sales-order.cancelled
+    PS->>INV: (subscription — additional release if needed)
+```
+
+### 4.5. Circuit Breaker — Inventory Service Down
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant SO as Sales Service
+    participant INV as Inventory Service
+
+    User->>SO: POST /orders/{id}/submit
+    SO->>SO: status = submitted
+
+    SO->>INV: HTTP POST /v1/inventory/items/batch/reserve
+    Note over INV: Service unavailable!
+    Note over SO: Circuit Breaker OPEN → fallback
+    SO->>SO: reserved = false (safe default)
+
+    SO->>SO: status = cancelled
+    SO->>SO: cancel_reason = "Inventory service unavailable"
+    SO-->>User: 200 {id, status: cancelled, reason: "..."}
+```
+
+### 4.6. Pub/Sub Flows Still Active
+
+The following event-driven flows remain unchanged:
+
+| Event | Publisher | Subscriber | Action |
 |---|---|---|---|
-| 1 | Order | Submit đơn hàng, status = `submitted` | — (bước đầu, không cần compensation) |
-| 2 | Inventory | Reserve stock cho tất cả items | Release stock (giải phóng reserved) |
-| 3 | Order → Customer | Credit check (HTTP) | — (chỉ đọc, không cần compensation) |
-| 4 | Order | Confirm đơn hàng, status = `confirmed` | Cancel order + release stock |
-
-### 4.3. Happy Path — Tất cả thành công
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant OW as Order Outbox Worker
-    participant Order as Order Service
-    participant PS as Pub/Sub
-    participant Inv as Inventory Service
-    participant Cust as Customer Service
-
-    User->>Order: POST /orders/{id}/submit
-    Order->>Order: Validate order has lines
-    Order->>Order: status = submitted
-    Order->>Order: Write outbox (order.submitted)
-    Order-->>User: 200 OK
-
-    Note over OW: Poll every 2s
-    OW->>PS: Publish order.submitted
-
-    PS->>Inv: Deliver order.submitted
-    Inv->>Inv: Check available stock
-    Inv->>Inv: Reserve stock (on_hand - reserved)
-    Inv->>Inv: Record movements (type=reserve)
-    Inv->>Inv: Optimistic lock check (version)
-    Inv->>Inv: Write outbox (inventory.reserved)
-
-    Note over Inv: Outbox Worker
-    Inv->>PS: Publish inventory.reserved
-
-    PS->>Order: Deliver inventory.reserved
-    Order->>Cust: HTTP GET /customers/{id}/credit-check
-    Cust-->>Order: credit OK
-
-    Order->>Order: status = confirmed
-    Order->>Order: Write outbox (order.confirmed)
-    Order->>Order: Write status_history
-```
-
-### 4.4. Compensation Path — Stock thiếu
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant Order as Order Service
-    participant PS as Pub/Sub
-    participant Inv as Inventory Service
-
-    User->>Order: POST /orders/{id}/submit
-    Order->>Order: status = submitted
-    Order->>Order: Write outbox (order.submitted)
-    Order-->>User: 200 OK
-
-    Note over Order: Outbox Worker publishes
-    Order->>PS: Publish order.submitted
-
-    PS->>Inv: Deliver order.submitted
-    Inv->>Inv: Check available stock
-    Note over Inv: available < requested!
-    Inv->>Inv: Write outbox (inventory.reservation-failed)
-
-    Note over Inv: Outbox Worker publishes
-    Inv->>PS: Publish inventory.reservation-failed
-
-    PS->>Order: Deliver inventory.reservation-failed
-    Order->>Order: status = cancelled
-    Order->>Order: cancel_reason = "Insufficient stock"
-    Order->>Order: Write status_history
-```
-
-### 4.5. Compensation Path — Credit check thất bại
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant Order as Order Service
-    participant PS as Pub/Sub
-    participant Inv as Inventory Service
-    participant Cust as Customer Service
-
-    User->>Order: POST /orders/{id}/submit
-    Order->>Order: status = submitted
-    Order-->>User: 200 OK
-
-    Note over Order: Events flow...
-    Order->>PS: order.submitted
-    PS->>Inv: order.submitted
-    Inv->>Inv: Reserve stock OK
-    Inv->>PS: inventory.reserved
-    PS->>Order: inventory.reserved
-
-    Order->>Cust: HTTP credit-check
-    Cust-->>Order: credit INSUFFICIENT
-
-    Note over Order: Compensation begins
-    Order->>Order: status = cancelled
-    Order->>Order: cancel_reason = "Credit limit exceeded"
-    Order->>Order: Write outbox (order.cancelled)
-
-    Note over Order: Outbox Worker publishes
-    Order->>PS: order.cancelled
-
-    PS->>Inv: order.cancelled
-    Inv->>Inv: Release reserved stock
-    Inv->>Inv: Record movements (type=release)
-```
+| `sales-order.cancelled` | Sales Service | Inventory Service | Release reserved stock |
+| `sales-order.fulfilled` | Sales Service | Inventory Service | Issue stock (outbound) |
+| `product.created` | Catalog Service | Inventory Service | Auto-create stock item |
+| `goods.received` | Purchasing Service | Inventory Service | Receive stock (inbound) |
 
 ---
 
-## 5. Outbox Pattern — Chi tiết hoạt động
 
-### 5.1. Vấn đề: Dual Write Problem
+## 5. Outbox Pattern
 
-Khi service cần vừa ghi DB vừa publish event, có 2 cách "naive" — cả 2 đều lỗi:
-
-**Cách 1: Publish trước, ghi DB sau**
-
-```
-1. Publish event → Pub/Sub     ✅ Event sent
-2. Write to DB                 ❌ DB fails → rollback
-→ Event đã gửi nhưng data không tồn tại! (Ghost event)
-```
-
-**Cách 2: Ghi DB trước, publish sau**
-
-```
-1. Write to DB                 ✅ Data saved
-2. Publish event → Pub/Sub     ❌ Pub/Sub down
-→ Data đã lưu nhưng event không bao giờ gửi! (Lost event)
-```
-
-### 5.2. Giải pháp: Outbox Pattern
-
-```mermaid
-flowchart TB
-    subgraph Same Transaction
-        A["1. Write business data"] --> B["2. Write outbox row"]
-    end
-
-    B --> C["3. COMMIT transaction"]
-    C --> D["4. Outbox Worker polls"]
-    D --> E["5. Publish to Pub/Sub"]
-    E --> F["6. Update published_at"]
-
-    style A fill:none,stroke:#000
-    style B fill:none,stroke:#000
-```
-
-**Key insight**: Bước 1 + 2 nằm trong **cùng một DB transaction**. Nếu business data commit thì outbox row cũng commit. Nếu rollback thì cả 2 đều rollback. → **Zero inconsistency**.
-
-### 5.3. Outbox Worker — Cơ chế hoạt động
-
-```typescript
-// Pseudocode — Outbox Worker
-class OutboxWorker {
-  // Poll every 2 seconds
-  @Cron('*/2 * * * * *')
-  async pollAndPublish(): Promise<void> {
-    // 1. Query unpublished events
-    const events = await this.db.outbox.findMany({
-      where: { published_at: null },
-      orderBy: { created_at: 'asc' },
-      take: 10,  // batch size
-    });
-
-    for (const event of events) {
-      // 2. Publish to Pub/Sub
-      await this.pubsub
-        .topic(event.event_type)
-        .publishMessage({
-          json: {
-            eventId: event.id,
-            eventType: event.event_type,
-            aggregateType: event.aggregate_type,
-            aggregateId: event.aggregate_id,
-            payload: event.payload,
-            occurredAt: event.created_at,
-          },
-        });
-
-      // 3. Mark as published
-      await this.db.outbox.update({
-        where: { id: event.id },
-        data: { published_at: new Date() },
-      });
-    }
-  }
-}
-```
-
-### 5.4. Xử lý lỗi và Idempotency
-
-| Tình huống | Xử lý |
-|---|---|
-| Publish thành công nhưng mark failed | Worker sẽ publish lại → **at-least-once delivery** |
-| Subscriber nhận duplicate event | Subscriber check `eventId` → **idempotent processing** |
-| Worker crash giữa chừng | Restart → tiếp tục poll unpublished → **no event loss** |
-| DB down | Worker không poll được → retry tự nhiên khi DB recovery |
-
-> **At-least-once delivery**: Outbox pattern đảm bảo event được gửi **ít nhất 1 lần**. Subscriber phải xử lý idempotent (cùng eventId chỉ xử lý 1 lần).
-
-### 5.5. Idempotent Consumer
-
-> **Implementation chi tiết**: Xem [design-patterns.md → 12. Idempotent Consumer](design-patterns.md) để hiểu cơ chế Redis SET NX, retry-safe, và code sử dụng `withIdempotency()` từ `@erp/shared`.
-
-```typescript
-// Pseudocode — Idempotent event handler
-async handleEvent(event: BaseEvent): Promise<void> {
-  // Check if already processed
-  const existing = await this.db.processedEvents.findUnique({
-    where: { eventId: event.eventId },
-  });
-
-  if (existing) {
-    // Already processed — skip (idempotent)
-    return;
-  }
-
-  // Process event
-  await this.db.$transaction([
-    // 1. Business logic
-    this.processBusinessLogic(event),
-    // 2. Record processed event
-    this.db.processedEvents.create({
-      data: { eventId: event.eventId, processedAt: new Date() },
-    }),
-  ]);
-}
-```
+> Chi tiết cơ chế Outbox (Dual Write Problem, worker polling, idempotent consumer) xem tại [design-patterns.md §5](design-patterns.md).
+>
+> Tóm tắt: Business data + outbox row ghi trong **cùng 1 DB transaction** → Outbox Worker poll mỗi 2s → publish lên Pub/Sub → mark `published_at`. Consumer bắt buộc dùng `withIdempotency()` để dedup (at-least-once delivery).
 
 ---
 

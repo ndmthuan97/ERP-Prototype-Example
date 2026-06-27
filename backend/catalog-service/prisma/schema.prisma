@@ -24,6 +24,7 @@ model Product {
   name              String
   unit              String    @default("PCS")
   defaultSalePrice  Decimal   @default(0) @map("default_sale_price") @db.Decimal(15, 2)
+  taxRate           Decimal   @default(0.10) @map("tax_rate") @db.Decimal(5, 4)
   isActive          Boolean   @default(true) @map("is_active")
   version           Int       @default(0)
   createdAt         DateTime  @default(now()) @map("created_at")

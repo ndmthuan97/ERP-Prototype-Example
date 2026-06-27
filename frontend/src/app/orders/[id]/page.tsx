@@ -1,9 +1,7 @@
 'use client';
 // =============================================================================
-// PHASE 3 — CHI TIẾT ĐƠN HÀNG: header + lines + add line + lifecycle timeline
+// ORDER DETAIL PAGE — header + lines + add line + delivery/return tabs
 // =============================================================================
-// Bug H7: customer_name always empty in lifecycle — fetch customer separately.
-// SAGA_ENABLED = false → Submit/Cancel buttons shown disabled with tooltip.
 
 import { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
@@ -28,6 +26,7 @@ import {
   Row,
   Col,
   Steps,
+  Tabs,
 } from 'antd';
 import {
   PlusOutlined,
@@ -45,7 +44,7 @@ import {
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
-import { salesApi, SAGA_ENABLED } from '@/lib/api/sales';
+import { salesApi } from '@/lib/api/sales';
 import { customerApi } from '@/lib/api/customer';
 import { inventoryApi } from '@/lib/api/inventory';
 import type {
@@ -57,12 +56,15 @@ import type {
 } from '@/lib/api/types';
 import { toMessage } from '@/lib/api/errors';
 import { formatVnd, formatDateTime } from '@/lib/format';
+import { DeliveryTab } from '@/components/orders/DeliveryTab';
+import { ReturnTab } from '@/components/orders/ReturnTab';
 
 const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   draft: 'default',
   submitted: 'processing',
   confirmed: 'success',
-  fulfilled: 'cyan',
+  partially_delivered: 'warning',
+  fully_delivered: 'cyan',
   cancelled: 'error',
 };
 
@@ -71,7 +73,8 @@ const TIMELINE_DOT_COLOR: Record<string, string> = {
   draft: 'gray',
   submitted: 'blue',
   confirmed: 'green',
-  fulfilled: 'cyan',
+  partially_delivered: 'orange',
+  fully_delivered: 'cyan',
   cancelled: 'red',
 };
 
@@ -79,7 +82,8 @@ const TIMELINE_ICON: Record<string, React.ReactNode> = {
   draft: <ClockCircleOutlined />,
   submitted: <SendOutlined />,
   confirmed: <CheckCircleOutlined />,
-  fulfilled: <CheckCircleOutlined />,
+  partially_delivered: <CarryOutOutlined />,
+  fully_delivered: <CheckCircleOutlined />,
   cancelled: <CloseCircleOutlined />,
 };
 
@@ -88,7 +92,8 @@ const STATUS_STEP_INDEX: Record<OrderStatus, number> = {
   draft: 0,
   submitted: 1,
   confirmed: 2,
-  fulfilled: 3,
+  partially_delivered: 3,
+  fully_delivered: 4,
   cancelled: -1,
 };
 
@@ -353,43 +358,25 @@ export default function OrderDetailPage({ params }: PageProps) {
           </Space>
 
           <Space>
-            {/* Saga-gated Submit button */}
-            <Tooltip
-              title={
-                SAGA_ENABLED
-                  ? undefined
-                  : 'Saga chưa sẵn sàng (BE cần fix C1+C2)'
-              }
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              disabled={!isDraft}
+              loading={submitMutation.isPending}
+              onClick={() => submitMutation.mutate()}
             >
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                disabled={!SAGA_ENABLED || !isDraft}
-                loading={submitMutation.isPending}
-                onClick={() => submitMutation.mutate()}
-              >
-                Gửi đơn
-              </Button>
-            </Tooltip>
+              Gửi đơn
+            </Button>
 
-            {/* Saga-gated Cancel button */}
-            <Tooltip
-              title={
-                SAGA_ENABLED
-                  ? undefined
-                  : 'Saga chưa sẵn sàng (BE cần fix C1+C2)'
-              }
+            <Button
+              danger
+              icon={<CloseCircleOutlined />}
+              disabled={order.status === 'cancelled'}
+              loading={cancelMutation.isPending}
+              onClick={() => cancelMutation.mutate()}
             >
-              <Button
-                danger
-                icon={<CloseCircleOutlined />}
-                disabled={!SAGA_ENABLED || order.status === 'cancelled'}
-                loading={cancelMutation.isPending}
-                onClick={() => cancelMutation.mutate()}
-              >
-                Hủy đơn
-              </Button>
-            </Tooltip>
+              Hủy đơn
+            </Button>
           </Space>
         </div>
 
@@ -746,6 +733,36 @@ export default function OrderDetailPage({ params }: PageProps) {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* ---- Delivery & Return Tabs ---- */}
+      <Card style={{ borderRadius: 12 }}>
+        <Tabs
+          items={[
+            {
+              key: 'delivery',
+              label: 'Giao hàng',
+              children: (
+                <DeliveryTab
+                  orderId={id}
+                  orderLines={order.lines}
+                  orderStatus={order.status}
+                />
+              ),
+            },
+            {
+              key: 'returns',
+              label: 'Trả hàng',
+              children: (
+                <ReturnTab
+                  orderId={id}
+                  orderLines={order.lines}
+                  orderStatus={order.status}
+                />
+              ),
+            },
+          ]}
+        />
+      </Card>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // ORDER REPOSITORY — Port (DDD/Hexagonal)
 // =============================================================================
 import { SalesOrder } from '../entities/index.js';
@@ -80,4 +80,10 @@ export interface ISalesOrderRepository {
 
   /** Lấy lịch sử chuyển trạng thái (CQRS read — status_history) */
   getLifecycle(orderId: string): Promise<StatusHistoryEntry[]>;
+
+  /**
+   * Sum totalAmount of submitted orders for a customer, excluding a specific order.
+   * Used by credit check to account for concurrent pending orders.
+   */
+  sumPendingOrdersTotal(customerId: string, excludeOrderId: string): Promise<number>;
 }

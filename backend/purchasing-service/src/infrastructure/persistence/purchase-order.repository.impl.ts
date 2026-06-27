@@ -41,10 +41,11 @@ type PORecord = {
 
 type POLineRecord = {
   id: string;
+  headerId: string;
   productId: string;
   productName: string;
-  orderedQty: number;
-  receivedQty: number;
+  orderedQty: Prisma.Decimal;
+  receivedQty: Prisma.Decimal;
   unitCost: Prisma.Decimal;
 };
 
@@ -67,8 +68,8 @@ export class PrismaPurchaseOrderRepository
           id: l.id,
           productId: l.productId,
           productName: l.productName,
-          orderedQty: l.orderedQty,
-          receivedQty: l.receivedQty,
+          orderedQty: l.orderedQty.toNumber(),
+          receivedQty: l.receivedQty.toNumber(),
           unitCost: l.unitCost.toNumber(),
         }),
     );
@@ -185,7 +186,7 @@ export class PrismaPurchaseOrderRepository
             aggregateType: 'PurchaseOrder',
             aggregateId: order.id,
             eventType: e.eventType,
-            payload: e.payload,
+            payload: e.payload as Prisma.InputJsonValue,
           })),
         });
       }

@@ -1,3 +1,12 @@
+---
+type: API Endpoint
+title: "Customer Service API"
+description: "Customer CRUD endpoints with credit check, B2B business rules, and Cache-Aside pattern"
+resource: "http://localhost:3001"
+tags: [api, customer, crud, credit-check]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Customer Service — API Endpoints
 
 > Tài liệu tham chiếu cho tất cả endpoints của **Customer Service** (`localhost:3001`).

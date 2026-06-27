@@ -20,6 +20,8 @@ import { ReceiveStockCommand } from '../application/commands/receive-stock.comma
 import { ReserveStockCommand } from '../application/commands/reserve-stock.command';
 import { ReleaseStockCommand } from '../application/commands/release-stock.command';
 import { IssueStockCommand } from '../application/commands/issue-stock.command';
+import { ReserveBatchCommand } from '../application/commands/reserve-batch.command';
+import { ReleaseBatchCommand } from '../application/commands/release-batch.command';
 import { GetItemQuery } from '../application/queries/get-item.query';
 import { SearchItemsQuery } from '../application/queries/search-items.query';
 import { CheckAvailabilityQuery } from '../application/queries/check-availability.query';
@@ -32,6 +34,8 @@ export class InventoryController {
     private readonly reserveStockCommand: ReserveStockCommand,
     private readonly releaseStockCommand: ReleaseStockCommand,
     private readonly issueStockCommand: IssueStockCommand,
+    private readonly reserveBatchCommand: ReserveBatchCommand,
+    private readonly releaseBatchCommand: ReleaseBatchCommand,
     private readonly getItemQuery: GetItemQuery,
     private readonly searchItemsQuery: SearchItemsQuery,
     private readonly checkAvailabilityQuery: CheckAvailabilityQuery,
@@ -101,5 +105,17 @@ export class InventoryController {
   @Post(':sku/issue')
   async issue(@Param('sku') sku: string, @Body() body: unknown) {
     return this.issueStockCommand.execute(sku, body);
+  }
+
+  /** POST /inventory/items/batch/reserve — reserve ALL items for an order atomically */
+  @Post('batch/reserve')
+  async reserveBatch(@Body() body: unknown) {
+    return this.reserveBatchCommand.execute(body);
+  }
+
+  /** POST /inventory/items/batch/release — release ALL reserved items for an order */
+  @Post('batch/release')
+  async releaseBatch(@Body() body: unknown) {
+    return this.releaseBatchCommand.execute(body);
   }
 }

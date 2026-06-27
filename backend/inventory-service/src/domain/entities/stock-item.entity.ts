@@ -7,11 +7,11 @@
 // `version` phục vụ Optimistic Locking ở tầng persistence (không tăng trong entity;
 // repository so khớp + tăng version khi UPDATE).
 
-/** Lỗi domain: không đủ tồn kho để giữ chỗ */
+/** Domain error: insufficient stock for reservation */
 export class InsufficientStockError extends Error {
   constructor(sku: string, requested: number, available: number) {
     super(
-      `Không đủ tồn kho cho SKU "${sku}": cần ${requested}, còn ${available}`,
+      `Insufficient stock for SKU "${sku}": requested ${requested}, available ${available}`,
     );
     this.name = 'InsufficientStockError';
   }
@@ -31,20 +31,23 @@ export interface StockItemProps {
 export class StockItem {
   readonly id: string;
   readonly sku: string;
-  name: string;
-  quantityAvailable: number;
-  quantityReserved: number;
-  /** Optimistic lock token — repository dùng để phát hiện ghi đè đồng thời */
+  private _name: string;
+  private _quantityAvailable: number;
+  private _quantityReserved: number;
   readonly version: number;
   readonly createdAt: Date;
   updatedAt: Date;
 
+  get name(): string { return this._name; }
+  get quantityAvailable(): number { return this._quantityAvailable; }
+  get quantityReserved(): number { return this._quantityReserved; }
+
   constructor(props: StockItemProps) {
     this.id = props.id;
     this.sku = props.sku;
-    this.name = props.name;
-    this.quantityAvailable = props.quantityAvailable;
-    this.quantityReserved = props.quantityReserved;
+    this._name = props.name;
+    this._quantityAvailable = props.quantityAvailable;
+    this._quantityReserved = props.quantityReserved;
     this.version = props.version;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
@@ -60,7 +63,7 @@ export class StockItem {
    */
   receive(quantity: number): void {
     this.assertPositive(quantity);
-    this.quantityAvailable += quantity;
+    this._quantityAvailable += quantity;
     this.touch();
   }
 
@@ -70,15 +73,15 @@ export class StockItem {
    */
   reserve(quantity: number): void {
     this.assertPositive(quantity);
-    if (this.quantityAvailable < quantity) {
+    if (this._quantityAvailable < quantity) {
       throw new InsufficientStockError(
         this.sku,
         quantity,
-        this.quantityAvailable,
+        this._quantityAvailable,
       );
     }
-    this.quantityAvailable -= quantity;
-    this.quantityReserved += quantity;
+    this._quantityAvailable -= quantity;
+    this._quantityReserved += quantity;
     this.touch();
   }
 
@@ -88,9 +91,9 @@ export class StockItem {
    */
   release(quantity: number): void {
     this.assertPositive(quantity);
-    const releasable = Math.min(quantity, this.quantityReserved);
-    this.quantityReserved -= releasable;
-    this.quantityAvailable += releasable;
+    const releasable = Math.min(quantity, this._quantityReserved);
+    this._quantityReserved -= releasable;
+    this._quantityAvailable += releasable;
     this.touch();
   }
 
@@ -101,32 +104,30 @@ export class StockItem {
    */
   issue(quantity: number, reference?: string): void {
     this.assertPositive(quantity);
-    if (this.quantityAvailable < quantity) {
+    if (this._quantityAvailable < quantity) {
       throw new InsufficientStockError(
         this.sku,
         quantity,
-        this.quantityAvailable,
+        this._quantityAvailable,
       );
     }
-    this.quantityAvailable -= quantity;
-    // If there's reserved stock being fulfilled, also reduce reserved
-    const reservedToRelease = Math.min(this.quantityReserved, quantity);
-    this.quantityReserved -= reservedToRelease;
+    this._quantityAvailable -= quantity;
+    const reservedToRelease = Math.min(this._quantityReserved, quantity);
+    this._quantityReserved -= reservedToRelease;
     this.touch();
   }
 
-  /** Tổng tồn (khả dụng + đang giữ) — phục vụ báo cáo. */
   totalQuantity(): number {
-    return this.quantityAvailable + this.quantityReserved;
+    return this._quantityAvailable + this._quantityReserved;
   }
 
   canReserve(quantity: number): boolean {
-    return quantity > 0 && this.quantityAvailable >= quantity;
+    return quantity > 0 && this._quantityAvailable >= quantity;
   }
 
   private assertPositive(quantity: number): void {
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      throw new Error('Số lượng phải là số nguyên dương');
+    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0) {
+      throw new Error('Quantity must be a positive number');
     }
   }
 

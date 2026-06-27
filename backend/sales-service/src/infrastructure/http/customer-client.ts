@@ -16,6 +16,7 @@ import CircuitBreaker from 'opossum';
 export interface CreditCheckResult {
   creditLimit: number;
   creditUsed: number;
+  pendingAmount: number;
   available: number;
   sufficient: boolean;
 }
@@ -27,12 +28,12 @@ const TIMEOUT_MS = 5000;
 @Injectable()
 export class CustomerClient implements OnModuleInit {
   private readonly logger = new Logger(CustomerClient.name);
-  private breaker!: CircuitBreaker<[string, number], CreditCheckResult>;
+  private breaker!: CircuitBreaker<[string, number, number], CreditCheckResult>;
 
   onModuleInit(): void {
     this.breaker = new CircuitBreaker(
-      (customerId: string, orderAmount: number) =>
-        this.doCheckCredit(customerId, orderAmount),
+      (customerId: string, orderAmount: number, pendingOrdersTotal: number) =>
+        this.doCheckCredit(customerId, orderAmount, pendingOrdersTotal),
       {
         timeout: TIMEOUT_MS,
         errorThresholdPercentage: 50,
@@ -41,9 +42,10 @@ export class CustomerClient implements OnModuleInit {
       },
     );
 
-    this.breaker.fallback((_customerId: string, _orderAmount: number) => ({
+    this.breaker.fallback((_customerId: string, _orderAmount: number, _pending: number) => ({
       creditLimit: 0,
       creditUsed: 0,
+      pendingAmount: 0,
       available: 0,
       sufficient: false,
     }));
@@ -65,8 +67,9 @@ export class CustomerClient implements OnModuleInit {
   async checkCredit(
     customerId: string,
     orderAmount: number,
+    pendingOrdersTotal: number = 0,
   ): Promise<CreditCheckResult> {
-    return this.breaker.fire(customerId, orderAmount);
+    return this.breaker.fire(customerId, orderAmount, pendingOrdersTotal);
   }
 
   /**
@@ -75,10 +78,15 @@ export class CustomerClient implements OnModuleInit {
   private async doCheckCredit(
     customerId: string,
     orderAmount: number,
+    pendingOrdersTotal: number = 0,
   ): Promise<CreditCheckResult> {
-    const url = `${CUSTOMER_SERVICE_URL}/v1/customers/${customerId}/credit-check`;
+    const params = new URLSearchParams({
+      orderAmount: String(orderAmount),
+      pendingOrdersTotal: String(pendingOrdersTotal),
+    });
+    const url = `${CUSTOMER_SERVICE_URL}/v1/customers/${customerId}/credit-check?${params}`;
     this.logger.log(
-      `Credit check: customer="${customerId}", amount=${orderAmount}`,
+      `Credit check: customer="${customerId}", amount=${orderAmount}, pending=${pendingOrdersTotal}`,
     );
 
     const controller = new AbortController();
@@ -101,6 +109,7 @@ export class CustomerClient implements OnModuleInit {
       const data = (await response.json()) as {
         creditLimit: number;
         creditUsed: number;
+        pendingAmount: number;
         available: number;
       };
 

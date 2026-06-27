@@ -1,4 +1,4 @@
-﻿import {
+import {
   SalesOrder,
   InvalidStatusTransitionError,
   EmptyOrderError,
@@ -125,7 +125,7 @@ describe('SalesOrder', () => {
       expect(order.status).toBe('cancelled');
     });
 
-    it('should reject cancel from submitted (saga is processing)', () => {
+    it('should reject cancel from submitted (submit flow is processing)', () => {
       const order = SalesOrder.createDraft('order-1', 'customer-1');
       order.addLine(createLine());
       order.submit();
@@ -135,11 +135,13 @@ describe('SalesOrder', () => {
       );
     });
 
-    it('should reject cancel from fulfilled', () => {
+    it('should reject cancel from fully_delivered', () => {
       const order = new SalesOrder({
         id: 'o1',
         customerId: 'c1',
-        status: 'fulfilled',
+        status: 'fully_delivered',
+        subtotalAmount: 1000,
+        totalTaxAmount: 0,
         totalAmount: 1000,
         cancelReason: null,
         version: 5,
@@ -154,7 +156,7 @@ describe('SalesOrder', () => {
     });
   });
 
-  describe('saga compensation', () => {
+  describe('compensation', () => {
     it('markFailedNoStock should cancel submitted order', () => {
       const order = SalesOrder.createDraft('order-1', 'customer-1');
       order.addLine(createLine());
@@ -163,7 +165,7 @@ describe('SalesOrder', () => {
       order.markFailedNoStock();
 
       expect(order.status).toBe('cancelled');
-      expect(order.cancelReason).toContain('inventory');
+      expect(order.cancelReason).toContain('stock');
     });
 
     it('markFailedCredit should cancel submitted order', () => {
@@ -171,10 +173,10 @@ describe('SalesOrder', () => {
       order.addLine(createLine());
       order.submit();
 
-      order.markFailedCredit('Hạn mức tín dụng không đủ');
+      order.markFailedCredit('Insufficient credit limit');
 
       expect(order.status).toBe('cancelled');
-      expect(order.cancelReason).toBe('Hạn mức tín dụng không đủ');
+      expect(order.cancelReason).toBe('Insufficient credit limit');
     });
 
     it('markFailedNoStock should reject when not submitted', () => {

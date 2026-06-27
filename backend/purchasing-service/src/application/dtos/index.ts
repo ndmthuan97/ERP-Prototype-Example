@@ -13,4 +13,10 @@ export {
   validateCancelPO,
   searchPOsSchema,
   type SearchPOsDto,
+  createSupplierSchema,
+  type CreateSupplierDto,
+  validateCreateSupplier,
+  updateSupplierSchema,
+  type UpdateSupplierDto,
+  validateUpdateSupplier,
 } from './purchasing.dto';

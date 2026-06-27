@@ -27,13 +27,16 @@ model SalesOrder {
   id           String    @id @default(uuid())
   customerId   String    @map("customer_id")
   status       String    @default("draft")
-  totalAmount  Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
-  cancelReason String?   @map("cancel_reason")
-  version      Int       @default(0)
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  totalAmount     Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
+  subtotalAmount  Decimal   @default(0) @map("subtotal_amount") @db.Decimal(15, 2)
+  totalTaxAmount  Decimal   @default(0) @map("total_tax_amount") @db.Decimal(15, 2)
+  cancelReason    String?   @map("cancel_reason")
+  version         Int       @default(0)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   lines         SalesOrderLine[]
+  deliveries    DeliveryOrder[]
   statusHistory StatusHistory[]
 
   @@index([customerId], map: "idx_headers_customer_id")
@@ -53,8 +56,10 @@ model SalesOrderLine {
   headerId  String   @map("header_id")
   itemId    String   @map("item_id")
   itemName  String   @map("item_name")
-  quantity  Int
+  quantity  Decimal  @db.Decimal(18, 4)
   unitPrice Decimal  @map("unit_price") @db.Decimal(15, 2)
+  taxRate   Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 4)
+  taxAmount Decimal  @default(0) @map("tax_amount") @db.Decimal(15, 2)
   lineTotal Decimal  @map("line_total") @db.Decimal(15, 2)
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -62,6 +67,91 @@ model SalesOrderLine {
 
   @@index([headerId], map: "idx_lines_header_id")
   @@map("lines")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: DeliveryOrder — Shipment tracking for confirmed SOs
+// =============================================================================
+// State: draft → picking → packed → shipped → delivered | shipped → failed
+model DeliveryOrder {
+  id           String    @id @default(uuid())
+  salesOrderId String    @map("sales_order_id")
+  status       String    @default("draft")
+  failReason   String?   @map("fail_reason")
+  version      Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  salesOrder SalesOrder    @relation(fields: [salesOrderId], references: [id])
+  lines      DeliveryLine[]
+
+  @@index([salesOrderId], map: "idx_delivery_orders_so_id")
+  @@index([status], map: "idx_delivery_orders_status")
+  @@map("delivery_orders")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: DeliveryLine — Items in a delivery
+// =============================================================================
+model DeliveryLine {
+  id               String @id @default(uuid())
+  deliveryOrderId  String @map("delivery_order_id")
+  salesOrderLineId String @map("sales_order_line_id")
+  itemId           String @map("item_id")
+  itemName         String @map("item_name")
+  quantity         Decimal @db.Decimal(18, 4)
+
+  deliveryOrder DeliveryOrder @relation(fields: [deliveryOrderId], references: [id])
+
+  @@index([deliveryOrderId], map: "idx_delivery_lines_do_id")
+  @@map("delivery_lines")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: SalesReturn — Return/refund for fulfilled orders
+// =============================================================================
+// State: draft → approved → goods_received → completed | draft → rejected
+model SalesReturn {
+  id                String    @id @default(uuid())
+  salesOrderId      String    @map("sales_order_id")
+  customerId        String    @map("customer_id")
+  status            String    @default("draft")
+  reason            String
+  totalRefundAmount Decimal   @default(0) @map("total_refund_amount") @db.Decimal(15, 2)
+  approvedAt        DateTime? @map("approved_at")
+  completedAt       DateTime? @map("completed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  lines SalesReturnLine[]
+
+  @@index([salesOrderId], map: "idx_sales_returns_so_id")
+  @@index([customerId], map: "idx_sales_returns_customer_id")
+  @@index([status], map: "idx_sales_returns_status")
+  @@map("sales_returns")
+  @@schema("sales")
+}
+
+// =============================================================================
+// MODEL: SalesReturnLine — Items in a return
+// =============================================================================
+model SalesReturnLine {
+  id               String  @id @default(uuid())
+  salesReturnId    String  @map("sales_return_id")
+  salesOrderLineId String  @map("sales_order_line_id")
+  itemId           String  @map("item_id")
+  itemName         String  @map("item_name")
+  quantity         Decimal @db.Decimal(18, 4)
+  unitPrice        Decimal @map("unit_price") @db.Decimal(15, 2)
+  reason           String?
+
+  salesReturn SalesReturn @relation(fields: [salesReturnId], references: [id])
+
+  @@index([salesReturnId], map: "idx_sales_return_lines_sr_id")
+  @@map("sales_return_lines")
   @@schema("sales")
 }
 

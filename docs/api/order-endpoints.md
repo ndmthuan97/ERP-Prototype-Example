@@ -1,6 +1,15 @@
+---
+type: API Endpoint
+title: "Order Service API"
+description: "Sales order lifecycle, Saga flow, Delivery Order, Sales Return, and CQRS read model endpoints"
+resource: "http://localhost:3002"
+tags: [api, sales, order, saga, delivery, return]
+timestamp: "2026-06-26T00:00:00+07:00"
+---
+
 # Order Service — API Endpoints
 
-> 🚧 **PLANNED — chưa implement.** `order-service` hiện chỉ là scaffold `Hello World!`. Tài liệu dưới đây là **blueprint thiết kế**, không phải mô tả code đang chạy. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Đã implement đầy đủ.** `sales-service` bao gồm: Order CRUD, Submit/Cancel saga, Delivery Order 6-state, Sales Return, lifecycle view. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
 
 > Tài liệu tham chiếu cho tất cả endpoints của **Order Service** (`localhost:3002`).
 > Service quản lý đơn hàng — từ tạo draft, thêm dòng hàng, submit (kích hoạt saga), đến fulfill/cancel. Áp dụng **CQRS**, **Saga**, **Outbox Pattern**, và **Optimistic Locking**.

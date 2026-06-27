@@ -1,6 +1,15 @@
+---
+type: API Endpoint
+title: "Auth Service API"
+description: "Authentication endpoints: login, refresh, logout, user management with JWT + bcrypt + RBAC"
+resource: "http://localhost:3004"
+tags: [api, auth, jwt, rbac]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Auth Service — API Endpoints
 
-> 🚧 **PLANNED — chưa implement.** `auth-service` hiện chỉ là scaffold `Hello World!`. Tài liệu dưới đây là **blueprint thiết kế**, không phải mô tả code đang chạy. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Đã implement đầy đủ.** `auth-service` với JWT login/refresh/logout, bcrypt password hashing, RBAC 3 roles. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
 
 > Tài liệu tham chiếu cho tất cả endpoints của **Auth Service** (`localhost:3004`).
 > Service chịu trách nhiệm xác thực (authentication), phân quyền (authorization), và quản lý phiên đăng nhập (session) thông qua JWT.

@@ -30,7 +30,8 @@ import { ReceiveStockCommand } from './application/commands/receive-stock.comman
 import { ReserveStockCommand } from './application/commands/reserve-stock.command';
 import { ReleaseStockCommand } from './application/commands/release-stock.command';
 import { IssueStockCommand } from './application/commands/issue-stock.command';
-import { HandleSalesOrderSubmittedCommand } from './application/commands/handle-sales-order-submitted.command';
+import { ReserveBatchCommand } from './application/commands/reserve-batch.command';
+import { ReleaseBatchCommand } from './application/commands/release-batch.command';
 import { HandleSalesOrderCancelledCommand } from './application/commands/handle-sales-order-cancelled.command';
 import { HandleProductCreatedCommand } from './application/commands/handle-product-created.command';
 import { HandleGoodsReceivedCommand } from './application/commands/handle-goods-received.command';
@@ -66,7 +67,6 @@ import { InventoryController } from './presentation/inventory.controller';
     // Pub/Sub subscriber for event handlers
     PubSubSubscriber,
     InventoryEventSubscriber,
-    HandleSalesOrderSubmittedCommand,
     HandleSalesOrderCancelledCommand,
     HandleProductCreatedCommand,
     HandleGoodsReceivedCommand,
@@ -93,6 +93,8 @@ import { InventoryController } from './presentation/inventory.controller';
     ReserveStockCommand,
     ReleaseStockCommand,
     IssueStockCommand,
+    ReserveBatchCommand,
+    ReleaseBatchCommand,
     GetItemQuery,
     SearchItemsQuery,
     CheckAvailabilityQuery,

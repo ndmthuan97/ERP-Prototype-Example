@@ -10,7 +10,7 @@
 
 import { API, type ServiceName } from './config';
 import { ApiError, type ApiIssue } from './errors';
-import { getAuthToken } from '../auth/token';
+import { getAuthToken, clearTokens } from '../auth/token';
 
 type QueryValue = string | number | boolean | undefined | null;
 
@@ -77,6 +77,14 @@ async function request<T>(
   const data: unknown = text ? safeJson(text) : undefined;
 
   if (!res.ok) {
+    // Session expired: clear tokens and redirect to login
+    if (res.status === 401) {
+      clearTokens();
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+
     const err = data as
       | { message?: string; issues?: ApiIssue[] }
       | undefined;

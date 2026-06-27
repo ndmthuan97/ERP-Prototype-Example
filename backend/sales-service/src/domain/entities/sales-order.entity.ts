@@ -2,7 +2,7 @@
 // ORDER HEADER ENTITY — Aggregate Root của bounded context "Order"
 // =============================================================================
 // Quản lý toàn bộ lifecycle đơn hàng:
-//   draft → submitted → confirmed → fulfilled
+//   draft → submitted → confirmed → partially_delivered → fully_delivered
 //                    ↘ cancelled (compensation)
 //   draft / confirmed → cancelled (manual)
 //
@@ -16,21 +16,22 @@ export type SalesOrderStatus =
   | 'draft'
   | 'submitted'
   | 'confirmed'
-  | 'fulfilled'
+  | 'partially_delivered'
+  | 'fully_delivered'
   | 'cancelled';
 
-/** Lỗi domain: hành động không hợp lệ cho trạng thái hiện tại */
+/** Domain error: action not allowed for current status */
 export class InvalidStatusTransitionError extends Error {
   constructor(from: string, action: string) {
-    super(`Không thể "${action}" khi đơn hàng đang ở trạng thái "${from}"`);
+    super(`Cannot "${action}" when order is in "${from}" status`);
     this.name = 'InvalidStatusTransitionError';
   }
 }
 
-/** Lỗi domain: đơn hàng chưa có dòng hàng (không thể submit) */
+/** Domain error: order has no line items (cannot submit) */
 export class EmptyOrderError extends Error {
   constructor() {
-    super('Không thể submit đơn hàng chưa có dòng hàng');
+    super('Cannot submit order with no line items');
     this.name = 'EmptyOrderError';
   }
 }
@@ -39,6 +40,8 @@ export interface SalesOrderProps {
   id: string;
   customerId: string;
   status: SalesOrderStatus;
+  subtotalAmount: number;
+  totalTaxAmount: number;
   totalAmount: number;
   cancelReason: string | null;
   version: number;
@@ -50,20 +53,30 @@ export interface SalesOrderProps {
 export class SalesOrder {
   readonly id: string;
   readonly customerId: string;
-  status: SalesOrderStatus;
-  totalAmount: number;
-  cancelReason: string | null;
+  private _status: SalesOrderStatus;
+  private _subtotalAmount: number;
+  private _totalTaxAmount: number;
+  private _totalAmount: number;
+  private _cancelReason: string | null;
   readonly version: number;
   private _lines: SalesOrderLine[];
   readonly createdAt: Date;
   updatedAt: Date;
 
+  get status(): SalesOrderStatus { return this._status; }
+  get subtotalAmount(): number { return this._subtotalAmount; }
+  get totalTaxAmount(): number { return this._totalTaxAmount; }
+  get totalAmount(): number { return this._totalAmount; }
+  get cancelReason(): string | null { return this._cancelReason; }
+
   constructor(props: SalesOrderProps) {
     this.id = props.id;
     this.customerId = props.customerId;
-    this.status = props.status;
-    this.totalAmount = props.totalAmount;
-    this.cancelReason = props.cancelReason;
+    this._status = props.status;
+    this._subtotalAmount = props.subtotalAmount;
+    this._totalTaxAmount = props.totalTaxAmount;
+    this._totalAmount = props.totalAmount;
+    this._cancelReason = props.cancelReason;
     this.version = props.version;
     this._lines = props.lines;
     this.createdAt = props.createdAt;
@@ -83,8 +96,8 @@ export class SalesOrder {
    * Auto recalculate totalAmount.
    */
   addLine(line: SalesOrderLine): void {
-    if (this.status !== 'draft') {
-      throw new InvalidStatusTransitionError(this.status, 'thêm dòng hàng');
+    if (this._status !== 'draft') {
+      throw new InvalidStatusTransitionError(this._status, 'addLine');
     }
     this._lines.push(line);
     this.recalculateTotals();
@@ -98,13 +111,13 @@ export class SalesOrder {
    * @throws InvalidStatusTransitionError nếu không phải draft
    */
   submit(): void {
-    if (this.status !== 'draft') {
-      throw new InvalidStatusTransitionError(this.status, 'submit');
+    if (this._status !== 'draft') {
+      throw new InvalidStatusTransitionError(this._status, 'submit');
     }
     if (this._lines.length === 0) {
       throw new EmptyOrderError();
     }
-    this.status = 'submitted';
+    this._status = 'submitted';
     this.touch();
   }
 
@@ -113,22 +126,34 @@ export class SalesOrder {
    * Gọi sau khi saga hoàn tất (inventory reserved + credit OK).
    */
   confirm(): void {
-    if (this.status !== 'submitted') {
-      throw new InvalidStatusTransitionError(this.status, 'confirm');
+    if (this._status !== 'submitted') {
+      throw new InvalidStatusTransitionError(this._status, 'confirm');
     }
-    this.status = 'confirmed';
+    this._status = 'confirmed';
     this.touch();
   }
 
   /**
-   * Fulfil order: confirmed → fulfilled.
-   * Called when goods have been shipped/delivered successfully.
+   * Record a delivery event. When a DeliveryOrder is delivered,
+   * check if all lines have been fully delivered.
+   * confirmed → partially_delivered → fully_delivered
+   * @param allLinesDelivered - true when all SO lines are fully delivered
    */
-  fulfil(): void {
-    if (this.status !== 'confirmed') {
-      throw new InvalidStatusTransitionError(this.status, 'fulfilled');
+  recordDelivery(allLinesDelivered: boolean): void {
+    const allowed: SalesOrderStatus[] = ['confirmed', 'partially_delivered'];
+    if (!allowed.includes(this._status)) {
+      throw new InvalidStatusTransitionError(this._status, 'recordDelivery');
     }
-    this.status = 'fulfilled';
+    if (allLinesDelivered) {
+      this.markFullyDelivered();
+    } else {
+      this._status = 'partially_delivered';
+      this.touch();
+    }
+  }
+
+  private markFullyDelivered(): void {
+    this._status = 'fully_delivered';
     this.touch();
   }
 
@@ -138,47 +163,52 @@ export class SalesOrder {
    * submitted → saga đang xử lý, cancel qua saga compensation.
    */
   cancel(reason: string): void {
-    const cancellable: SalesOrderStatus[] = ['draft', 'confirmed'];
-    if (!cancellable.includes(this.status)) {
-      throw new InvalidStatusTransitionError(this.status, 'cancel');
+    const cancellable: SalesOrderStatus[] = ['draft', 'confirmed', 'partially_delivered'];
+    if (!cancellable.includes(this._status)) {
+      throw new InvalidStatusTransitionError(this._status, 'cancel');
     }
-    this.status = 'cancelled';
-    this.cancelReason = reason;
+    this._status = 'cancelled';
+    this._cancelReason = reason;
     this.touch();
   }
 
   /**
-   * Saga compensation: đánh dấu thất bại do không đủ tồn kho.
+   * Compensation: mark as failed due to insufficient stock.
    * submitted → cancelled.
    */
   markFailedNoStock(): void {
-    if (this.status !== 'submitted') {
-      throw new InvalidStatusTransitionError(this.status, 'markFailedNoStock');
+    if (this._status !== 'submitted') {
+      throw new InvalidStatusTransitionError(this._status, 'markFailedNoStock');
     }
-    this.status = 'cancelled';
-    this.cancelReason = 'Không đủ tồn kho (inventory reservation failed)';
+    this._status = 'cancelled';
+    this._cancelReason = 'Insufficient stock (inventory reservation failed)';
     this.touch();
   }
 
   /**
-   * Saga compensation: đánh dấu thất bại do credit không đủ.
+   * Compensation: mark as failed due to insufficient credit.
    * submitted → cancelled.
    */
   markFailedCredit(reason: string): void {
-    if (this.status !== 'submitted') {
-      throw new InvalidStatusTransitionError(this.status, 'markFailedCredit');
+    if (this._status !== 'submitted') {
+      throw new InvalidStatusTransitionError(this._status, 'markFailedCredit');
     }
-    this.status = 'cancelled';
-    this.cancelReason = reason;
+    this._status = 'cancelled';
+    this._cancelReason = reason;
     this.touch();
   }
 
-  /** Tính lại totalAmount = Σ(line.lineTotal) */
+  /** Recalculate subtotal, tax, and total from pre-calculated line values */
   private recalculateTotals(): void {
-    this.totalAmount = this._lines.reduce(
-      (sum, line) => sum + line.lineTotal,
+    this._subtotalAmount = this._lines.reduce(
+      (sum, line) => sum + (line.lineTotal - line.taxAmount),
       0,
     );
+    this._totalTaxAmount = this._lines.reduce(
+      (sum, line) => sum + line.taxAmount,
+      0,
+    );
+    this._totalAmount = this._subtotalAmount + this._totalTaxAmount;
   }
 
   private touch(): void {
@@ -196,6 +226,8 @@ export class SalesOrder {
       id,
       customerId,
       status: 'draft',
+      subtotalAmount: 0,
+      totalTaxAmount: 0,
       totalAmount: 0,
       cancelReason: null,
       version: 0,

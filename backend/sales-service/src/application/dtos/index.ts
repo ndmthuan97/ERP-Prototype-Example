@@ -34,7 +34,7 @@ export function validateCancelOrder(data: unknown): CancelOrderDto {
 }
 
 // --- Search Orders ---
-const validStatuses = ['draft', 'submitted', 'confirmed', 'fulfilled', 'cancelled'];
+const validStatuses = ['draft', 'submitted', 'confirmed', 'partially_delivered', 'fully_delivered', 'cancelled'];
 const searchOrdersSchema = z.object({
   page: z.number().int().positive().optional().default(1),
   limit: z.number().int().positive().max(100).optional().default(20),

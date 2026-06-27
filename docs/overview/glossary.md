@@ -1,3 +1,11 @@
+---
+type: Reference
+title: "ERP Glossary"
+description: "Glossary of domain terms (Customer, Order, Inventory) and architecture terms (DDD, CQRS, Saga, Outbox, etc.)"
+tags: [reference, glossary, ddd, terminology]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Glossary — Bảng thuật ngữ
 
 > Bảng thuật ngữ tổng hợp các khái niệm nghiệp vụ (domain) và kiến trúc (architecture) được sử dụng trong dự án ERP Prototype. Mỗi thuật ngữ được giải thích bằng tiếng Việt, kèm theo thuật ngữ tiếng Anh gốc trong ngoặc đơn.

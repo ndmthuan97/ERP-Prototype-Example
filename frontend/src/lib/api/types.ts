@@ -92,7 +92,8 @@ export type OrderStatus =
   | 'draft'
   | 'submitted'
   | 'confirmed'
-  | 'fulfilled'
+  | 'partially_delivered'
+  | 'fully_delivered'
   | 'cancelled';
 
 export interface SalesOrderLine {
@@ -101,6 +102,8 @@ export interface SalesOrderLine {
   itemName: string;
   quantity: number;
   unitPrice: number;
+  taxRate: number;
+  taxAmount: number;
   lineTotal: number;
 }
 
@@ -108,6 +111,8 @@ export interface SalesOrder {
   id: string;
   customerId: string;
   status: OrderStatus;
+  subtotalAmount: number;
+  totalTaxAmount: number;
   totalAmount: number;
   cancelReason: string | null;
   version: number;
@@ -161,4 +166,134 @@ export interface CancelResult {
   status: 'cancelled';
   cancelReason: string;
   cancelledAt: string;
+}
+
+// ----- Delivery Order (sales-service :3002) -----
+export type DeliveryStatus =
+  | 'draft'
+  | 'picking'
+  | 'packed'
+  | 'shipped'
+  | 'delivered'
+  | 'failed';
+
+export interface DeliveryLine {
+  id: string;
+  salesOrderLineId: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+}
+
+export interface DeliveryOrder {
+  id: string;
+  salesOrderId: string;
+  status: DeliveryStatus;
+  failReason: string | null;
+  version: number;
+  lines: DeliveryLine[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDeliveryInput {
+  lines: Array<{ salesOrderLineId: string; itemId: string; itemName: string; quantity: number }>;
+}
+
+// ----- Sales Return (sales-service :3002) -----
+export type SalesReturnStatus =
+  | 'draft'
+  | 'approved'
+  | 'goods_received'
+  | 'completed'
+  | 'rejected';
+
+export interface SalesReturnLine {
+  id: string;
+  salesOrderLineId: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  reason: string | null;
+}
+
+export interface SalesReturn {
+  id: string;
+  salesOrderId: string;
+  customerId: string;
+  status: SalesReturnStatus;
+  reason: string;
+  totalRefundAmount: number;
+  lines: SalesReturnLine[];
+  approvedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateReturnInput {
+  reason: string;
+  lines: Array<{ salesOrderLineId: string; itemId: string; itemName: string; quantity: number; unitPrice: number; reason?: string }>;
+}
+
+// ----- Supplier (purchasing-service :3004) -----
+export interface Supplier {
+  id: string;
+  name: string;
+  taxCode: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  paymentTermDays: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSupplierInput {
+  name: string;
+  taxCode?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  paymentTermDays?: number;
+}
+
+export type UpdateSupplierInput = Partial<CreateSupplierInput>;
+
+// ----- Purchase Order Detail (purchasing-service :3004) -----
+export interface PurchaseOrderLine {
+  id: string;
+  productId: string;
+  productName: string;
+  orderedQty: number;
+  receivedQty: number;
+  unitCost: number;
+}
+
+export interface PurchaseOrderDetail {
+  id: string;
+  supplierId: string;
+  status: 'draft' | 'placed' | 'partially_received' | 'received' | 'cancelled';
+  totalCost: number;
+  lines: PurchaseOrderLine[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePurchaseOrderInput {
+  supplierId: string;
+}
+
+export interface AddPurchaseOrderLineInput {
+  productId: string;
+  productName: string;
+  orderedQty: number;
+  unitCost: number;
+}
+
+export interface ReceiveGoodsInput {
+  lines: Array<{ lineId: string; quantity: number }>;
 }

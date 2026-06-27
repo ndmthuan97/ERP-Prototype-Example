@@ -50,8 +50,10 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
           id: l.id,
           itemId: l.itemId,
           itemName: l.itemName,
-          quantity: l.quantity,
+          quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice),
+          taxRate: Number(l.taxRate),
+          taxAmount: Number(l.taxAmount),
           lineTotal: Number(l.lineTotal),
           createdAt: l.createdAt,
         }),
@@ -61,6 +63,8 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
       id: record.id,
       customerId: record.customerId,
       status: record.status as SalesOrder['status'],
+      subtotalAmount: Number(record.subtotalAmount),
+      totalTaxAmount: Number(record.totalTaxAmount),
       totalAmount: Number(record.totalAmount),
       cancelReason: record.cancelReason,
       version: record.version,
@@ -151,6 +155,8 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
           id: order.id,
           customerId: order.customerId,
           status: order.status,
+          subtotalAmount: order.subtotalAmount,
+          totalTaxAmount: order.totalTaxAmount,
           totalAmount: order.totalAmount,
           cancelReason: order.cancelReason,
           version: 0,
@@ -213,6 +219,8 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
           itemName: lastLine.itemName,
           quantity: lastLine.quantity,
           unitPrice: lastLine.unitPrice,
+          taxRate: lastLine.taxRate,
+          taxAmount: lastLine.taxAmount,
           lineTotal: lastLine.lineTotal,
         },
       });
@@ -221,6 +229,8 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
       const rec = await tx.salesOrder.update({
         where: { id: order.id },
         data: {
+          subtotalAmount: order.subtotalAmount,
+          totalTaxAmount: order.totalTaxAmount,
           totalAmount: order.totalAmount,
           version: { increment: 1 },
           updatedAt: order.updatedAt,
@@ -265,6 +275,8 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
         where: { id: order.id },
         data: {
           status: order.status,
+          subtotalAmount: order.subtotalAmount,
+          totalTaxAmount: order.totalTaxAmount,
           totalAmount: order.totalAmount,
           cancelReason: order.cancelReason,
           version: { increment: 1 },
@@ -320,5 +332,23 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
     });
 
     return this.toDomain(updated);
+  }
+
+  // ==========================================================================
+  // PENDING ORDERS TOTAL — for credit check
+  // ==========================================================================
+
+  async sumPendingOrdersTotal(customerId: string, excludeOrderId: string): Promise<number> {
+    const result = await this.prisma.salesOrder.aggregate({
+      where: {
+        customerId,
+        status: 'submitted',
+        id: { not: excludeOrderId },
+      },
+      _sum: {
+        totalAmount: true,
+      },
+    });
+    return Number(result._sum.totalAmount ?? 0);
   }
 }

@@ -17,7 +17,7 @@ describe('PurchaseOrderLine entity', () => {
     it('throws on non-positive orderedQty', () => {
       expect(() =>
         PurchaseOrderLine.create('l1', 'p', 'X', 0, 10),
-      ).toThrow('orderedQty must be a positive integer');
+      ).toThrow('orderedQty must be a positive number');
     });
 
     it('throws on non-positive unitCost', () => {

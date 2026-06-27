@@ -107,10 +107,17 @@ export class CustomerController {
   /**
    * GET /customers/:id/credit-check — Kiểm tra tín dụng
    * Order Service sẽ gọi endpoint này trước khi xác nhận đơn hàng
-   * Trả về: { customerId, creditLimit, creditUsed, available, canOrder }
+   * Query params: orderAmount, pendingOrdersTotal
+   * Trả về: { customerId, creditLimit, creditUsed, pendingAmount, available, canOrder }
    */
   @Get(':id/credit-check')
-  async checkCredit(@Param('id') id: string) {
-    return this.checkCreditQuery.execute(id);
+  async checkCredit(
+    @Param('id') id: string,
+    @Query('orderAmount') orderAmount?: string,
+    @Query('pendingOrdersTotal') pendingOrdersTotal?: string,
+  ) {
+    const amount = Number(orderAmount) || 0;
+    const pending = Number(pendingOrdersTotal) || 0;
+    return this.checkCreditQuery.execute(id, amount, pending);
   }
 }

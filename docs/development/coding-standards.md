@@ -1,3 +1,11 @@
+---
+type: Reference
+title: "Coding Standards"
+description: "Code conventions covering Clean Code, SOLID principles, DDD layer structure, naming, error handling, and @erp/shared integration"
+tags: [reference, coding-standards, clean-code, solid]
+timestamp: "2026-06-25T00:00:00+07:00"
+---
+
 # Coding Standards — Quy chuẩn viết code
 
 > Tài liệu quy định các chuẩn mực viết code trong dự án ERP prototype.

@@ -2,16 +2,17 @@
 // INVENTORY EVENT SUBSCRIBER — Pub/Sub consumer for domain events
 // =============================================================================
 // Listens to:
-// - sales-order.submitted → HandleSalesOrderSubmittedCommand (reserve stock)
 // - sales-order.cancelled → HandleSalesOrderCancelledCommand (release stock — compensation)
 // - product.created → HandleProductCreatedCommand (auto-create stock item)
 // - goods.received → HandleGoodsReceivedCommand (receive stock from PO)
 // - sales-order.fulfilled → HandleSalesOrderFulfilledCommand (issue stock for shipment)
+//
+// NOTE: sales-order.submitted is NO LONGER consumed here. Stock reservation is
+// now handled synchronously via HTTP POST /v1/inventory/items/batch/reserve.
 
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { EVENT, PubSubSubscriber } from '@erp/shared';
 
-import { HandleSalesOrderSubmittedCommand } from '../../application/commands/handle-sales-order-submitted.command.js';
 import { HandleSalesOrderCancelledCommand } from '../../application/commands/handle-sales-order-cancelled.command.js';
 import { HandleProductCreatedCommand } from '../../application/commands/handle-product-created.command.js';
 import { HandleGoodsReceivedCommand } from '../../application/commands/handle-goods-received.command.js';
@@ -23,7 +24,6 @@ export class InventoryEventSubscriber implements OnModuleInit {
 
   constructor(
     private readonly subscriber: PubSubSubscriber,
-    private readonly handleSubmitted: HandleSalesOrderSubmittedCommand,
     private readonly handleCancelled: HandleSalesOrderCancelledCommand,
     private readonly handleProductCreated: HandleProductCreatedCommand,
     private readonly handleGoodsReceived: HandleGoodsReceivedCommand,
@@ -33,16 +33,7 @@ export class InventoryEventSubscriber implements OnModuleInit {
   onModuleInit(): void {
     this.logger.log('Registering inventory event handlers...');
 
-    // Saga: reserve stock on order submission
-    this.subscriber.register({
-      topic: EVENT.SALES_ORDER_SUBMITTED,
-      subscription: 'inventory-service.sales-order.submitted',
-      handler: async (envelope) => {
-        await this.handleSubmitted.execute(envelope);
-      },
-    });
-
-    // Saga compensation: release stock on order cancellation
+    // Compensation: release stock on order cancellation (from confirmed state)
     this.subscriber.register({
       topic: EVENT.SALES_ORDER_CANCELLED,
       subscription: 'inventory-service.sales-order.cancelled',

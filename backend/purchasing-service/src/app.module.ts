@@ -23,9 +23,11 @@ import {
 import { PrismaService } from './infrastructure/persistence/prisma.service';
 import { PrismaPurchaseOrderRepository } from './infrastructure/persistence/purchase-order.repository.impl';
 import { PrismaOutboxStore } from './infrastructure/persistence/prisma-outbox.store';
+import { PrismaSupplierRepository } from './infrastructure/persistence/prisma-supplier.repository';
 
 // Domain — token only
 import { PURCHASE_ORDER_REPOSITORY } from './domain/repositories/purchase-order.repository';
+import { SUPPLIER_REPOSITORY } from './domain/repositories/supplier.repository';
 
 // Application — use cases (Command = write, Query = read → CQRS)
 import { CreatePOCommand } from './application/commands/create-po.command';
@@ -34,15 +36,21 @@ import { RemoveLinePOCommand } from './application/commands/remove-line-po.comma
 import { PlacePOCommand } from './application/commands/place-po.command';
 import { ReceiveGoodsCommand } from './application/commands/receive-goods.command';
 import { CancelPOCommand } from './application/commands/cancel-po.command';
+import { CreateSupplierCommand } from './application/commands/create-supplier.command';
+import { UpdateSupplierCommand } from './application/commands/update-supplier.command';
 import { GetPOQuery } from './application/queries/get-po.query';
 import { SearchPOsQuery } from './application/queries/search-pos.query';
+import { GetSupplierQuery } from './application/queries/get-supplier.query';
+import { SearchSuppliersQuery } from './application/queries/search-suppliers.query';
 
 // Presentation — HTTP controllers
 import { PurchasingController } from './presentation/purchasing.controller';
+import { SupplierController } from './presentation/supplier.controller';
 
 @Module({
   controllers: [
     PurchasingController,
+    SupplierController,
     HealthController,
     MetricsController,
   ],
@@ -54,6 +62,10 @@ import { PurchasingController } from './presentation/purchasing.controller';
     {
       provide: PURCHASE_ORDER_REPOSITORY,
       useClass: PrismaPurchaseOrderRepository,
+    },
+    {
+      provide: SUPPLIER_REPOSITORY,
+      useClass: PrismaSupplierRepository,
     },
 
     // Cache + Metrics from shared
@@ -98,8 +110,12 @@ import { PurchasingController } from './presentation/purchasing.controller';
     PlacePOCommand,
     ReceiveGoodsCommand,
     CancelPOCommand,
+    CreateSupplierCommand,
+    UpdateSupplierCommand,
     GetPOQuery,
     SearchPOsQuery,
+    GetSupplierQuery,
+    SearchSuppliersQuery,
   ],
 })
 export class AppModule {}
