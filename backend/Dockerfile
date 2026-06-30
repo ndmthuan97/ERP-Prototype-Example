@@ -24,7 +24,9 @@ COPY --from=shared-builder /app/shared shared/
 
 # Copy entire service directory (handles prisma or no-prisma uniformly)
 COPY ${SERVICE_DIR}/ ${SERVICE_DIR}/
-RUN cd ${SERVICE_DIR} && npm ci && npm run build
+RUN cd ${SERVICE_DIR} && npm ci && \
+    if [ -f "prisma/schema.prisma" ]; then npx prisma generate; fi && \
+    npm run build
 
 # Ensure prisma dir always exists (empty for services without prisma)
 RUN mkdir -p ${SERVICE_DIR}/prisma
