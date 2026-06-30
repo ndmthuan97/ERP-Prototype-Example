@@ -53,6 +53,7 @@ jobs:
       id-token: write
       contents: read
     strategy:
+      fail-fast: false
       matrix:
         include:
           - service: auth-service
@@ -70,30 +71,36 @@ jobs:
           - service: api-gateway
             changed: ${{ needs.detect-changes.outputs.gateway }}
     steps:
-      - name: Skip unchanged service
-        if: matrix.changed != 'true' && needs.detect-changes.outputs.shared != 'true'
-        run: echo "Skipping ${{ matrix.service }} — no changes" && exit 0
+      - name: Check if build needed
+        id: check
+        run: |
+          if [[ "${{ matrix.changed }}" == "true" || "${{ needs.detect-changes.outputs.shared }}" == "true" ]]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "Skipping ${{ matrix.service }} — no changes"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
 
       - uses: actions/checkout@v4
-        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        if: steps.check.outputs.should_build == 'true'
 
       - name: Authenticate to GCP (WIF)
-        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        if: steps.check.outputs.should_build == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.DEPLOYER_SA }}
 
       - name: Setup gcloud
-        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        if: steps.check.outputs.should_build == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        if: steps.check.outputs.should_build == 'true'
         run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
       - name: Build Docker image
-        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        if: steps.check.outputs.should_build == 'true'
         run: |
           docker build \
             --build-arg SERVICE_DIR=${{ matrix.service }} \
@@ -102,7 +109,7 @@ jobs:
             -f backend/Dockerfile backend/
 
       - name: Push Docker image
-        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        if: steps.check.outputs.should_build == 'true'
         run: |
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }}
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:latest
