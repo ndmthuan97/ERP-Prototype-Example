@@ -29,7 +29,10 @@ jobs:
         id: filter
         with:
           filters: |
-            shared: 'backend/shared/**'
+            shared:
+              - 'backend/shared/**'
+              - 'backend/Dockerfile'
+              - 'backend/.dockerignore'
             auth: 'backend/auth-service/**'
             customer: 'backend/customer-service/**'
             sales: 'backend/sales-service/**'
