@@ -28,14 +28,10 @@ ARG SERVICE_DIR
 # Copy shared (built) — needed as file: dependency
 COPY --from=shared-builder /app/shared shared/
 
-# Install service dependencies (includes prisma generate via postinstall)
-COPY ${SERVICE_DIR}/package*.json ${SERVICE_DIR}/
-COPY ${SERVICE_DIR}/prisma/ ${SERVICE_DIR}/prisma/
-RUN cd ${SERVICE_DIR} && npm ci
-
-# Copy service source & build
+# Install service dependencies
+# Not all services have prisma (e.g. api-gateway), so copy everything then install
 COPY ${SERVICE_DIR}/ ${SERVICE_DIR}/
-RUN cd ${SERVICE_DIR} && npm run build
+RUN cd ${SERVICE_DIR} && npm ci && npm run build
 
 # ---- Stage 3: Production-like runtime ----
 FROM base AS runner
@@ -49,8 +45,13 @@ ENV PORT=${SERVICE_PORT}
 COPY --from=shared-builder /app/shared shared/
 COPY --from=service-builder /app/${SERVICE_DIR}/node_modules ${SERVICE_DIR}/node_modules
 COPY --from=service-builder /app/${SERVICE_DIR}/dist ${SERVICE_DIR}/dist
-COPY --from=service-builder /app/${SERVICE_DIR}/prisma ${SERVICE_DIR}/prisma
 COPY --from=service-builder /app/${SERVICE_DIR}/package.json ${SERVICE_DIR}/package.json
+
+# Copy prisma if it exists (not all services use prisma)
+RUN --mount=from=service-builder,source=/app,target=/tmp/build \
+    if [ -d "/tmp/build/${SERVICE_DIR}/prisma" ]; then \
+      cp -r /tmp/build/${SERVICE_DIR}/prisma ${SERVICE_DIR}/prisma; \
+    fi
 
 WORKDIR /app/${SERVICE_DIR}
 EXPOSE ${SERVICE_PORT}
