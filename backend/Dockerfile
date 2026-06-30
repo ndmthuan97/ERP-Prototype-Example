@@ -48,4 +48,4 @@ COPY --from=service-builder /app/${SERVICE_DIR}/prisma ${SERVICE_DIR}/prisma
 WORKDIR /app/${SERVICE_DIR}
 EXPOSE ${SERVICE_PORT}
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
