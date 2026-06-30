@@ -30,38 +30,38 @@ export function CustomerForm({
       disabled={loading}
     >
       <Form.Item
-        label="Tên doanh nghiệp"
+        label="Business Name"
         name="businessName"
-        rules={[{ required: true, min: 2, message: 'Tối thiểu 2 ký tự' }]}
+        rules={[{ required: true, min: 2, message: 'At least 2 characters' }]}
       >
-        <Input placeholder="Công ty TNHH ABC" />
+        <Input placeholder="e.g. ACME Corp" />
       </Form.Item>
 
-      <Form.Item label="Mã số thuế" name="taxCode">
-        <Input placeholder="0312345678 hoặc 0312345678-001" />
+      <Form.Item label="Tax Code" name="taxCode">
+        <Input placeholder="e.g. 0312345678" />
       </Form.Item>
 
-      <Form.Item label="Người liên hệ" name="contactName">
+      <Form.Item label="Contact Person" name="contactName">
         <Input />
       </Form.Item>
 
-      <Form.Item label="Điện thoại" name="contactPhone">
+      <Form.Item label="Phone" name="contactPhone">
         <Input />
       </Form.Item>
 
       <Form.Item
         label="Email"
         name="contactEmail"
-        rules={[{ type: 'email', message: 'Email không hợp lệ' }]}
+        rules={[{ type: 'email', message: 'Invalid email' }]}
       >
         <Input />
       </Form.Item>
 
       {isAdmin && (
         <Form.Item
-          label="Hạn mức tín dụng (VND)"
+          label="Credit Limit (VND)"
           name="creditLimitAmount"
-          tooltip="Chỉ admin/manager được đặt (xem fix bảo mật C6)"
+          tooltip="Admin/manager only"
         >
           <InputNumber<number>
             style={{ width: '100%' }}

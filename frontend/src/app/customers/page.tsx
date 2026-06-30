@@ -4,6 +4,7 @@
 // =============================================================================
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Table,
   Input,
@@ -42,6 +43,9 @@ import { ApiError, toMessage } from '@/lib/api/errors';
 import { formatVnd, formatDateTime } from '@/lib/format';
 import { CustomerForm } from '@/components/customers/CustomerForm';
 import { StatCard } from '@/components/StatCard';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { CAN } from '@/lib/auth/permissions';
+import { CUSTOMER_STATUS, statusLabel } from '@/lib/constants/status';
 
 const STATUS_COLOR: Record<Customer['status'], string> = {
   prospect: 'default',
@@ -53,10 +57,14 @@ const STATUS_COLOR: Record<Customer['status'], string> = {
 export default function CustomersPage() {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const role = user?.role ?? 'viewer';
+  const router = useRouter();
 
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [statusFilter, setStatusFilter] = useState('');
 
   // Create modal
   const [openCreate, setOpenCreate] = useState(false);
@@ -68,8 +76,8 @@ export default function CustomersPage() {
 
   // ---- Queries ----
   const listQuery = useQuery({
-    queryKey: ['customers', { q, page, limit }],
-    queryFn: () => customerApi.list({ q, page, limit }),
+    queryKey: ['customers', { q, page, limit, status: statusFilter }],
+    queryFn: () => customerApi.list({ q, page, limit, status: statusFilter || undefined }),
   });
 
   // Fetch a large page for stat calculations (runs once, cached)
@@ -142,7 +150,7 @@ export default function CustomersPage() {
   const createMutation = useMutation({
     mutationFn: (input: CreateCustomerInput) => customerApi.create(input),
     onSuccess: () => {
-      message.success('Đã tạo khách hàng');
+      message.success('Customer created');
       setOpenCreate(false);
       createForm.resetFields();
       queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -154,7 +162,7 @@ export default function CustomersPage() {
     mutationFn: (input: CreateCustomerInput) =>
       customerApi.update(editingId!, input),
     onSuccess: () => {
-      message.success('Đã cập nhật khách hàng');
+      message.success('Customer updated');
       setEditingId(null);
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
@@ -164,7 +172,7 @@ export default function CustomersPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => customerApi.remove(id),
     onSuccess: () => {
-      message.success('Đã xóa khách hàng');
+      message.success('Customer deleted');
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
     onError: (err) => message.error(toMessage(err)),
@@ -185,7 +193,7 @@ export default function CustomersPage() {
 
   const columns: ColumnsType<Customer> = [
     {
-      title: 'Tên doanh nghiệp',
+      title: 'Business Name',
       dataIndex: 'businessName',
       key: 'businessName',
       width: 200,
@@ -196,20 +204,20 @@ export default function CustomersPage() {
         </Typography.Link>
       ),
     },
-    { title: 'MST', dataIndex: 'taxCode', key: 'taxCode', width: 120, render: (v) => v ?? '—' },
+    { title: 'Tax Code', dataIndex: 'taxCode', key: 'taxCode', width: 120, render: (v) => v ?? '—' },
     {
-      title: 'Trạng thái',
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (s: Customer['status']) => (
-        <Tag color={STATUS_COLOR[s]} style={{ textTransform: 'capitalize' }}>
-          {s}
+        <Tag color={CUSTOMER_STATUS.color[s]}>
+          {statusLabel(CUSTOMER_STATUS.label, s)}
         </Tag>
       ),
     },
     {
-      title: 'Hạn mức',
+      title: 'Credit Limit',
       dataIndex: 'creditLimitAmount',
       key: 'creditLimitAmount',
       width: 140,
@@ -217,7 +225,7 @@ export default function CustomersPage() {
       render: (v: number | null) => formatVnd(v),
     },
     {
-      title: 'Đã dùng',
+      title: 'Used',
       dataIndex: 'creditUsedAmount',
       key: 'creditUsedAmount',
       width: 120,
@@ -225,57 +233,62 @@ export default function CustomersPage() {
       render: (v: number) => formatVnd(v),
     },
     {
-      title: 'Liên hệ',
+      title: 'Contact',
       key: 'contact',
       width: 150,
       ellipsis: true,
       render: (_, r) => r.contactName ?? r.contactPhone ?? r.contactEmail ?? '—',
     },
     {
-      title: 'Tạo lúc',
+      title: 'Created At',
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 120,
       render: (v: string) => formatDateTime(v),
     },
     {
-      title: 'Hành động',
+      title: 'Actions',
       key: 'actions',
       width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space size={4}>
-          <Tooltip title="Chi tiết">
+          <Tooltip title="Details">
             <Link href={`/customers/${record.id}`}>
               <Button type="link" size="small" icon={<EyeOutlined />} />
             </Link>
           </Tooltip>
-          <Tooltip title="Chỉnh sửa">
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleOpenEdit(record)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title="Xác nhận xóa khách hàng?"
-            description="Thao tác này sẽ xóa mềm khách hàng."
-            onConfirm={() => deleteMutation.mutate(record.id)}
-            okText="Xóa"
-            cancelText="Hủy"
-            okButtonProps={{ danger: true }}
-          >
-            <Tooltip title="Lưu trữ">
+          {CAN.update(role) && (
+            <Tooltip title="Edit">
               <Button
                 type="link"
                 size="small"
-                danger
-                icon={<DeleteOutlined />}
-                loading={deleteMutation.isPending && deleteMutation.variables === record.id}
+                icon={<EditOutlined />}
+                onClick={(e) => { e.stopPropagation(); handleOpenEdit(record); }}
               />
             </Tooltip>
-          </Popconfirm>
+          )}
+          {CAN.delete(role) && (
+            <Popconfirm
+              title="Delete this customer?"
+              description="This will soft-delete the customer."
+              onConfirm={() => deleteMutation.mutate(record.id)}
+              okText="Delete"
+              cancelText="Cancel"
+              okButtonProps={{ danger: true }}
+            >
+              <Tooltip title="Archive">
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={deleteMutation.isPending && deleteMutation.variables === record.id}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Tooltip>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -286,14 +299,14 @@ export default function CustomersPage() {
       {/* Page header */}
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
-          Khách hàng
+          Customers
         </Typography.Title>
         <Button
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => setOpenCreate(true)}
         >
-          Tạo khách hàng
+          Create Customer
         </Button>
       </Space>
 
@@ -304,7 +317,7 @@ export default function CustomersPage() {
             icon={<TeamOutlined />}
             iconBgColor="rgba(22, 119, 255, 0.1)"
             iconColor="#1677ff"
-            label="Tổng khách hàng"
+            label="Total Customers"
             value={stats.total}
           />
         </Col>
@@ -313,9 +326,9 @@ export default function CustomersPage() {
             icon={<UserAddOutlined />}
             iconBgColor="rgba(82, 196, 26, 0.1)"
             iconColor="#52c41a"
-            label="KH mới tháng này"
+            label="New This Month"
             value={stats.newThisMonth}
-            trend={{ text: '~ ước lượng từ dữ liệu hiện có', color: 'green' }}
+            trend={{ text: '~ estimated from current data', color: 'green' }}
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -323,7 +336,7 @@ export default function CustomersPage() {
             icon={<CrownOutlined />}
             iconBgColor="rgba(250, 173, 20, 0.1)"
             iconColor="#faad14"
-            label="KH VIP"
+            label="VIP Customers"
             value={stats.vipCount}
           />
         </Col>
@@ -332,9 +345,9 @@ export default function CustomersPage() {
             icon={<SyncOutlined />}
             iconBgColor="rgba(114, 46, 209, 0.1)"
             iconColor="#722ed1"
-            label="Tỷ lệ quay lại"
+            label="Return Rate"
             value={stats.returnRate}
-            trend={{ text: '~ tỷ lệ active / tổng', color: 'green' }}
+            trend={{ text: '~ active / total ratio', color: 'green' }}
           />
         </Col>
       </Row>
@@ -347,7 +360,7 @@ export default function CustomersPage() {
         <Space wrap>
           <Input.Search
             allowClear
-            placeholder="Tìm theo tên doanh nghiệp…"
+            placeholder="Search by business name…"
             style={{ width: 320 }}
             onSearch={(value) => {
               setQ(value);
@@ -358,18 +371,19 @@ export default function CustomersPage() {
             defaultValue="all"
             style={{ width: 180 }}
             options={[
-              { value: 'all', label: 'Tất cả' },
+              { value: '', label: 'All' },
               { value: 'prospect', label: 'Prospect' },
               { value: 'active', label: 'Active' },
               { value: 'suspended', label: 'Suspended' },
-              { value: 'archived', label: 'Archived' },
+              { value: 'archived', label: 'Archive' },
             ]}
+            onChange={(v) => { setStatusFilter(v); setPage(1); }}
           />
           <Button
             icon={<ReloadOutlined />}
             onClick={() => listQuery.refetch()}
           >
-            Tải lại
+            Reload
           </Button>
         </Space>
       </Card>
@@ -385,12 +399,17 @@ export default function CustomersPage() {
           dataSource={listQuery.data?.data ?? []}
           loading={listQuery.isFetching}
           scroll={{ x: 1100 }}
+          onRow={(record) => ({
+            onClick: () => router.push(`/customers/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
+          locale={{ emptyText: 'No customers yet' }}
           pagination={{
             current: page,
             pageSize: limit,
             total: listQuery.data?.total ?? 0,
             showSizeChanger: true,
-            showTotal: (total) => `${total} khách hàng`,
+            showTotal: (total) => `${total} customers`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);
@@ -401,13 +420,13 @@ export default function CustomersPage() {
 
       {/* Create Modal */}
       <Modal
-        title="Tạo khách hàng"
+        title="Create Customer"
         open={openCreate}
         onCancel={() => setOpenCreate(false)}
         onOk={() => createForm.submit()}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <CustomerForm
@@ -419,13 +438,13 @@ export default function CustomersPage() {
 
       {/* Edit Modal */}
       <Modal
-        title="Sửa khách hàng"
+        title="Edit Customer"
         open={!!editingId}
         onCancel={() => setEditingId(null)}
         onOk={() => editForm.submit()}
         confirmLoading={updateMutation.isPending}
-        okText="Lưu"
-        cancelText="Hủy"
+        okText="Save"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <CustomerForm

@@ -82,7 +82,7 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
   const createMutation = useMutation({
     mutationFn: (input: CreateDeliveryInput) => deliveryApi.create(orderId, input),
     onSuccess: () => {
-      message.success('Đã tạo phiếu giao hàng');
+      message.success('Delivery order created');
       setOpenCreate(false);
       queryClient.invalidateQueries({ queryKey: ['orders', orderId, 'deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['orders', orderId] });
@@ -101,7 +101,7 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
       return actions[action](orderId, doId);
     },
     onSuccess: () => {
-      message.success('Cập nhật thành công');
+      message.success('Updated successfully');
       queryClient.invalidateQueries({ queryKey: ['orders', orderId, 'deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['orders', orderId] });
     },
@@ -110,17 +110,17 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
 
   const getNextAction = (status: DeliveryStatus): { label: string; action: string } | null => {
     const map: Record<string, { label: string; action: string }> = {
-      draft: { label: 'Bắt đầu lấy hàng', action: 'start_picking' },
-      picking: { label: 'Đóng gói', action: 'pack' },
-      packed: { label: 'Vận chuyển', action: 'ship' },
-      shipped: { label: 'Đã giao', action: 'deliver' },
+      draft: { label: 'Start Picking', action: 'start_picking' },
+      picking: { label: 'Pack', action: 'pack' },
+      packed: { label: 'Ship', action: 'ship' },
+      shipped: { label: 'Delivered', action: 'deliver' },
     };
     return map[status] ?? null;
   };
 
   const columns: ColumnsType<DeliveryOrder> = [
     {
-      title: 'Mã phiếu',
+      title: 'DO ID',
       dataIndex: 'id',
       key: 'id',
       render: (id: string) => (
@@ -133,25 +133,25 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
       ),
     },
     {
-      title: 'Trạng thái',
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       render: (s: DeliveryStatus) => <Tag color={STATUS_COLOR[s]}>{s}</Tag>,
     },
     {
-      title: 'Số dòng',
+      title: 'Lines',
       key: 'lineCount',
       align: 'center',
       render: (_, record) => record.lines?.length ?? 0,
     },
     {
-      title: 'Ngày tạo',
+      title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (v: string) => formatDateTime(v),
     },
     {
-      title: 'Hành động',
+      title: 'Actions',
       key: 'actions',
       align: 'center',
       render: (_, record) => {
@@ -184,7 +184,7 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
       .filter((l) => l.quantity > 0);
 
     if (lines.length === 0) {
-      message.warning('Chọn ít nhất 1 dòng hàng');
+      message.warning('Select at least 1 line item');
       return;
     }
 
@@ -194,7 +194,7 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography.Text strong>Phiếu giao hàng ({deliveries.length})</Typography.Text>
+        <Typography.Text strong>Delivery Orders ({deliveries.length})</Typography.Text>
         {canCreate && (
           <Button
             type="primary"
@@ -202,13 +202,13 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
             icon={<PlusOutlined />}
             onClick={() => setOpenCreate(true)}
           >
-            Tạo phiếu giao
+            Create Delivery
           </Button>
         )}
       </div>
 
       {deliveries.length === 0 ? (
-        <Empty description="Chưa có phiếu giao hàng nào" />
+        <Empty description="No delivery orders yet" />
       ) : (
         <>
           <Table<DeliveryOrder>
@@ -224,16 +224,16 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
             const doItem = deliveries.find((d) => d.id === expandedDO);
             if (!doItem) return null;
             return (
-              <Card size="small" title={`Chi tiết: ${expandedDO.slice(0, 8)}…`}>
+              <Card size="small" title={`Details: ${expandedDO.slice(0, 8)}…`}>
                 <Steps
                   current={STEP_MAP[doItem.status] ?? 0}
                   size="small"
                   items={[
-                    { title: 'Nháp', icon: <ClockCircleOutlined /> },
-                    { title: 'Lấy hàng', icon: <InboxOutlined /> },
-                    { title: 'Đóng gói', icon: <InboxOutlined /> },
-                    { title: 'Vận chuyển', icon: <CarOutlined /> },
-                    { title: 'Đã giao', icon: <CheckCircleOutlined /> },
+                    { title: 'Draft', icon: <ClockCircleOutlined /> },
+                    { title: 'Picking', icon: <InboxOutlined /> },
+                    { title: 'Pack', icon: <InboxOutlined /> },
+                    { title: 'Ship', icon: <CarOutlined /> },
+                    { title: 'Delivered', icon: <CheckCircleOutlined /> },
                   ]}
                   style={{ marginBottom: 16 }}
                 />
@@ -243,13 +243,13 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
                   pagination={false}
                   size="small"
                   columns={[
-                    { title: 'Sản phẩm', dataIndex: 'itemName', key: 'itemName' },
+                    { title: 'Products', dataIndex: 'itemName', key: 'itemName' },
                     { title: 'SL giao', dataIndex: 'quantity', key: 'quantity', align: 'center' },
                   ]}
                 />
                 {doItem.failReason && (
                   <Typography.Text type="danger" style={{ marginTop: 8, display: 'block' }}>
-                    Lý do thất bại: {doItem.failReason}
+                    Failure reason: {doItem.failReason}
                   </Typography.Text>
                 )}
               </Card>
@@ -260,7 +260,7 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
 
       {/* Create Delivery Modal */}
       <Modal
-        title="Tạo phiếu giao hàng"
+        title="Create Delivery Order"
         open={openCreate}
         onCancel={() => setOpenCreate(false)}
         onOk={() => {
@@ -268,11 +268,11 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
           formEl?.requestSubmit();
         }}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
       >
         <Typography.Paragraph type="secondary">
-          Nhập số lượng giao cho mỗi dòng hàng. Để trống hoặc 0 để bỏ qua.
+          Enter delivery quantity for each line. Leave blank or 0 to skip.
         </Typography.Paragraph>
         <form
           id="delivery-create-form"
@@ -292,8 +292,8 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
             pagination={false}
             size="small"
             columns={[
-              { title: 'Sản phẩm', dataIndex: 'itemName', key: 'itemName' },
-              { title: 'SL đơn', dataIndex: 'quantity', key: 'quantity', align: 'center' },
+              { title: 'Products', dataIndex: 'itemName', key: 'itemName' },
+              { title: 'Order Qty', dataIndex: 'quantity', key: 'quantity', align: 'center' },
               {
                 title: 'SL giao',
                 key: 'deliverQty',

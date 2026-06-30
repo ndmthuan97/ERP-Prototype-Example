@@ -1,0 +1,14 @@
+# ============================================================
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to git (it's in .gitignore)
+# ============================================================
+
+project_id  = "your-gcp-project-id"
+region      = "us-central1"
+github_repo = "your-github-username/erp-prototype-example"
+
+# Sensitive values — keep secret
+db_password         = "change-me-strong-password"
+jwt_secret          = "change-me-jwt-secret-key"
+upstash_redis_url   = "https://your-redis-instance.upstash.io"
+upstash_redis_token = "your-upstash-redis-token"

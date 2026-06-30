@@ -25,11 +25,13 @@ const SVC = 'sales' as const;
 // ----- Sales Order -----
 
 export const salesApi = {
-  list: (params: { page?: number; limit?: number; status?: string }) =>
+  list: (params: { page?: number; limit?: number; status?: string; createdFrom?: string; createdTo?: string }) =>
     apiClient.get<PaginatedMeta<SalesOrderSummary>>(SVC, '/api/orders', {
       page: params.page,
       limit: params.limit,
       status: params.status,
+      createdFrom: params.createdFrom,
+      createdTo: params.createdTo,
     }),
 
   get: (id: string) => apiClient.get<SalesOrder>(SVC, `/api/orders/${id}`),
@@ -42,6 +44,12 @@ export const salesApi = {
 
   addLine: (id: string, input: AddLineInput) =>
     apiClient.post<SalesOrderLine>(SVC, `/api/orders/${id}/lines`, input),
+
+  updateLine: (id: string, lineId: string, input: Partial<AddLineInput>) =>
+    apiClient.patch<SalesOrderLine>(SVC, `/api/orders/${id}/lines/${lineId}`, input),
+
+  removeLine: (id: string, lineId: string) =>
+    apiClient.delete<void>(SVC, `/api/orders/${id}/lines/${lineId}`),
 
   submit: (id: string) => apiClient.post<SubmitResult>(SVC, `/api/orders/${id}/submit`),
   cancel: (id: string, reason: string) =>

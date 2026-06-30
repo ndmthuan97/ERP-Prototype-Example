@@ -119,6 +119,22 @@ export class SalesReturn {
     );
   }
 
+  toJSON() {
+    return {
+      id: this.id,
+      salesOrderId: this.salesOrderId,
+      customerId: this.customerId,
+      status: this.status,
+      reason: this.reason,
+      totalRefundAmount: this.totalRefundAmount,
+      lines: this._lines,
+      approvedAt: this.approvedAt,
+      completedAt: this.completedAt,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+
   private touch(): void {
     this.updatedAt = new Date();
   }

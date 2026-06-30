@@ -68,7 +68,7 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
       const ret = createDraftWithLines();
       ret.approve();
 
-      expect(() => ret.reject()).toThrow(/Cannot reject/);
+      expect(() => ret.reject()).toThrow(/Cannot.*reject/);
     });
   });
 
@@ -114,7 +114,7 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
       const ret = createDraftWithLines();
       ret.approve();
 
-      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(/Cannot add lines/);
+      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(/Cannot.*addLine/);
     });
 
     it('should reject addLine from completed', () => {
@@ -123,7 +123,7 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
       ret.receiveGoods();
       ret.complete();
 
-      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(/Cannot add lines/);
+      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(/Cannot.*addLine/);
     });
   });
 
@@ -139,7 +139,7 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
     it('should reject approve from non-draft status', () => {
       const ret = createDraftWithLines();
       ret.approve();
-      expect(() => ret.approve()).toThrow(/Cannot approve/);
+      expect(() => ret.approve()).toThrow(/Cannot.*approve/);
     });
   });
 
@@ -149,18 +149,18 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
   describe('Transition guards', () => {
     it('receiveGoods() should reject from draft', () => {
       const ret = createDraftWithLines();
-      expect(() => ret.receiveGoods()).toThrow(/Cannot receive goods/);
+      expect(() => ret.receiveGoods()).toThrow(/Cannot.*receiveGoods/);
     });
 
     it('complete() should reject from approved (must receive goods first)', () => {
       const ret = createDraftWithLines();
       ret.approve();
-      expect(() => ret.complete()).toThrow(/Cannot complete/);
+      expect(() => ret.complete()).toThrow(/Cannot.*complete/);
     });
 
     it('complete() should reject from draft', () => {
       const ret = createDraftReturn();
-      expect(() => ret.complete()).toThrow(/Cannot complete/);
+      expect(() => ret.complete()).toThrow(/Cannot.*complete/);
     });
   });
 

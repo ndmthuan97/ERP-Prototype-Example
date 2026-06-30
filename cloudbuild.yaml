@@ -1,0 +1,128 @@
+# ============================================================
+# Cloud Build — Deploy all services to Cloud Run
+# Triggered by GitHub Actions CD workflow
+# ============================================================
+
+steps:
+  # --- Backend Services ---
+
+  - id: deploy-auth-service
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - auth-service-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/auth-service:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --vpc-connector=erp-vpc-connector
+      - --vpc-egress=private-ranges-only
+      - --quiet
+
+  - id: deploy-customer-service
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - customer-service-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/customer-service:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --vpc-connector=erp-vpc-connector
+      - --vpc-egress=private-ranges-only
+      - --quiet
+
+  - id: deploy-sales-service
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - sales-service-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/sales-service:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --vpc-connector=erp-vpc-connector
+      - --vpc-egress=private-ranges-only
+      - --quiet
+
+  - id: deploy-inventory-service
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - inventory-service-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/inventory-service:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --vpc-connector=erp-vpc-connector
+      - --vpc-egress=private-ranges-only
+      - --quiet
+
+  - id: deploy-catalog-service
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - catalog-service-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/catalog-service:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --vpc-connector=erp-vpc-connector
+      - --vpc-egress=private-ranges-only
+      - --quiet
+
+  - id: deploy-purchasing-service
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - purchasing-service-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/purchasing-service:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --vpc-connector=erp-vpc-connector
+      - --vpc-egress=private-ranges-only
+      - --quiet
+
+  - id: deploy-api-gateway
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - api-gateway-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/api-gateway:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --vpc-connector=erp-vpc-connector
+      - --vpc-egress=private-ranges-only
+      - --allow-unauthenticated
+      - --quiet
+
+  # --- Frontend ---
+
+  - id: deploy-frontend
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - frontend-dev
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/frontend:${_TAG}
+      - --region=us-central1
+      - --platform=managed
+      - --allow-unauthenticated
+      - --quiet
+
+substitutions:
+  _TAG: latest
+
+timeout: '1200s'
+options:
+  logging: CLOUD_LOGGING_ONLY

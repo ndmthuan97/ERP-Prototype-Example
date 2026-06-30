@@ -18,20 +18,26 @@ import {
   Popconfirm,
   App,
   Result,
+  Table,
+  Empty,
+  Typography,
 } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
   ArrowLeftOutlined,
+  ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { customerApi } from '@/lib/api/customer';
+import { salesApi } from '@/lib/api/sales';
 import type { CreateCustomerInput, Customer } from '@/lib/api/types';
 import { ApiError, toMessage } from '@/lib/api/errors';
 import { formatVnd, formatDateTime } from '@/lib/format';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { CustomerForm } from '@/components/customers/CustomerForm';
+import { ORDER_STATUS } from '@/lib/constants/status';
 
 const STATUS_COLOR: Record<Customer['status'], string> = {
   prospect: 'default',
@@ -41,10 +47,10 @@ const STATUS_COLOR: Record<Customer['status'], string> = {
 };
 
 const STATUS_LABEL: Record<Customer['status'], string> = {
-  prospect: 'Tiềm năng',
-  active: 'Hoạt động',
-  suspended: 'Tạm ngưng',
-  archived: 'Lưu trữ',
+  prospect: 'Prospect',
+  active: 'Active',
+  suspended: 'Suspended',
+  archived: 'Archive',
 };
 
 export default function CustomerDetailPage() {
@@ -70,10 +76,17 @@ export default function CustomerDetailPage() {
     enabled: !!customerQuery.data,
   });
 
+  // Order history for this customer
+  const ordersQuery = useQuery({
+    queryKey: ['orders', 'by-customer', id],
+    queryFn: () => salesApi.list({ limit: 50 }),
+    enabled: !!customerQuery.data,
+  });
+
   const updateMutation = useMutation({
     mutationFn: (input: CreateCustomerInput) => customerApi.update(id, input),
     onSuccess: () => {
-      message.success('Đã cập nhật khách hàng');
+      message.success('Customer updated');
       setOpenEdit(false);
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
@@ -97,7 +110,7 @@ export default function CustomerDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: () => customerApi.remove(id),
     onSuccess: () => {
-      message.success('Đã xóa khách hàng');
+      message.success('Customer deleted');
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       router.push('/customers');
     },
@@ -121,11 +134,11 @@ export default function CustomerDetailPage() {
     return (
       <Result
         status={is404 ? '404' : 'error'}
-        title={is404 ? 'Không tìm thấy khách hàng' : 'Lỗi tải dữ liệu'}
+        title={is404 ? 'Customer not found' : 'Failed to load data'}
         subTitle={is404 ? undefined : toMessage(customerQuery.error)}
         extra={
           <Link href="/customers">
-            <Button type="primary">Quay lại danh sách</Button>
+            <Button type="primary">Back to list</Button>
           </Link>
         }
       />
@@ -156,8 +169,8 @@ export default function CustomerDetailPage() {
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Breadcrumb
         items={[
-          { title: <Link href="/">Tổng quan</Link> },
-          { title: <Link href="/customers">Khách hàng</Link> },
+          { title: <Link href="/">Dashboard</Link> },
+          { title: <Link href="/customers">Customers</Link> },
           { title: customer.businessName },
         ]}
       />
@@ -167,7 +180,7 @@ export default function CustomerDetailPage() {
           icon={<ArrowLeftOutlined />}
           onClick={() => router.push('/customers')}
         >
-          Quay lại
+          Back
         </Button>
         <Space>
           <Button
@@ -175,14 +188,14 @@ export default function CustomerDetailPage() {
             icon={<EditOutlined />}
             onClick={handleOpenEdit}
           >
-            Sửa
+            Edit
           </Button>
           <Popconfirm
-            title="Xác nhận xóa khách hàng?"
-            description="Thao tác này sẽ xóa mềm khách hàng."
+            title="Delete this customer?"
+            description="This will soft-delete the customer."
             onConfirm={() => deleteMutation.mutate()}
-            okText="Xóa"
-            cancelText="Hủy"
+            okText="Delete"
+            cancelText="Cancel"
             okButtonProps={{ danger: true }}
           >
             <Button
@@ -190,60 +203,60 @@ export default function CustomerDetailPage() {
               icon={<DeleteOutlined />}
               loading={deleteMutation.isPending}
             >
-              Xóa
+              Delete
             </Button>
           </Popconfirm>
         </Space>
       </Space>
 
       <Descriptions
-        title="Thông tin khách hàng"
+        title="Customer Information"
         bordered
         column={{ xs: 1, sm: 2 }}
       >
-        <Descriptions.Item label="Tên doanh nghiệp">
+        <Descriptions.Item label="Business Name">
           {customer.businessName}
         </Descriptions.Item>
-        <Descriptions.Item label="Mã số thuế">
+        <Descriptions.Item label="Tax Code">
           {customer.taxCode ?? '—'}
         </Descriptions.Item>
-        <Descriptions.Item label="Trạng thái">
+        <Descriptions.Item label="Status">
           <Tag color={STATUS_COLOR[customer.status]}>
             {STATUS_LABEL[customer.status]}
           </Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="Người liên hệ">
+        <Descriptions.Item label="Contact Person">
           {customer.contactName ?? '—'}
         </Descriptions.Item>
-        <Descriptions.Item label="Điện thoại">
+        <Descriptions.Item label="Phone">
           {customer.contactPhone ?? '—'}
         </Descriptions.Item>
         <Descriptions.Item label="Email">
           {customer.contactEmail ?? '—'}
         </Descriptions.Item>
-        <Descriptions.Item label="Hạn mức tín dụng">
+        <Descriptions.Item label="Credit Limit">
           {formatVnd(customer.creditLimitAmount)}
         </Descriptions.Item>
-        <Descriptions.Item label="Đã sử dụng">
+        <Descriptions.Item label="Used">
           {formatVnd(customer.creditUsedAmount)}
         </Descriptions.Item>
-        <Descriptions.Item label="Ngày tạo">
+        <Descriptions.Item label="Created">
           {formatDateTime(customer.createdAt)}
         </Descriptions.Item>
-        <Descriptions.Item label="Cập nhật lần cuối">
+        <Descriptions.Item label="Last Updated">
           {formatDateTime(customer.updatedAt)}
         </Descriptions.Item>
       </Descriptions>
 
       {/* Credit Check Card */}
       <Card
-        title="Kiểm tra tín dụng"
+        title="Credit Check"
         loading={creditQuery.isLoading}
         extra={
           credit && (
             <Badge
               status={credit.canOrder ? 'success' : 'error'}
-              text={credit.canOrder ? 'Được đặt hàng' : 'Không được đặt hàng'}
+              text={credit.canOrder ? 'Can Order' : 'Cannot Order'}
             />
           )
         }
@@ -251,24 +264,24 @@ export default function CustomerDetailPage() {
         {credit && (
           <Space size="large" wrap>
             <Statistic
-              title="Hạn mức"
+              title="Credit Limit"
               value={
                 credit.creditLimit === null
-                  ? 'Không giới hạn'
+                  ? 'Unlimited'
                   : formatVnd(credit.creditLimit)
               }
             />
             <Statistic
-              title="Đã sử dụng"
+              title="Used"
               value={formatVnd(credit.creditUsed)}
             />
             <Statistic
-              title="Khả dụng"
-              value={isUnlimited ? 'Không giới hạn' : formatVnd(credit.available)}
+              title="Available"
+              value={isUnlimited ? 'Unlimited' : formatVnd(credit.available)}
             />
             <Statistic
-              title="Được đặt hàng"
-              value={credit.canOrder ? 'Có' : 'Không'}
+              title="Can Order"
+              value={credit.canOrder ? 'Yes' : 'No'}
               valueStyle={{ color: credit.canOrder ? '#52c41a' : '#ff4d4f' }}
             />
           </Space>
@@ -276,21 +289,78 @@ export default function CustomerDetailPage() {
         {creditQuery.isError && (
           <Result
             status="error"
-            title="Không thể kiểm tra tín dụng"
+            title="Credit check unavailable"
             subTitle={toMessage(creditQuery.error)}
           />
         )}
       </Card>
 
+      {/* Order History */}
+      <Card
+        title={
+          <Space>
+            <ShoppingCartOutlined />
+            Order History
+          </Space>
+        }
+        loading={ordersQuery.isLoading}
+      >
+        {ordersQuery.data?.data && ordersQuery.data.data.length > 0 ? (
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={
+              ordersQuery.data.data.filter((o) => o.customerId === id)
+            }
+            pagination={{ pageSize: 5 }}
+            onRow={(record) => ({
+              onClick: () => router.push(`/orders/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
+            columns={[
+              {
+                title: 'Order ID',
+                dataIndex: 'id',
+                render: (v: string) => (
+                  <Typography.Link>{v.slice(0, 8)}…</Typography.Link>
+                ),
+              },
+              {
+                title: 'Status',
+                dataIndex: 'status',
+                render: (s: string) => (
+                  <Tag color={ORDER_STATUS.color[s] ?? 'default'}>
+                    {ORDER_STATUS.label[s] ?? s}
+                  </Tag>
+                ),
+              },
+              {
+                title: 'Total',
+                dataIndex: 'totalAmount',
+                align: 'right',
+                render: (v: number) => formatVnd(v),
+              },
+              {
+                title: 'Created',
+                dataIndex: 'createdAt',
+                render: (v: string) => formatDateTime(v),
+              },
+            ]}
+          />
+        ) : (
+          <Empty description="No orders found for this customer" />
+        )}
+      </Card>
+
       {/* Edit Modal */}
       <Modal
-        title="Sửa khách hàng"
+        title="Edit Customer"
         open={openEdit}
         onCancel={() => setOpenEdit(false)}
         onOk={() => editForm.submit()}
         confirmLoading={updateMutation.isPending}
-        okText="Lưu"
-        cancelText="Hủy"
+        okText="Save"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <CustomerForm

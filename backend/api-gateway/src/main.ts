@@ -15,6 +15,10 @@
  *   /api/catalog/*    → Catalog Service   :3005
  *   /api/purchasing/* → Purchasing Service :3006
  */
+import { config } from 'dotenv';
+import { resolve } from 'path';
+config({ path: resolve(__dirname, '../../.env') });
+
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';

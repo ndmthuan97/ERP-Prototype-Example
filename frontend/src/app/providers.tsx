@@ -1,13 +1,14 @@
 'use client';
 import '@ant-design/v5-patch-for-react-19';
 // =============================================================================
-// PROVIDERS — gom mọi client provider (React Query + AntD + Auth)
+// PROVIDERS — wraps all client providers (React Query + AntD + Auth)
 // =============================================================================
-import { ConfigProvider, App as AntdApp } from 'antd';
-import viVN from 'antd/locale/vi_VN';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ConfigProvider, App as AntdApp, message as antdMessage } from 'antd';
+import enUS from 'antd/locale/en_US';
+import { QueryClient, QueryClientProvider, MutationCache, QueryCache } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
+import { toMessage } from '@/lib/api/errors';
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -20,13 +21,29 @@ export function Providers({ children }: { children: ReactNode }) {
             staleTime: 30_000,
           },
         },
+        queryCache: new QueryCache({
+          onError: (error, query) => {
+            // Only show global toast for queries without explicit onError
+            if (!query.options.meta?.skipGlobalErrorHandler) {
+              antdMessage.error(toMessage(error));
+            }
+          },
+        }),
+        mutationCache: new MutationCache({
+          onError: (error, _variables, _context, mutation) => {
+            // Only show global toast for mutations without explicit onError
+            if (!mutation.options.onError) {
+              antdMessage.error(toMessage(error));
+            }
+          },
+        }),
       }),
   );
 
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider
-        locale={viVN}
+        locale={enUS}
         theme={{
           token: {
             colorPrimary: '#1677ff',

@@ -216,6 +216,26 @@ export class SalesOrder {
   }
 
   // ==========================================================================
+  // SERIALIZATION
+  // ==========================================================================
+
+  toJSON() {
+    return {
+      id: this.id,
+      customerId: this.customerId,
+      status: this._status,
+      subtotalAmount: this._subtotalAmount,
+      totalTaxAmount: this._totalTaxAmount,
+      totalAmount: this._totalAmount,
+      cancelReason: this._cancelReason,
+      version: this.version,
+      lines: this._lines,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+
+  // ==========================================================================
   // FACTORY
   // ==========================================================================
 

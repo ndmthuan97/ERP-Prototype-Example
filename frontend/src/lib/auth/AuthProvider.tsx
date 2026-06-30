@@ -3,9 +3,9 @@
 // AUTH PROVIDER — Real authentication via auth-service API
 // =============================================================================
 // Flow:
-//   1. On mount: check localStorage for existing token → restore session
+//   1. On mount: check localStorage for token → validate JWT expiry → restore session
 //   2. login(email, password) → POST /auth/login → store JWT + user
-//   3. logout() → clear tokens + redirect to /login
+//   3. logout() → POST /auth/logout (server-side invalidation) → clear tokens → redirect
 //   4. Auth guard: redirect unauthenticated users to /login
 
 import {
@@ -19,7 +19,14 @@ import {
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
-import { setAuthToken, setRefreshToken, getAuthToken, clearTokens } from './token';
+import {
+  setAuthToken,
+  setRefreshToken,
+  getAuthToken,
+  getRefreshToken,
+  clearTokens,
+  isTokenExpired,
+} from './token';
 
 export type Role = 'admin' | 'manager' | 'staff' | 'viewer';
 
@@ -59,17 +66,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Restore session from localStorage on mount
+  // Restore session from localStorage on mount — validate JWT expiry
   useEffect(() => {
     const token = getAuthToken();
     const savedUser = localStorage.getItem(USER_STORAGE_KEY);
 
     if (token && savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch {
+      if (isTokenExpired()) {
+        // Token expired → clear and force re-login
+        // Token refresh will be handled by apiClient interceptor on next API call
         clearTokens();
         localStorage.removeItem(USER_STORAGE_KEY);
+      } else {
+        try {
+          setUser(JSON.parse(savedUser));
+        } catch {
+          clearTokens();
+          localStorage.removeItem(USER_STORAGE_KEY);
+        }
       }
     }
     setLoading(false);
@@ -95,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: res.user.role as Role,
     };
 
-    // Persist tokens and user
     setAuthToken(res.accessToken);
     setRefreshToken(res.refreshToken);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authUser));
@@ -103,6 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Fire-and-forget: invalidate refresh token on server
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      apiClient
+        .post('auth', '/api/auth/logout', { refreshToken })
+        .catch(() => {});
+    }
+
     clearTokens();
     localStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);

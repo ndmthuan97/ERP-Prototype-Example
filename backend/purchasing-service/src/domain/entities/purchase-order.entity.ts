@@ -207,6 +207,23 @@ export class PurchaseOrder extends AggregateRoot {
   }
 
   // ==========================================================================
+  // SERIALIZATION
+  // ==========================================================================
+
+  toJSON() {
+    return {
+      id: this.id,
+      supplierId: this.supplierId,
+      status: this.status,
+      version: this.version,
+      lines: this._lines,
+      totalCost: this.totalCost(),
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+
+  // ==========================================================================
   // FACTORY
   // ==========================================================================
 

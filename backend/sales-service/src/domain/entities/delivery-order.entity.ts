@@ -112,6 +112,19 @@ export class DeliveryOrder {
     this.touch();
   }
 
+  toJSON() {
+    return {
+      id: this.id,
+      salesOrderId: this.salesOrderId,
+      status: this.status,
+      failReason: this.failReason,
+      version: this.version,
+      lines: this._lines,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+
   private touch(): void {
     this.updatedAt = new Date();
   }

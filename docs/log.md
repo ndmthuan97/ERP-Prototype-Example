@@ -2,8 +2,29 @@
 
 Nhật ký thay đổi của knowledge bundle này.
 
+## 2026-06-30
+
+- Added: [GCP Cloud Architecture](./architecture/gcp-cloud-architecture.md) — System Component: target infrastructure trên GCP (Cloud Run, Cloud SQL, Pub/Sub, VPC, IAM, WIF, Terraform modules, chi phí ~$15-20/month)
+- Added: [CI/CD Pipeline](./architecture/cicd-pipeline.md) — System Component: GitHub Actions CI + Cloud Build CD, Workload Identity Federation, monorepo path filters, RBAC via GitHub Environments
+- Added: [GCP Implementation Plan](./architecture/gcp-implementation-plan.md) — Runbook: step-by-step plan ~37 files (Terraform modules, GitHub Actions, Cloud Build, Dockerfiles)
+- Updated: [architecture/index.md](./architecture/index.md) — thêm GCP Implementation Plan entry
+
+## 2026-06-29
+
+- Added: [learning/](./learning/index.md) — thư mục tài liệu học tập & nghiên cứu
+- Added: [learning/terraform/](./learning/terraform/index.md) — Terraform Pareto 80/20 knowledge bundle (7 concepts)
+- Added: [IaC & Terraform Overview](./learning/terraform/iac-and-terraform-overview.md) — Learning Note: tổng quan IaC, declarative model, vị trí trong DevOps
+- Added: [Core Concepts](./learning/terraform/core-concepts.md) — Concept Explanation: Provider, Resource, State, Module, Variables/Outputs
+- Added: [Core Workflow](./learning/terraform/core-workflow.md) — Concept Explanation: init → plan → apply → destroy, CI/CD integration
+- Added: [HCL Syntax & Project Structure](./learning/terraform/hcl-syntax-and-structure.md) — Reference: cú pháp HCL, variable types, project structure chuẩn
+- Added: [Best Practices](./learning/terraform/best-practices.md) — Learning Note: state management, security, code org, CI/CD
+- Added: [Ecosystem 2025-2026](./learning/terraform/ecosystem-2025-2026.md) — Comparison: BSL license, OpenTofu, Pulumi/CloudFormation/Ansible
+- Added: [Command Cheat Sheet](./learning/terraform/command-cheatsheet.md) — Reference: CLI commands tra cứu nhanh
+- Updated: [docs/index.md](./index.md) — thêm learning/ subdirectory entry
+
 ## 2026-06-27
 
+- Added: [Frontend Improvement Plan](./frontend-improvement-plan.md) — Technical Review: đánh giá toàn diện FE, 38 tasks chia 4 phase (bug fixes, missing features, UX, architecture)
 - Deleted: `docs/README.md` — trùng vai trò với `index.md`, nội dung merge vào Root README
 - Updated: [Root README](../README.md) — merge "Hướng dẫn đọc" + "Tìm theo nhu cầu" từ docs/README, cập nhật Quick Start dùng `install:all`/`dev:all`
 - Updated: [Getting Started](./development/getting-started.md) — rewrite: Docker chỉ cho Pub/Sub, backend chạy terminal với `dev:all`, cập nhật 6 services + ports

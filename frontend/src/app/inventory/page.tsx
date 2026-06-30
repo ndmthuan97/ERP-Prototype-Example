@@ -21,6 +21,7 @@ import {
   Col,
   Card,
   Tooltip,
+  Tag,
 } from 'antd';
 import {
   PlusOutlined,
@@ -70,19 +71,13 @@ export default function InventoryPage() {
     queryFn: () => inventoryApi.list({ q, page, limit }),
   });
 
-  // Fetch all items for accurate stat card computation
-  const statsQuery = useQuery({
-    queryKey: ['inventory', 'stats-all'],
-    queryFn: () => inventoryApi.list({ page: 1, limit: 9999 }),
-    staleTime: 30_000,
-  });
-
   // ---------------------------------------------------------------------------
-  // Derived stat values from API data
+  // Derived stat values from paginated data
+  // Low stock / out of stock are approximate (current page only) unless total < limit
   // ---------------------------------------------------------------------------
   const stats = useMemo(() => {
-    const items = statsQuery.data?.data ?? [];
-    const totalProducts = statsQuery.data?.total ?? 0;
+    const items = listQuery.data?.data ?? [];
+    const totalProducts = listQuery.data?.total ?? 0;
     const totalStock = items.reduce((sum, i) => sum + i.quantityAvailable, 0);
     const lowStockCount = items.filter(
       (i) => i.quantityAvailable > 0 && i.quantityAvailable <= 20,
@@ -92,12 +87,12 @@ export default function InventoryPage() {
     ).length;
 
     return { totalProducts, totalStock, lowStockCount, outOfStockCount };
-  }, [statsQuery.data]);
+  }, [listQuery.data]);
 
   const createMutation = useMutation({
     mutationFn: (input: CreateItemInput) => inventoryApi.create(input),
     onSuccess: () => {
-      message.success('Đã tạo sản phẩm');
+      message.success('Product created');
       setOpenCreate(false);
       createForm.resetFields();
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -124,7 +119,7 @@ export default function InventoryPage() {
     mutationFn: ({ sku, quantity }: { sku: string; quantity: number }) =>
       inventoryApi.receive(sku, quantity),
     onSuccess: (_, vars) => {
-      message.success(`Đã nhập kho ${vars.quantity} đơn vị cho ${vars.sku}`);
+      message.success(`Stock imported ${vars.quantity} units cho ${vars.sku}`);
       setReceiveTarget(null);
       receiveForm.resetFields();
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -173,16 +168,20 @@ export default function InventoryPage() {
         </a>
       ),
     },
-    { title: 'Tên', dataIndex: 'name', key: 'name' },
+    { title: 'Name', dataIndex: 'name', key: 'name' },
     {
-      title: 'SL khả dụng',
+      title: 'Qty Available',
       dataIndex: 'quantityAvailable',
       key: 'quantityAvailable',
       align: 'right',
       render: (v: number) => (
-        <span style={{ color: getQuantityColor(v), fontWeight: 600 }}>
-          {v.toLocaleString('vi-VN')}
-        </span>
+        <Space size={4}>
+          <span style={{ color: getQuantityColor(v), fontWeight: 600 }}>
+            {v.toLocaleString('vi-VN')}
+          </span>
+          {v === 0 && <Tag color="error" style={{ margin: 0, fontSize: 11 }}>Out of Stock</Tag>}
+          {v > 0 && v <= 20 && <Tag color="warning" style={{ margin: 0, fontSize: 11 }}>Low Stock</Tag>}
+        </Space>
       ),
     },
     {
@@ -193,17 +192,17 @@ export default function InventoryPage() {
       render: (v: number) => v.toLocaleString('vi-VN'),
     },
     {
-      title: 'Ngày tạo',
+      title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (v: string) => formatDateTime(v),
     },
     {
-      title: 'Thao tác',
+      title: 'Action',
       key: 'actions',
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title="Chi tiết">
+          <Tooltip title="Details">
             <Button
               type="text"
               size="small"
@@ -211,7 +210,7 @@ export default function InventoryPage() {
               onClick={() => router.push(`/inventory/${encodeURIComponent(record.sku)}`)}
             />
           </Tooltip>
-          <Tooltip title="Nhập kho">
+          <Tooltip title="Import Stock">
             <Button
               type="text"
               size="small"
@@ -219,7 +218,7 @@ export default function InventoryPage() {
               onClick={() => setReceiveTarget(record)}
             />
           </Tooltip>
-          <Tooltip title="Kiểm tra tồn">
+          <Tooltip title="Check Availability">
             <Button
               type="text"
               size="small"
@@ -244,14 +243,14 @@ export default function InventoryPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
-          Tồn kho
+          Inventory
         </Typography.Title>
         <Button
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => setOpenCreate(true)}
         >
-          Tạo sản phẩm
+          Create Product
         </Button>
       </div>
 
@@ -262,8 +261,8 @@ export default function InventoryPage() {
             icon={<AppstoreOutlined />}
             iconBgColor="rgba(22,119,255,0.1)"
             iconColor="#1677ff"
-            label="Tổng sản phẩm"
-            value={statsQuery.data ? String(stats.totalProducts) : '—'}
+            label="Total Products"
+            value={listQuery.data ? String(stats.totalProducts) : '—'}
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -271,8 +270,8 @@ export default function InventoryPage() {
             icon={<DollarOutlined />}
             iconBgColor="rgba(82,196,26,0.1)"
             iconColor="#52c41a"
-            label="Tổng tồn kho"
-            value={statsQuery.data ? stats.totalStock.toLocaleString('vi-VN') : '—'}
+            label="Total Stock"
+            value={listQuery.data ? stats.totalStock.toLocaleString('vi-VN') : '—'}
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -280,12 +279,12 @@ export default function InventoryPage() {
             icon={<WarningOutlined />}
             iconBgColor="rgba(250,173,20,0.1)"
             iconColor="#faad14"
-            label="Sắp hết hàng"
-            value={statsQuery.data ? String(stats.lowStockCount) : '—'}
+            label="Low Stock Items"
+            value={listQuery.data ? String(stats.lowStockCount) : '—'}
             trend={{
               text: stats.lowStockCount > 0
-                ? `${stats.lowStockCount} sản phẩm cần nhập thêm`
-                : 'Đủ hàng',
+                ? `${stats.lowStockCount} products items need restocking`
+                : 'All stocked',
               color: stats.lowStockCount > 0 ? 'orange' : 'green',
             }}
           />
@@ -295,12 +294,12 @@ export default function InventoryPage() {
             icon={<StopOutlined />}
             iconBgColor="rgba(255,77,79,0.1)"
             iconColor="#ff4d4f"
-            label="Hết hàng"
-            value={statsQuery.data ? String(stats.outOfStockCount) : '—'}
+            label="Out of Stock"
+            value={listQuery.data ? String(stats.outOfStockCount) : '—'}
             trend={{
               text: stats.outOfStockCount > 0
-                ? 'Cần nhập ngay'
-                : 'Tất cả còn hàng',
+                ? 'Needs restocking'
+                : 'All in stock',
               color: stats.outOfStockCount > 0 ? 'red' : 'green',
             }}
           />
@@ -312,7 +311,7 @@ export default function InventoryPage() {
         <Space>
           <Input.Search
             allowClear
-            placeholder="Tìm theo SKU hoặc tên…"
+            placeholder="Search by SKU or name…"
             style={{ width: 320 }}
             onSearch={(value) => {
               setQ(value);
@@ -320,7 +319,7 @@ export default function InventoryPage() {
             }}
           />
           <Button icon={<ReloadOutlined />} onClick={() => listQuery.refetch()}>
-            Tải lại
+            Reload
           </Button>
         </Space>
       </Card>
@@ -342,7 +341,7 @@ export default function InventoryPage() {
             pageSize: limit,
             total: listQuery.data?.total ?? 0,
             showSizeChanger: true,
-            showTotal: (total) => `${total} sản phẩm`,
+            showTotal: (total) => `${total} products`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);
@@ -353,13 +352,13 @@ export default function InventoryPage() {
 
       {/* ---- Create Item Modal ---- */}
       <Modal
-        title="Tạo sản phẩm"
+        title="Create Product"
         open={openCreate}
         onCancel={() => setOpenCreate(false)}
         onOk={() => createForm.submit()}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <Form<CreateItemInput>
@@ -371,24 +370,24 @@ export default function InventoryPage() {
             label="SKU"
             name="sku"
             rules={[
-              { required: true, message: 'Vui lòng nhập SKU' },
-              { min: 2, max: 64, message: 'SKU từ 2–64 ký tự' },
+              { required: true, message: 'Please enter SKU' },
+              { min: 2, max: 64, message: 'SKU must be 2–64 characters' },
             ]}
           >
             <Input placeholder="VD: SP-001" />
           </Form.Item>
           <Form.Item
-            label="Tên sản phẩm"
+            label="Product Name"
             name="name"
             rules={[
-              { required: true, message: 'Vui lòng nhập tên' },
-              { min: 2, message: 'Tối thiểu 2 ký tự' },
+              { required: true, message: 'Please enter name' },
+              { min: 2, message: 'At least 2 characters' },
             ]}
           >
-            <Input placeholder="Sản phẩm ABC" />
+            <Input placeholder="Products ABC" />
           </Form.Item>
           <Form.Item
-            label="Số lượng ban đầu"
+            label="Initial Quantity"
             name="initialQuantity"
             initialValue={0}
           >
@@ -404,7 +403,7 @@ export default function InventoryPage() {
 
       {/* ---- Receive Stock Modal ---- */}
       <Modal
-        title={`Nhập kho — ${receiveTarget?.sku ?? ''}`}
+        title={`Import Stock — ${receiveTarget?.sku ?? ''}`}
         open={!!receiveTarget}
         onCancel={() => {
           setReceiveTarget(null);
@@ -412,8 +411,8 @@ export default function InventoryPage() {
         }}
         onOk={() => receiveForm.submit()}
         confirmLoading={receiveMutation.isPending}
-        okText="Nhập kho"
-        cancelText="Hủy"
+        okText="Import Stock"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <Form<{ quantity: number }>
@@ -425,18 +424,18 @@ export default function InventoryPage() {
           }
         >
           <Form.Item
-            label="Số lượng nhập"
+            label="Import Quantity"
             name="quantity"
             rules={[
-              { required: true, message: 'Vui lòng nhập số lượng' },
-              { type: 'number', min: 1, message: 'Số lượng phải ≥ 1' },
+              { required: true, message: 'Please enter quantity' },
+              { type: 'number', min: 1, message: 'Quantity must be ≥ 1' },
             ]}
           >
             <InputNumber<number>
               style={{ width: '100%' }}
               min={1}
               precision={0}
-              placeholder="Nhập số lượng"
+              placeholder="Enter quantity"
             />
           </Form.Item>
         </Form>
@@ -444,7 +443,7 @@ export default function InventoryPage() {
 
       {/* ---- Availability Check Modal ---- */}
       <Modal
-        title={`Kiểm tra tồn — ${availTarget?.sku ?? ''}`}
+        title={`Check Availability — ${availTarget?.sku ?? ''}`}
         open={!!availTarget}
         onCancel={() => {
           setAvailTarget(null);
@@ -460,23 +459,23 @@ export default function InventoryPage() {
           onFinish={handleCheckAvailability}
         >
           <Form.Item
-            label="Số lượng cần kiểm tra"
+            label="Quantity to Check"
             name="quantity"
             rules={[
-              { required: true, message: 'Vui lòng nhập số lượng' },
-              { type: 'number', min: 1, message: 'Số lượng phải ≥ 1' },
+              { required: true, message: 'Please enter quantity' },
+              { type: 'number', min: 1, message: 'Quantity must be ≥ 1' },
             ]}
           >
             <InputNumber<number>
               style={{ width: '100%' }}
               min={1}
               precision={0}
-              placeholder="Nhập số lượng"
+              placeholder="Enter quantity"
             />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" loading={availLoading}>
-              Kiểm tra
+              Check
             </Button>
           </Form.Item>
         </Form>
@@ -484,21 +483,21 @@ export default function InventoryPage() {
         {availResult && (
           <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
             <Col span={6}>
-              <Statistic title="Khả dụng" value={availResult.available} />
+              <Statistic title="Available" value={availResult.available} />
             </Col>
             <Col span={6}>
-              <Statistic title="Đã giữ" value={availResult.reserved} />
+              <Statistic title="Reserved" value={availResult.reserved} />
             </Col>
             <Col span={6}>
-              <Statistic title="Tổng" value={availResult.total} />
+              <Statistic title="Total" value={availResult.total} />
             </Col>
             <Col span={6}>
               <Statistic
-                title="Có thể giữ"
+                title="Can Reserve"
                 valueRender={() => (
                   <Badge
                     status={availResult.canReserve ? 'success' : 'error'}
-                    text={availResult.canReserve ? 'Có' : 'Không'}
+                    text={availResult.canReserve ? 'Yes' : 'No'}
                   />
                 )}
               />

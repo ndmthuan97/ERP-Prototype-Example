@@ -98,7 +98,7 @@ describe('DeliveryOrder — Full Lifecycle Flow', () => {
           failReason: null, version: 0, lines: [createLine()],
           createdAt: new Date(), updatedAt: new Date(),
         });
-        expect(() => delivery.addLine(createLine('dl-2'))).toThrow(/Cannot add lines/);
+        expect(() => delivery.addLine(createLine('dl-2'))).toThrow(/Cannot.*addLine/);
       },
     );
   });
@@ -115,7 +115,7 @@ describe('DeliveryOrder — Full Lifecycle Flow', () => {
     it('should reject when not draft', () => {
       const delivery = createDraftWithLines();
       delivery.startPicking();
-      expect(() => delivery.startPicking()).toThrow(/Cannot start picking/);
+      expect(() => delivery.startPicking()).toThrow(/Cannot.*startPicking/);
     });
   });
 
@@ -125,27 +125,27 @@ describe('DeliveryOrder — Full Lifecycle Flow', () => {
   describe('Transition guards', () => {
     it('pack() should reject from draft', () => {
       const delivery = createDraftWithLines();
-      expect(() => delivery.pack()).toThrow(/Cannot pack/);
+      expect(() => delivery.pack()).toThrow(/Cannot.*pack/);
     });
 
     it('ship() should reject from picking', () => {
       const delivery = createDraftWithLines();
       delivery.startPicking();
-      expect(() => delivery.ship()).toThrow(/Cannot ship/);
+      expect(() => delivery.ship()).toThrow(/Cannot.*ship/);
     });
 
     it('confirmDelivery() should reject from packed', () => {
       const delivery = createDraftWithLines();
       delivery.startPicking();
       delivery.pack();
-      expect(() => delivery.confirmDelivery()).toThrow(/Cannot confirm delivery/);
+      expect(() => delivery.confirmDelivery()).toThrow(/Cannot.*confirmDelivery/);
     });
 
     it('markFailed() should reject from packed (not yet shipped)', () => {
       const delivery = createDraftWithLines();
       delivery.startPicking();
       delivery.pack();
-      expect(() => delivery.markFailed('reason')).toThrow(/Cannot mark as failed/);
+      expect(() => delivery.markFailed('reason')).toThrow(/Cannot.*markFailed/);
     });
   });
 

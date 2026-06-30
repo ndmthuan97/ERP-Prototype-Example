@@ -24,6 +24,7 @@ import {
   Col,
   Input,
   Tooltip,
+  DatePicker,
 } from 'antd';
 import {
   PlusOutlined,
@@ -46,6 +47,7 @@ import type {
 import { toMessage } from '@/lib/api/errors';
 import { formatVnd, formatDateTime } from '@/lib/format';
 import { StatCard } from '@/components/StatCard';
+import { ORDER_STATUS, statusLabel } from '@/lib/constants/status';
 
 const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   draft: 'default',
@@ -57,12 +59,12 @@ const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
 };
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'Tất cả' },
+  { value: '', label: 'All' },
   { value: 'draft', label: 'Draft' },
   { value: 'submitted', label: 'Submitted' },
   { value: 'confirmed', label: 'Confirmed' },
-  { value: 'partially_delivered', label: 'Giao một phần' },
-  { value: 'fully_delivered', label: 'Đã giao đủ' },
+  { value: 'partially_delivered', label: 'Partially Delivered' },
+  { value: 'fully_delivered', label: 'Fully Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
@@ -76,6 +78,7 @@ export default function OrdersPage() {
   const [limit, setLimit] = useState(20);
   const [openCreate, setOpenCreate] = useState(false);
   const [form] = Form.useForm<CreateOrderInput>();
+  const [dateRange, setDateRange] = useState<[string, string] | null>(null);
 
   // Async customer search state
   const [customerSearch, setCustomerSearch] = useState('');
@@ -83,9 +86,15 @@ export default function OrdersPage() {
   // ---- Queries ----
 
   const listQuery = useQuery({
-    queryKey: ['orders', { status, page, limit }],
+    queryKey: ['orders', { status, page, limit, dateRange }],
     queryFn: () =>
-      salesApi.list({ page, limit, status: status || undefined }),
+      salesApi.list({
+        page,
+        limit,
+        status: status || undefined,
+        createdFrom: dateRange?.[0],
+        createdTo: dateRange?.[1],
+      }),
   });
 
   const customerSearchQuery = useQuery({
@@ -118,7 +127,7 @@ export default function OrdersPage() {
   const createMutation = useMutation({
     mutationFn: (input: CreateOrderInput) => salesApi.createDraft(input),
     onSuccess: (order) => {
-      message.success('Đã tạo đơn hàng draft');
+      message.success('Order created draft');
       setOpenCreate(false);
       form.resetFields();
       setCustomerSearch('');
@@ -141,7 +150,7 @@ export default function OrdersPage() {
 
   const columns: ColumnsType<SalesOrderSummary> = [
     {
-      title: 'Mã đơn',
+      title: 'Order ID',
       dataIndex: 'id',
       key: 'id',
       render: (id: string) => (
@@ -154,7 +163,7 @@ export default function OrdersPage() {
       ),
     },
     {
-      title: 'Khách hàng',
+      title: 'Customers',
       dataIndex: 'customerId',
       key: 'customerId',
       render: (id: string) => (
@@ -164,38 +173,38 @@ export default function OrdersPage() {
       ),
     },
     {
-      title: 'Trạng thái',
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       render: (s: OrderStatus) => (
-        <Tag color={ORDER_STATUS_COLOR[s]}>{s}</Tag>
+        <Tag color={ORDER_STATUS.color[s]}>{statusLabel(ORDER_STATUS.label, s)}</Tag>
       ),
     },
     {
-      title: 'Tổng tiền',
+      title: 'Total Amount',
       dataIndex: 'totalAmount',
       key: 'totalAmount',
       align: 'right',
       render: (v: number) => formatVnd(v),
     },
     {
-      title: 'Số dòng',
+      title: 'Lines',
       dataIndex: 'lineCount',
       key: 'lineCount',
       align: 'center',
     },
     {
-      title: 'Ngày tạo',
+      title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (v: string) => formatDateTime(v),
     },
     {
-      title: 'Hành động',
+      title: 'Actions',
       key: 'actions',
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title="Chi tiết">
+          <Tooltip title="Details">
             <Button
               type="text"
               size="small"
@@ -217,14 +226,14 @@ export default function OrdersPage() {
       {/* Page header */}
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
-          Đơn hàng
+          Orders
         </Typography.Title>
         <Button
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => setOpenCreate(true)}
         >
-          Tạo đơn hàng
+          Create Order
         </Button>
       </Space>
 
@@ -235,7 +244,7 @@ export default function OrdersPage() {
             icon={<ShoppingCartOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(22,119,255,0.1)"
             iconColor="#1677ff"
-            label="Tổng đơn hàng"
+            label="Total Items"
             value={meta?.total ?? '—'}
           />
         </Col>
@@ -244,7 +253,7 @@ export default function OrdersPage() {
             icon={<ClockCircleOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(250,173,20,0.1)"
             iconColor="#faad14"
-            label="Chờ xử lý"
+            label="Pending"
             value={String(pendingCount)}
           />
         </Col>
@@ -253,7 +262,7 @@ export default function OrdersPage() {
             icon={<SendOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(19,194,194,0.1)"
             iconColor="#13c2c2"
-            label="Đang giao"
+            label="In Transit"
             value={String(shippingCount)}
           />
         </Col>
@@ -262,7 +271,7 @@ export default function OrdersPage() {
             icon={<DollarOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(82,196,26,0.1)"
             iconColor="#52c41a"
-            label="Doanh thu (trang hiện tại)"
+            label="Revenue (current page)"
             value={formatVnd(totalRevenue)}
           />
         </Col>
@@ -275,7 +284,7 @@ export default function OrdersPage() {
       >
         <Space wrap>
           <Input.Search
-            placeholder="Tìm đơn hàng…"
+            placeholder="Search orders…"
             allowClear
             style={{ width: 260 }}
           />
@@ -284,14 +293,29 @@ export default function OrdersPage() {
             onChange={handleStatusChange}
             options={STATUS_OPTIONS}
             style={{ width: 180 }}
-            placeholder="Lọc trạng thái"
+            placeholder="Filter by status"
           />
           <Button
             icon={<ReloadOutlined />}
             onClick={() => listQuery.refetch()}
           >
-            Tải lại
+            Reload
           </Button>
+          <DatePicker.RangePicker
+            style={{ width: 260 }}
+            onChange={(dates) => {
+              if (dates && dates[0] && dates[1]) {
+                setDateRange([
+                  dates[0].toISOString(),
+                  dates[1].toISOString(),
+                ]);
+              } else {
+                setDateRange(null);
+              }
+              setPage(1);
+            }}
+            placeholder={['From date', 'To date']}
+          />
         </Space>
       </Card>
 
@@ -299,7 +323,7 @@ export default function OrdersPage() {
         <Alert
           type="error"
           showIcon
-          message="Không thể tải danh sách đơn hàng"
+          message="Failed to load orders"
           description={toMessage(listQuery.error)}
         />
       )}
@@ -318,7 +342,7 @@ export default function OrdersPage() {
           pageSize: meta?.limit ?? limit,
           total: meta?.total ?? 0,
           showSizeChanger: true,
-          showTotal: (total) => `${total} đơn hàng`,
+          showTotal: (total) => `${total} orders`,
           onChange: (nextPage, nextSize) => {
             setPage(nextPage);
             setLimit(nextSize);
@@ -328,7 +352,7 @@ export default function OrdersPage() {
 
       {/* ---- Create Draft Modal ---- */}
       <Modal
-        title="Tạo đơn hàng"
+        title="Create Order"
         open={openCreate}
         onCancel={() => {
           setOpenCreate(false);
@@ -337,8 +361,8 @@ export default function OrdersPage() {
         }}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <Form<CreateOrderInput>
@@ -347,18 +371,18 @@ export default function OrdersPage() {
           onFinish={(values) => createMutation.mutate(values)}
         >
           <Form.Item
-            label="Khách hàng"
+            label="Customers"
             name="customerId"
-            rules={[{ required: true, message: 'Vui lòng chọn khách hàng' }]}
+            rules={[{ required: true, message: 'Please select a customer' }]}
           >
             <Select
               showSearch
               filterOption={false}
-              placeholder="Tìm khách hàng…"
+              placeholder="Search customers…"
               onSearch={setCustomerSearch}
               loading={customerSearchQuery.isFetching}
               notFoundContent={
-                customerSearchQuery.isFetching ? 'Đang tìm…' : 'Không tìm thấy'
+                customerSearchQuery.isFetching ? 'Searching…' : 'Not found'
               }
               options={(customerSearchQuery.data?.data ?? []).map((c) => ({
                 value: c.id,

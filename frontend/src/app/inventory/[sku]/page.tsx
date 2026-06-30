@@ -22,8 +22,9 @@ import {
   App,
   Form,
   Result,
+  Empty,
 } from 'antd';
-import { HomeOutlined, ImportOutlined, SearchOutlined } from '@ant-design/icons';
+import { HomeOutlined, ImportOutlined, SearchOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { inventoryApi } from '@/lib/api/inventory';
@@ -56,7 +57,7 @@ export default function InventoryDetailPage() {
   const receiveMutation = useMutation({
     mutationFn: (quantity: number) => inventoryApi.receive(sku, quantity),
     onSuccess: (_, qty) => {
-      message.success(`Đã nhập kho ${qty} đơn vị`);
+      message.success(`Stock imported ${qty} units`);
       setReceiveQty(null);
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
     },
@@ -82,7 +83,7 @@ export default function InventoryDetailPage() {
   if (itemQuery.isLoading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" tip="Đang tải…" />
+        <Spin size="large" tip="Loading…" />
       </div>
     );
   }
@@ -95,11 +96,11 @@ export default function InventoryDetailPage() {
       return (
         <Result
           status="404"
-          title="Không tìm thấy"
-          subTitle={`SKU "${sku}" không tồn tại trong hệ thống.`}
+          title="Not found"
+          subTitle={`SKU "${sku}" does not exist.`}
           extra={
             <Link href="/inventory">
-              <Button type="primary">Về danh sách tồn kho</Button>
+              <Button type="primary">Back to Inventory</Button>
             </Link>
           }
         />
@@ -110,10 +111,10 @@ export default function InventoryDetailPage() {
       <Alert
         type="error"
         showIcon
-        message="Lỗi tải dữ liệu"
+        message="Failed to load data"
         description={toMessage(itemQuery.error)}
         action={
-          <Button onClick={() => itemQuery.refetch()}>Thử lại</Button>
+          <Button onClick={() => itemQuery.refetch()}>Retry</Button>
         }
       />
     );
@@ -129,12 +130,12 @@ export default function InventoryDetailPage() {
           {
             title: (
               <Link href="/">
-                <HomeOutlined /> Tổng quan
+                <HomeOutlined /> Dashboard
               </Link>
             ),
           },
           {
-            title: <Link href="/inventory">Tồn kho</Link>,
+            title: <Link href="/inventory">Inventory</Link>,
           },
           { title: item.sku },
         ]}
@@ -147,20 +148,20 @@ export default function InventoryDetailPage() {
       {/* ---- Item Details ---- */}
       <Descriptions bordered column={{ xs: 1, sm: 2 }}>
         <Descriptions.Item label="SKU">{item.sku}</Descriptions.Item>
-        <Descriptions.Item label="Tên sản phẩm">{item.name}</Descriptions.Item>
-        <Descriptions.Item label="SL khả dụng">
+        <Descriptions.Item label="Product Name">{item.name}</Descriptions.Item>
+        <Descriptions.Item label="Qty Available">
           {item.quantityAvailable.toLocaleString('vi-VN')}
         </Descriptions.Item>
-        <Descriptions.Item label="SL đã giữ">
+        <Descriptions.Item label="Qty Reserved">
           {item.quantityReserved.toLocaleString('vi-VN')}
         </Descriptions.Item>
-        <Descriptions.Item label="Phiên bản (version)">
+        <Descriptions.Item label="Version (version)">
           {item.version}
         </Descriptions.Item>
-        <Descriptions.Item label="Ngày tạo">
+        <Descriptions.Item label="Created">
           {formatDateTime(item.createdAt)}
         </Descriptions.Item>
-        <Descriptions.Item label="Cập nhật lần cuối">
+        <Descriptions.Item label="Last Updated">
           {formatDateTime(item.updatedAt)}
         </Descriptions.Item>
       </Descriptions>
@@ -172,18 +173,18 @@ export default function InventoryDetailPage() {
             title={
               <Space>
                 <ImportOutlined />
-                Nhập kho
+                Import Stock
               </Space>
             }
           >
             <Form layout="inline" onFinish={() => receiveQty && receiveMutation.mutate(receiveQty)}>
-              <Form.Item label="Số lượng">
+              <Form.Item label="Quantity">
                 <InputNumber<number>
                   min={1}
                   precision={0}
                   value={receiveQty}
                   onChange={(v) => setReceiveQty(v)}
-                  placeholder="Nhập SL"
+                  placeholder="Enter qty"
                   style={{ width: 140 }}
                 />
               </Form.Item>
@@ -194,7 +195,7 @@ export default function InventoryDetailPage() {
                   loading={receiveMutation.isPending}
                   disabled={!receiveQty || receiveQty < 1}
                 >
-                  Nhập kho
+                  Import Stock
                 </Button>
               </Form.Item>
             </Form>
@@ -207,18 +208,18 @@ export default function InventoryDetailPage() {
             title={
               <Space>
                 <SearchOutlined />
-                Kiểm tra tồn
+                Check Availability
               </Space>
             }
           >
             <Form layout="inline" onFinish={handleCheckAvailability}>
-              <Form.Item label="Số lượng">
+              <Form.Item label="Quantity">
                 <InputNumber<number>
                   min={1}
                   precision={0}
                   value={availQty}
                   onChange={(v) => setAvailQty(v)}
-                  placeholder="Nhập SL"
+                  placeholder="Enter qty"
                   style={{ width: 140 }}
                 />
               </Form.Item>
@@ -229,7 +230,7 @@ export default function InventoryDetailPage() {
                   loading={availLoading}
                   disabled={!availQty || availQty < 1}
                 >
-                  Kiểm tra
+                  Check
                 </Button>
               </Form.Item>
             </Form>
@@ -237,21 +238,21 @@ export default function InventoryDetailPage() {
             {availResult && (
               <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
                 <Col span={6}>
-                  <Statistic title="Khả dụng" value={availResult.available} />
+                  <Statistic title="Available" value={availResult.available} />
                 </Col>
                 <Col span={6}>
-                  <Statistic title="Đã giữ" value={availResult.reserved} />
+                  <Statistic title="Reserved" value={availResult.reserved} />
                 </Col>
                 <Col span={6}>
-                  <Statistic title="Tổng" value={availResult.total} />
+                  <Statistic title="Total" value={availResult.total} />
                 </Col>
                 <Col span={6}>
                   <Statistic
-                    title="Có thể giữ"
+                    title="Can Reserve"
                     valueRender={() => (
                       <Badge
                         status={availResult.canReserve ? 'success' : 'error'}
-                        text={availResult.canReserve ? 'Có' : 'Không'}
+                        text={availResult.canReserve ? 'Yes' : 'No'}
                       />
                     )}
                   />
@@ -261,6 +262,27 @@ export default function InventoryDetailPage() {
           </Card>
         </Col>
       </Row>
+
+      {/* Stock Movement History — placeholder until BE provides endpoint */}
+      <Card
+        title={
+          <Space>
+            <HistoryOutlined />
+            Stock Movement History
+          </Space>
+        }
+      >
+        <Empty
+          description={
+            <>
+              <Typography.Text type="secondary">
+                Stock movement history will be available when the backend provides
+                a movement log endpoint.
+              </Typography.Text>
+            </>
+          }
+        />
+      </Card>
     </Space>
   );
 }

@@ -124,7 +124,7 @@ describe('Flow 2: Saga Compensation Scenarios', () => {
     order.markFailedNoStock();
 
     expect(order.status).toBe('cancelled');
-    expect(order.cancelReason).toContain('tồn kho');
+    expect(order.cancelReason).toContain('Insufficient stock');
   });
 
   it('should cancel on credit check failure', () => {

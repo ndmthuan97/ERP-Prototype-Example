@@ -140,6 +140,7 @@ export interface AddLineInput {
   itemName: string;
   quantity: number;
   unitPrice: number;
+  taxRate?: number;
 }
 
 export interface LifecycleEvent {

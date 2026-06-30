@@ -13,11 +13,12 @@ import type {
 const SVC = 'customer' as const;
 
 export const customerApi = {
-  list: (params: { q?: string; page?: number; limit?: number }) =>
+  list: (params: { q?: string; page?: number; limit?: number; status?: string }) =>
     apiClient.get<Paginated<Customer>>(SVC, '/api/customers', {
       q: params.q,
       page: params.page,
       limit: params.limit,
+      status: params.status,
     }),
 
   get: (id: string) => apiClient.get<Customer>(SVC, `/api/customers/${id}`),

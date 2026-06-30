@@ -9,13 +9,16 @@ import {
   ShoppingCartOutlined,
   DollarOutlined,
   WarningOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { StatCard } from '@/components/StatCard';
 import { customerApi } from '@/lib/api/customer';
 import { salesApi } from '@/lib/api/sales';
 import { inventoryApi } from '@/lib/api/inventory';
+import { purchasingApi } from '@/lib/api/purchasing';
 import { formatVnd, formatDateTime } from '@/lib/format';
+import { PO_STATUS } from '@/lib/constants/status';
 
 // ---------------------------------------------------------------------------
 // Static demo data — no aggregate/time-series API exists for these yet
@@ -32,10 +35,10 @@ const BAR_DATA = [
 
 // Fallback donut segments when no real order data available
 const FALLBACK_DONUT_SEGMENTS = [
-  { label: 'Hoàn thành', pct: 45, color: '#52c41a' },
-  { label: 'Đang xử lý', pct: 30, color: '#1677ff' },
-  { label: 'Đang giao', pct: 15, color: '#faad14' },
-  { label: 'Đã hủy', pct: 10, color: '#ff4d4f' },
+  { label: 'Completed', pct: 45, color: '#52c41a' },
+  { label: 'Processing', pct: 30, color: '#1677ff' },
+  { label: 'In Transit', pct: 15, color: '#faad14' },
+  { label: 'Cancelled', pct: 10, color: '#ff4d4f' },
 ];
 
 const ORDER_STATUS_COLOR: Record<string, string> = {
@@ -48,22 +51,22 @@ const ORDER_STATUS_COLOR: Record<string, string> = {
 };
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
-  draft: 'Nháp',
-  submitted: 'Đang xử lý',
-  confirmed: 'Xác nhận',
-  partially_delivered: 'Giao một phần',
-  fully_delivered: 'Đã giao đủ',
-  cancelled: 'Đã hủy',
+  draft: 'Draft',
+  submitted: 'Processing',
+  confirmed: 'Confirm',
+  partially_delivered: 'Partially Delivered',
+  fully_delivered: 'Fully Delivered',
+  cancelled: 'Cancelled',
 };
 
 // Color mapping for donut chart segments by order status
 const STATUS_DONUT_CONFIG: Record<string, { label: string; color: string }> = {
-  confirmed: { label: 'Xác nhận', color: '#52c41a' },
-  submitted: { label: 'Đang xử lý', color: '#1677ff' },
-  draft: { label: 'Nháp', color: '#8c8c8c' },
-  partially_delivered: { label: 'Giao một phần', color: '#faad14' },
-  fully_delivered: { label: 'Đã giao đủ', color: '#13c2c2' },
-  cancelled: { label: 'Đã hủy', color: '#ff4d4f' },
+  confirmed: { label: 'Confirm', color: '#52c41a' },
+  submitted: { label: 'Processing', color: '#1677ff' },
+  draft: { label: 'Draft', color: '#8c8c8c' },
+  partially_delivered: { label: 'Partially Delivered', color: '#faad14' },
+  fully_delivered: { label: 'Fully Delivered', color: '#13c2c2' },
+  cancelled: { label: 'Cancelled', color: '#ff4d4f' },
 };
 
 const LOW_STOCK_THRESHOLD = 50;
@@ -108,6 +111,12 @@ export default function DashboardPage() {
   const { data: inventoryData, isLoading: inventoryLoading } = useQuery({
     queryKey: ['dashboard', 'inventory'],
     queryFn: () => inventoryApi.list({ limit: 100 }),
+    staleTime: 60_000,
+  });
+
+  const { data: poData, isLoading: poLoading } = useQuery({
+    queryKey: ['dashboard', 'purchasing'],
+    queryFn: () => purchasingApi.list({ limit: 5 }),
     staleTime: 60_000,
   });
 
@@ -157,6 +166,19 @@ export default function DashboardPage() {
     }));
   }, [ordersData]);
 
+  // Recent POs
+  const recentPOs = useMemo(() => {
+    if (!poData?.data) return [];
+    return poData.data.map((po) => ({
+      key: po.id,
+      id: po.id.slice(0, 8).toUpperCase(),
+      total: po.totalCost,
+      status: po.status,
+      lines: po.lineCount,
+      date: formatDateTime(po.createdAt),
+    }));
+  }, [poData]);
+
   // Donut chart segments computed from real order status distribution
   const donutSegments = useMemo(() => {
     const source = allOrdersData?.data;
@@ -200,20 +222,20 @@ export default function DashboardPage() {
             Dashboard
           </Typography.Title>
           <Typography.Text type="secondary">
-            Tổng quan hoạt động kinh doanh
+            Business Overview
           </Typography.Text>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <Spin spinning={anyLoading} tip="Đang tải dữ liệu…">
+      <Spin spinning={anyLoading} tip="Loading data…">
         <Row gutter={16}>
           <Col xs={24} sm={12} xl={6}>
             <StatCard
               icon={<TeamOutlined />}
               iconBgColor="rgba(22,119,255,0.1)"
               iconColor="#1677ff"
-              label="Tổng khách hàng"
+              label="Total Customers"
               value={customerData?.total ?? loadingPlaceholder}
             />
           </Col>
@@ -222,7 +244,7 @@ export default function DashboardPage() {
               icon={<ShoppingCartOutlined />}
               iconBgColor="rgba(82,196,26,0.1)"
               iconColor="#52c41a"
-              label="Đơn hàng"
+              label="Orders"
               value={ordersData?.meta?.total ?? loadingPlaceholder}
             />
           </Col>
@@ -231,7 +253,7 @@ export default function DashboardPage() {
               icon={<DollarOutlined />}
               iconBgColor="rgba(250,173,20,0.1)"
               iconColor="#faad14"
-              label="Doanh thu (trang hiện tại)"
+              label="Revenue (current page)"
               value={ordersData ? formatVnd(revenueSum) : loadingPlaceholder}
             />
           </Col>
@@ -240,13 +262,22 @@ export default function DashboardPage() {
               icon={<WarningOutlined />}
               iconBgColor="rgba(255,77,79,0.1)"
               iconColor="#ff4d4f"
-              label="Tồn kho cảnh báo"
+              label="Inventory warnings"
               value={inventoryData ? lowStockCount : loadingPlaceholder}
               trend={
                 lowStockCount > 0
-                  ? { text: 'Cần nhập thêm hàng', color: 'red' }
+                  ? { text: 'Need to restock', color: 'red' }
                   : undefined
               }
+            />
+          </Col>
+          <Col xs={24} sm={12} xl={6}>
+            <StatCard
+              icon={<FileTextOutlined />}
+              iconBgColor="rgba(114,46,209,0.1)"
+              iconColor="#722ed1"
+              label="Purchase Orders"
+              value={poData?.total ?? loadingPlaceholder}
             />
           </Col>
         </Row>
@@ -259,7 +290,7 @@ export default function DashboardPage() {
           <Card
             title={
               <Typography.Text strong style={{ fontSize: 16 }}>
-                Doanh thu 7 ngày gần nhất
+                Revenue (Last 7 Days)
               </Typography.Text>
             }
             style={{ borderRadius: 12, height: '100%' }}
@@ -295,7 +326,7 @@ export default function DashboardPage() {
           <Card
             title={
               <Typography.Text strong style={{ fontSize: 16 }}>
-                Tỷ lệ đơn hàng
+                Order Distribution
               </Typography.Text>
             }
             style={{ borderRadius: 12, height: '100%' }}
@@ -308,7 +339,7 @@ export default function DashboardPage() {
               >
                 <div className="donut-hole">
                   <span className="donut-total">100%</span>
-                  <span className="donut-label">Tổng đơn</span>
+                  <span className="donut-label">Total</span>
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
@@ -343,7 +374,7 @@ export default function DashboardPage() {
           <Card
             title={
               <Typography.Text strong style={{ fontSize: 16 }}>
-                Đơn hàng gần đây
+                Orders Recent
               </Typography.Text>
             }
             style={{ borderRadius: 12, height: '100%' }}
@@ -354,10 +385,10 @@ export default function DashboardPage() {
               loading={ordersLoading}
               pagination={false}
               size="small"
-              locale={{ emptyText: <Empty description="Chưa có đơn hàng" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+              locale={{ emptyText: <Empty description="No orders yet" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               columns={[
                 {
-                  title: 'Mã đơn',
+                  title: 'Order ID',
                   dataIndex: 'id',
                   key: 'id',
                   render: (v: string) => (
@@ -366,16 +397,16 @@ export default function DashboardPage() {
                     </Typography.Text>
                   ),
                 },
-                { title: 'Khách hàng', dataIndex: 'customer', key: 'customer' },
+                { title: 'Customers', dataIndex: 'customer', key: 'customer' },
                 {
-                  title: 'Tổng tiền',
+                  title: 'Total Amount',
                   dataIndex: 'total',
                   key: 'total',
                   align: 'right',
                   render: (v: number) => formatVnd(v),
                 },
                 {
-                  title: 'Trạng thái',
+                  title: 'Status',
                   dataIndex: 'status',
                   key: 'status',
                   render: (s: string) => (
@@ -384,7 +415,7 @@ export default function DashboardPage() {
                     </Tag>
                   ),
                 },
-                { title: 'Ngày tạo', dataIndex: 'date', key: 'date' },
+                { title: 'Created', dataIndex: 'date', key: 'date' },
               ]}
             />
           </Card>
@@ -395,7 +426,7 @@ export default function DashboardPage() {
           <Card
             title={
               <Typography.Text strong style={{ fontSize: 16 }}>
-                Sản phẩm sắp hết hàng
+                Products Low Stock
               </Typography.Text>
             }
             style={{ borderRadius: 12, height: '100%' }}
@@ -406,9 +437,9 @@ export default function DashboardPage() {
               loading={inventoryLoading}
               pagination={false}
               size="small"
-              locale={{ emptyText: <Empty description="Tất cả sản phẩm đủ tồn kho" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+              locale={{ emptyText: <Empty description="All All products in stock" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               columns={[
-                { title: 'Sản phẩm', dataIndex: 'name', key: 'name' },
+                { title: 'Products', dataIndex: 'name', key: 'name' },
                 {
                   title: 'SKU',
                   dataIndex: 'sku',
@@ -420,7 +451,7 @@ export default function DashboardPage() {
                   ),
                 },
                 {
-                  title: 'Tồn kho',
+                  title: 'Inventory',
                   dataIndex: 'stock',
                   key: 'stock',
                   align: 'center',
@@ -431,14 +462,14 @@ export default function DashboardPage() {
                   ),
                 },
                 {
-                  title: 'Trạng thái',
+                  title: 'Status',
                   dataIndex: 'status',
                   key: 'status',
                   render: (s: string) =>
                     s === 'critical' ? (
-                      <Tag color="error">Hết hàng</Tag>
+                      <Tag color="error">Out of Stock</Tag>
                     ) : (
-                      <Tag color="warning">Sắp hết</Tag>
+                      <Tag color="warning">Low Stock</Tag>
                     ),
                 },
               ]}

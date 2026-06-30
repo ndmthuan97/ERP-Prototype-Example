@@ -10,6 +10,7 @@ Tài liệu kỹ thuật cho dự án ERP Prototype — microservices architectu
 | [Technical Review](./technical-review.md) | Technical Review | Đánh giá kỹ thuật toàn diện |
 | [E2E Test Plan](./e2e-test-plan.md) | Runbook | Kế hoạch E2E test (9 suites, ~80+ tests) |
 | [System Flows](./flows.md) | Reference | 9 luồng nghiệp vụ chính (sequence diagrams) |
+| [Frontend Improvement Plan](./frontend-improvement-plan.md) | Technical Review | Đánh giá FE — 38 tasks chia 4 phase: bug fixes, features, UX, architecture |
 
 ## Subdirectories
 
@@ -21,4 +22,5 @@ Tài liệu kỹ thuật cho dự án ERP Prototype — microservices architectu
 | [services/](./services/index.md) | Quick reference per service (port, schema, dependencies, links) |
 | [development/](./development/index.md) | Setup guide, coding standards |
 | [archive/](./archive/index.md) | Tài liệu đã hoàn thành (lịch sử) |
+| [learning/](./learning/index.md) | Tài liệu học tập & nghiên cứu (Terraform, ...) |
 

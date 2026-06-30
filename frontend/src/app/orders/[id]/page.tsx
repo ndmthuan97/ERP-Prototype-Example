@@ -41,12 +41,14 @@ import {
   ShoppingCartOutlined,
   FileTextOutlined,
   CarryOutOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { salesApi } from '@/lib/api/sales';
 import { customerApi } from '@/lib/api/customer';
 import { inventoryApi } from '@/lib/api/inventory';
+import { catalogApi, type Product } from '@/lib/api/catalog';
 import type {
   SalesOrder,
   SalesOrderLine,
@@ -58,6 +60,9 @@ import { toMessage } from '@/lib/api/errors';
 import { formatVnd, formatDateTime } from '@/lib/format';
 import { DeliveryTab } from '@/components/orders/DeliveryTab';
 import { ReturnTab } from '@/components/orders/ReturnTab';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { CAN } from '@/lib/auth/permissions';
+import { ORDER_STATUS, statusLabel } from '@/lib/constants/status';
 
 const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   draft: 'default',
@@ -111,6 +116,10 @@ export default function OrderDetailPage({ params }: PageProps) {
   const [form] = Form.useForm<AddLineInput>();
   const [itemSearch, setItemSearch] = useState('');
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
+  const [catalogProduct, setCatalogProduct] = useState<Product | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const { user } = useAuth();
+  const role = user?.role ?? 'viewer';
 
   // ---- Queries ----
 
@@ -146,7 +155,7 @@ export default function OrderDetailPage({ params }: PageProps) {
   const addLineMutation = useMutation({
     mutationFn: (input: AddLineInput) => salesApi.addLine(id, input),
     onSuccess: () => {
-      message.success('Đã thêm dòng hàng');
+      message.success('Line item added');
       setOpenAddLine(false);
       form.resetFields();
       setSelectedItem(null);
@@ -161,7 +170,7 @@ export default function OrderDetailPage({ params }: PageProps) {
   const submitMutation = useMutation({
     mutationFn: () => salesApi.submit(id),
     onSuccess: () => {
-      message.success('Đã gửi đơn hàng');
+      message.success('Order submitted');
       queryClient.invalidateQueries({ queryKey: ['orders', id] });
     },
     onError: (err) => {
@@ -170,9 +179,21 @@ export default function OrderDetailPage({ params }: PageProps) {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: () => salesApi.cancel(id, 'Hủy từ giao diện'),
+    mutationFn: (reason: string) => salesApi.cancel(id, reason || 'Cancelled from UI'),
     onSuccess: () => {
-      message.success('Đã hủy đơn hàng');
+      message.success('Order cancelled');
+      setCancelReason('');
+      queryClient.invalidateQueries({ queryKey: ['orders', id] });
+    },
+    onError: (err) => {
+      message.error(toMessage(err));
+    },
+  });
+
+  const removeLineMutation = useMutation({
+    mutationFn: (lineId: string) => salesApi.removeLine(id, lineId),
+    onSuccess: () => {
+      message.success('Line item removed');
       queryClient.invalidateQueries({ queryKey: ['orders', id] });
     },
     onError: (err) => {
@@ -182,39 +203,85 @@ export default function OrderDetailPage({ params }: PageProps) {
 
   // ---- Item selection handler ----
 
-  const handleItemSelect = (itemId: string) => {
+  const handleItemSelect = async (itemId: string) => {
     const items = itemSearchQuery.data?.data ?? [];
     const item = items.find((i) => i.id === itemId);
     if (item) {
       setSelectedItem(item);
       form.setFieldsValue({ itemId: item.id, itemName: item.name });
+
+      // Cross-lookup catalog product by SKU for price and taxRate
+      try {
+        const product = await catalogApi.get(item.sku);
+        setCatalogProduct(product);
+        form.setFieldsValue({
+          unitPrice: product.defaultSalePrice,
+          taxRate: product.taxRate,
+        });
+      } catch {
+        setCatalogProduct(null);
+      }
     }
   };
 
+
   // ---- Lines table columns ----
 
+  const isDraftStatus = order?.status === 'draft';
+
   const lineColumns: ColumnsType<SalesOrderLine> = [
-    { title: 'Tên hàng', dataIndex: 'itemName', key: 'itemName' },
+    { title: 'Item', dataIndex: 'itemName', key: 'itemName' },
     {
-      title: 'Số lượng',
+      title: 'Qty',
       dataIndex: 'quantity',
       key: 'quantity',
       align: 'center',
     },
     {
-      title: 'Đơn giá',
+      title: 'Unit Price',
       dataIndex: 'unitPrice',
       key: 'unitPrice',
       align: 'right',
       render: (v: number) => formatVnd(v),
     },
     {
-      title: 'Thành tiền',
+      title: 'Tax',
+      dataIndex: 'taxRate',
+      key: 'taxRate',
+      align: 'center',
+      render: (v: number) => `${((v ?? 0) * 100).toFixed(0)}%`,
+    },
+    {
+      title: 'Total',
       dataIndex: 'lineTotal',
       key: 'lineTotal',
       align: 'right',
       render: (v: number) => formatVnd(v),
     },
+    ...(isDraftStatus
+      ? [
+          {
+            title: '',
+            key: 'actions',
+            width: 60,
+            render: (_: unknown, record: SalesOrderLine) => (
+              <Tooltip title="Remove">
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  loading={
+                    removeLineMutation.isPending &&
+                    removeLineMutation.variables === record.id
+                  }
+                  onClick={() => removeLineMutation.mutate(record.id)}
+                />
+              </Tooltip>
+            ),
+          },
+        ]
+      : []),
   ];
 
   // ---- Loading / Error states ----
@@ -222,7 +289,7 @@ export default function OrderDetailPage({ params }: PageProps) {
   if (orderQuery.isLoading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" tip="Đang tải đơn hàng…" />
+        <Spin size="large" tip="Loading order…" />
       </div>
     );
   }
@@ -232,11 +299,11 @@ export default function OrderDetailPage({ params }: PageProps) {
       <Alert
         type="error"
         showIcon
-        message="Không thể tải đơn hàng"
+        message="Failed to load order"
         description={toMessage(orderQuery.error)}
         action={
           <Button onClick={() => router.push('/orders')}>
-            Về danh sách
+            Back to list
           </Button>
         }
       />
@@ -248,10 +315,10 @@ export default function OrderDetailPage({ params }: PageProps) {
       <Alert
         type="warning"
         showIcon
-        message="Không tìm thấy đơn hàng"
+        message="Order not found"
         action={
           <Button onClick={() => router.push('/orders')}>
-            Về danh sách
+            Back to list
           </Button>
         }
       />
@@ -268,10 +335,10 @@ export default function OrderDetailPage({ params }: PageProps) {
 
   // Build steps items from lifecycle data or use static fallback
   const staticSteps = [
-    { title: 'Tạo đơn', icon: <FileTextOutlined /> },
-    { title: 'Gửi đơn', icon: <SendOutlined /> },
-    { title: 'Xác nhận', icon: <CheckCircleOutlined /> },
-    { title: 'Hoàn thành', icon: <CarryOutOutlined /> },
+    { title: 'Created', icon: <FileTextOutlined /> },
+    { title: 'Submitted', icon: <SendOutlined /> },
+    { title: 'Confirmed', icon: <CheckCircleOutlined /> },
+    { title: 'Delivered', icon: <CarryOutOutlined /> },
   ];
 
   const lifecycleEvents = lifecycleQuery.data?.timeline ?? [];
@@ -320,8 +387,8 @@ export default function OrderDetailPage({ params }: PageProps) {
       {/* ---- Breadcrumb ---- */}
       <Breadcrumb
         items={[
-          { title: 'Tổng quan', href: '/' },
-          { title: 'Đơn hàng', href: '/orders' },
+          { title: 'Dashboard', href: '/' },
+          { title: 'Orders', href: '/orders' },
           { title: `#${id.slice(0, 8)}` },
         ]}
       />
@@ -344,16 +411,16 @@ export default function OrderDetailPage({ params }: PageProps) {
               icon={<ArrowLeftOutlined />}
               onClick={() => router.push('/orders')}
             >
-              Danh sách
+              Back
             </Button>
             <Typography.Title level={4} style={{ margin: 0 }}>
-              Đơn hàng #{id.slice(0, 8)}
+              Order #{id.slice(0, 8)}
             </Typography.Title>
             <Tag
-              color={ORDER_STATUS_COLOR[order.status]}
+              color={ORDER_STATUS.color[order.status]}
               style={{ fontSize: 14, padding: '2px 12px' }}
             >
-              {order.status}
+              {statusLabel(ORDER_STATUS.label, order.status)}
             </Tag>
           </Space>
 
@@ -365,7 +432,7 @@ export default function OrderDetailPage({ params }: PageProps) {
               loading={submitMutation.isPending}
               onClick={() => submitMutation.mutate()}
             >
-              Gửi đơn
+              Submit
             </Button>
 
             <Button
@@ -373,9 +440,9 @@ export default function OrderDetailPage({ params }: PageProps) {
               icon={<CloseCircleOutlined />}
               disabled={order.status === 'cancelled'}
               loading={cancelMutation.isPending}
-              onClick={() => cancelMutation.mutate()}
+              onClick={() => cancelMutation.mutate(cancelReason)}
             >
-              Hủy đơn
+              Cancel
             </Button>
           </Space>
         </div>
@@ -384,7 +451,7 @@ export default function OrderDetailPage({ params }: PageProps) {
         <Row gutter={24}>
           <Col span={6}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Khách hàng
+              Customer
             </Typography.Text>
             <div style={{ fontWeight: 500, fontSize: 15, marginTop: 4 }}>
               {customerQuery.isLoading ? <Spin size="small" /> : customerName}
@@ -392,7 +459,7 @@ export default function OrderDetailPage({ params }: PageProps) {
           </Col>
           <Col span={6}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Ngày tạo
+              Created
             </Typography.Text>
             <div style={{ fontWeight: 500, fontSize: 15, marginTop: 4 }}>
               {formatDateTime(order.createdAt)}
@@ -400,7 +467,7 @@ export default function OrderDetailPage({ params }: PageProps) {
           </Col>
           <Col span={6}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Cập nhật
+              Updated
             </Typography.Text>
             <div style={{ fontWeight: 500, fontSize: 15, marginTop: 4 }}>
               {formatDateTime(order.updatedAt)}
@@ -408,7 +475,7 @@ export default function OrderDetailPage({ params }: PageProps) {
           </Col>
           <Col span={6}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Tổng tiền
+              Total
             </Typography.Text>
             <div
               style={{
@@ -426,7 +493,7 @@ export default function OrderDetailPage({ params }: PageProps) {
 
       {/* ---- Steps Progress ---- */}
       <Card
-        title="Tiến trình đơn hàng"
+        title="Order Progress"
         style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
         styles={{ body: { padding: '24px 32px' } }}
       >
@@ -439,7 +506,7 @@ export default function OrderDetailPage({ params }: PageProps) {
             type="error"
             showIcon
             icon={<CloseCircleOutlined />}
-            message="Đơn hàng đã bị hủy"
+            message="Order has been cancelled"
             description={order.cancelReason}
             style={{ marginTop: 16 }}
           />
@@ -453,13 +520,13 @@ export default function OrderDetailPage({ params }: PageProps) {
             title={
               <Space>
                 <UserOutlined style={{ color: '#1677ff' }} />
-                <span>Thông tin khách hàng</span>
+                <span>Customer Info</span>
               </Space>
             }
             style={{ borderRadius: 12, border: '1px solid #f0f0f0', height: '100%' }}
           >
             <Descriptions column={1} colon={false} size="small">
-              <Descriptions.Item label="Tên khách hàng">
+              <Descriptions.Item label="Name">
                 {customerQuery.isLoading ? (
                   <Spin size="small" />
                 ) : (
@@ -467,11 +534,11 @@ export default function OrderDetailPage({ params }: PageProps) {
                 )}
               </Descriptions.Item>
               {customerQuery.data?.contactPhone && (
-                <Descriptions.Item label="Số điện thoại">
+                <Descriptions.Item label="Phone">
                   {customerQuery.data.contactPhone}
                 </Descriptions.Item>
               )}
-              <Descriptions.Item label="Mã khách hàng">
+              <Descriptions.Item label="Customer ID">
                 <Typography.Text copyable type="secondary">
                   {order.customerId}
                 </Typography.Text>
@@ -484,28 +551,28 @@ export default function OrderDetailPage({ params }: PageProps) {
             title={
               <Space>
                 <ShoppingCartOutlined style={{ color: '#1677ff' }} />
-                <span>Thông tin đơn hàng</span>
+                <span>Order Info</span>
               </Space>
             }
             style={{ borderRadius: 12, border: '1px solid #f0f0f0', height: '100%' }}
           >
             <Descriptions column={1} colon={false} size="small">
-              <Descriptions.Item label="Mã đơn">
+              <Descriptions.Item label="Order ID">
                 <Typography.Text copyable>{order.id}</Typography.Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
+              <Descriptions.Item label="Status">
                 <Tag color={ORDER_STATUS_COLOR[order.status]}>
                   {order.status}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Ngày tạo">
+              <Descriptions.Item label="Created">
                 {formatDateTime(order.createdAt)}
               </Descriptions.Item>
-              <Descriptions.Item label="Cập nhật">
+              <Descriptions.Item label="Updated">
                 {formatDateTime(order.updatedAt)}
               </Descriptions.Item>
               {order.cancelReason && (
-                <Descriptions.Item label="Lý do hủy">
+                <Descriptions.Item label="Cancel Reason">
                   <Typography.Text type="danger">
                     {order.cancelReason}
                   </Typography.Text>
@@ -518,7 +585,7 @@ export default function OrderDetailPage({ params }: PageProps) {
 
       {/* ---- Order Lines ---- */}
       <Card
-        title="Dòng hàng"
+        title="Line Items"
         style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
         extra={
           isDraft && (
@@ -528,7 +595,7 @@ export default function OrderDetailPage({ params }: PageProps) {
               size="small"
               onClick={() => setOpenAddLine(true)}
             >
-              Thêm dòng
+              Add Line
             </Button>
           )
         }
@@ -539,7 +606,7 @@ export default function OrderDetailPage({ params }: PageProps) {
           dataSource={order.lines}
           pagination={false}
           size="small"
-          locale={{ emptyText: 'Chưa có dòng hàng nào' }}
+          locale={{ emptyText: 'No line items yet' }}
         />
 
         {/* Summary footer */}
@@ -560,15 +627,23 @@ export default function OrderDetailPage({ params }: PageProps) {
           >
             <div style={{ textAlign: 'right' }}>
               <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                Tạm tính
+                Subtotal
               </Typography.Text>
               <div style={{ fontSize: 15, fontWeight: 500, marginTop: 4 }}>
-                {formatVnd(order.totalAmount)}
+                {formatVnd(order.subtotalAmount)}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                Tổng cộng
+                Tax
+              </Typography.Text>
+              <div style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: '#8c8c8c' }}>
+                {formatVnd(order.totalTaxAmount)}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <Typography.Text type="secondary" style={{ fontSize: 14 }}>
+                Grand Total
               </Typography.Text>
               <div
                 style={{
@@ -587,7 +662,7 @@ export default function OrderDetailPage({ params }: PageProps) {
 
       {/* ---- Lifecycle Timeline ---- */}
       <Card
-        title="Lịch sử đơn hàng"
+        title="Order History"
         style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
       >
         {lifecycleQuery.isLoading ? (
@@ -596,7 +671,7 @@ export default function OrderDetailPage({ params }: PageProps) {
           <Alert
             type="error"
             showIcon
-            message="Không thể tải lịch sử"
+            message="Failed to load history"
             description={toMessage(lifecycleQuery.error)}
           />
         ) : (
@@ -606,8 +681,8 @@ export default function OrderDetailPage({ params }: PageProps) {
               dot: TIMELINE_ICON[evt.status] ?? <ExclamationCircleOutlined />,
               children: (
                 <div>
-                  <Tag color={ORDER_STATUS_COLOR[evt.status as OrderStatus] ?? 'default'}>
-                    {evt.status}
+                  <Tag color={ORDER_STATUS.color[evt.status] ?? 'default'}>
+                    {statusLabel(ORDER_STATUS.label, evt.status)}
                   </Tag>
                   <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
                     {formatDateTime(evt.timestamp)}
@@ -633,18 +708,19 @@ export default function OrderDetailPage({ params }: PageProps) {
 
       {/* ---- Add Line Modal ---- */}
       <Modal
-        title="Thêm dòng hàng"
+        title="Add Line Item"
         open={openAddLine}
         onCancel={() => {
           setOpenAddLine(false);
           form.resetFields();
           setSelectedItem(null);
+          setCatalogProduct(null);
           setItemSearch('');
         }}
         onOk={() => form.submit()}
         confirmLoading={addLineMutation.isPending}
-        okText="Thêm"
-        cancelText="Hủy"
+        okText="Add"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <Form<AddLineInput>
@@ -653,23 +729,23 @@ export default function OrderDetailPage({ params }: PageProps) {
           onFinish={(values) => addLineMutation.mutate(values)}
         >
           <Form.Item
-            label="Sản phẩm"
+            label="Product"
             name="itemId"
-            rules={[{ required: true, message: 'Vui lòng chọn sản phẩm' }]}
+            rules={[{ required: true, message: 'Please select a product' }]}
           >
             <Select
               showSearch
               filterOption={false}
-              placeholder="Tìm sản phẩm…"
+              placeholder="Search products…"
               onSearch={setItemSearch}
               onChange={handleItemSelect}
               loading={itemSearchQuery.isFetching}
               notFoundContent={
-                itemSearchQuery.isFetching ? 'Đang tìm…' : 'Không tìm thấy'
+                itemSearchQuery.isFetching ? 'Searching…' : 'No results'
               }
               options={(itemSearchQuery.data?.data ?? []).map((item) => ({
                 value: item.id,
-                label: `${item.name} (SKU: ${item.sku}) — Tồn: ${item.quantityAvailable}`,
+                label: `${item.name} (SKU: ${item.sku}) — Stock: ${item.quantityAvailable}`,
               }))}
             />
           </Form.Item>
@@ -683,20 +759,20 @@ export default function OrderDetailPage({ params }: PageProps) {
             <Alert
               type="info"
               showIcon
-              message={`${selectedItem.name} — Tồn kho: ${selectedItem.quantityAvailable}`}
+              message={`${selectedItem.name} — In Stock: ${selectedItem.quantityAvailable}${catalogProduct ? ` — List Price: ${new Intl.NumberFormat('en-US').format(catalogProduct.defaultSalePrice)} — Tax: ${(catalogProduct.taxRate * 100).toFixed(0)}%` : ''}`}
               style={{ marginBottom: 16 }}
             />
           )}
 
           <Form.Item
-            label="Số lượng"
+            label="Quantity"
             name="quantity"
             rules={[
-              { required: true, message: 'Vui lòng nhập số lượng' },
+              { required: true, message: 'Please enter quantity' },
               {
                 type: 'number',
                 min: 1,
-                message: 'Số lượng phải ≥ 1',
+                message: 'Quantity must be ≥ 1',
               },
             ]}
           >
@@ -704,19 +780,19 @@ export default function OrderDetailPage({ params }: PageProps) {
               style={{ width: '100%' }}
               min={1}
               precision={0}
-              placeholder="VD: 10"
+              placeholder="e.g. 10"
             />
           </Form.Item>
 
           <Form.Item
-            label="Đơn giá (VND)"
+            label="Unit Price (VND)"
             name="unitPrice"
             rules={[
-              { required: true, message: 'Vui lòng nhập đơn giá' },
+              { required: true, message: 'Please enter unit price' },
               {
                 type: 'number',
                 min: 0,
-                message: 'Đơn giá phải ≥ 0',
+                message: 'Price must be ≥ 0',
               },
             ]}
           >
@@ -728,7 +804,25 @@ export default function OrderDetailPage({ params }: PageProps) {
                 `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
               }
               parser={(v) => Number((v ?? '').replace(/,/g, '')) as number}
-              placeholder="VD: 150,000"
+              placeholder="e.g. 150,000"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Tax Rate"
+            name="taxRate"
+            initialValue={0.10}
+            rules={[
+              { required: true, message: 'Please select tax rate' },
+            ]}
+          >
+            <Select
+              options={[
+                { value: 0, label: '0%' },
+                { value: 0.05, label: '5%' },
+                { value: 0.08, label: '8%' },
+                { value: 0.10, label: '10%' },
+              ]}
             />
           </Form.Item>
         </Form>
@@ -740,7 +834,7 @@ export default function OrderDetailPage({ params }: PageProps) {
           items={[
             {
               key: 'delivery',
-              label: 'Giao hàng',
+              label: 'Deliveries',
               children: (
                 <DeliveryTab
                   orderId={id}
@@ -751,7 +845,7 @@ export default function OrderDetailPage({ params }: PageProps) {
             },
             {
               key: 'returns',
-              label: 'Trả hàng',
+              label: 'Returns',
               children: (
                 <ReturnTab
                   orderId={id}

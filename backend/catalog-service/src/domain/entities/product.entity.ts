@@ -148,4 +148,19 @@ export class Product extends AggregateRoot {
   touch(): void {
     this.updatedAt = new Date();
   }
+
+  toJSON() {
+    return {
+      id: this.id,
+      sku: this.sku,
+      name: this.name,
+      unit: this.unit,
+      defaultSalePrice: this.defaultSalePrice,
+      taxRate: this.taxRate,
+      isActive: this.isActive,
+      version: this.version,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
 }

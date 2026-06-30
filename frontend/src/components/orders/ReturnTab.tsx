@@ -43,11 +43,11 @@ const STATUS_COLOR: Record<SalesReturnStatus, string> = {
 };
 
 const STATUS_LABEL: Record<SalesReturnStatus, string> = {
-  draft: 'Nháp',
-  approved: 'Đã duyệt',
-  goods_received: 'Đã nhận hàng',
-  completed: 'Hoàn tất',
-  rejected: 'Từ chối',
+  draft: 'Draft',
+  approved: 'Approved',
+  goods_received: 'Goods Received',
+  completed: 'Complete',
+  rejected: 'Reject',
 };
 
 interface Props {
@@ -76,7 +76,7 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
   const createMutation = useMutation({
     mutationFn: (input: CreateReturnInput) => returnApi.create(orderId, input),
     onSuccess: () => {
-      message.success('Đã tạo phiếu trả hàng');
+      message.success('Return order created');
       setOpenCreate(false);
       form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['orders', orderId, 'returns'] });
@@ -95,7 +95,7 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
       return actions[action](orderId, returnId);
     },
     onSuccess: () => {
-      message.success('Cập nhật thành công');
+      message.success('Updated successfully');
       queryClient.invalidateQueries({ queryKey: ['orders', orderId, 'returns'] });
     },
     onError: (err) => message.error(toMessage(err)),
@@ -105,14 +105,14 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
     const btns: { label: string; action: string; danger?: boolean }[] = [];
     switch (ret.status) {
       case 'draft':
-        btns.push({ label: 'Duyệt', action: 'approve' });
-        btns.push({ label: 'Từ chối', action: 'reject', danger: true });
+        btns.push({ label: 'Approve', action: 'approve' });
+        btns.push({ label: 'Reject', action: 'reject', danger: true });
         break;
       case 'approved':
-        btns.push({ label: 'Nhận hàng', action: 'receive_goods' });
+        btns.push({ label: 'Receive Goods', action: 'receive_goods' });
         break;
       case 'goods_received':
-        btns.push({ label: 'Hoàn tất', action: 'complete' });
+        btns.push({ label: 'Complete', action: 'complete' });
         break;
     }
     return btns;
@@ -120,19 +120,19 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
 
   const columns: ColumnsType<SalesReturn> = [
     {
-      title: 'Mã phiếu',
+      title: 'DO ID',
       dataIndex: 'id',
       key: 'id',
       render: (id: string) => <Typography.Text>{id.slice(0, 8)}…</Typography.Text>,
     },
     {
-      title: 'Lý do',
+      title: 'Reason',
       dataIndex: 'reason',
       key: 'reason',
       ellipsis: true,
     },
     {
-      title: 'Trạng thái',
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       render: (s: SalesReturnStatus) => (
@@ -140,20 +140,20 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
       ),
     },
     {
-      title: 'Hoàn tiền',
+      title: 'Refund',
       dataIndex: 'totalRefundAmount',
       key: 'totalRefundAmount',
       align: 'right',
       render: (v: number) => formatVnd(v),
     },
     {
-      title: 'Ngày tạo',
+      title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (v: string) => formatDateTime(v),
     },
     {
-      title: 'Hành động',
+      title: 'Actions',
       key: 'actions',
       align: 'center',
       render: (_, record) => {
@@ -196,7 +196,7 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
       .filter((l) => l.quantity > 0);
 
     if (lines.length === 0) {
-      message.warning('Chọn ít nhất 1 dòng hàng');
+      message.warning('Select at least 1 line item');
       return;
     }
 
@@ -206,7 +206,7 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography.Text strong>Phiếu trả hàng ({returns.length})</Typography.Text>
+        <Typography.Text strong>Return Orders ({returns.length})</Typography.Text>
         {canCreate && (
           <Button
             type="primary"
@@ -214,13 +214,13 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
             icon={<PlusOutlined />}
             onClick={() => setOpenCreate(true)}
           >
-            Tạo phiếu trả
+            Create Return
           </Button>
         )}
       </div>
 
       {returns.length === 0 ? (
-        <Empty description="Chưa có phiếu trả hàng nào" />
+        <Empty description="No return orders yet" />
       ) : (
         <Table<SalesReturn>
           rowKey="id"
@@ -233,7 +233,7 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
 
       {/* Create Return Modal */}
       <Modal
-        title="Tạo phiếu trả hàng"
+        title="Create Return Order"
         open={openCreate}
         onCancel={() => {
           setOpenCreate(false);
@@ -241,21 +241,21 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
         }}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleCreate}>
           <Form.Item
-            label="Lý do trả hàng"
+            label="Return Reason"
             name="reason"
-            rules={[{ required: true, message: 'Nhập lý do' }]}
+            rules={[{ required: true, message: 'Enter reason' }]}
           >
-            <Input.TextArea rows={2} placeholder="VD: Hàng lỗi, không đúng mẫu..." />
+            <Input.TextArea rows={2} placeholder="e.g. Defective, wrong model..." />
           </Form.Item>
 
           <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-            Chọn dòng hàng cần trả (nhập SL {'>'} 0):
+            Select lines to return (enter qty {'>'} 0):
           </Typography.Text>
 
           <Table
@@ -264,15 +264,15 @@ export function ReturnTab({ orderId, orderLines, orderStatus }: Props) {
             pagination={false}
             size="small"
             columns={[
-              { title: 'Sản phẩm', dataIndex: 'itemName', key: 'itemName' },
+              { title: 'Products', dataIndex: 'itemName', key: 'itemName' },
               {
-                title: 'SL đơn',
+                title: 'Order Qty',
                 dataIndex: 'quantity',
                 key: 'quantity',
                 align: 'center',
               },
               {
-                title: 'SL trả',
+                title: 'Return Qty',
                 key: 'returnQty',
                 align: 'center',
                 render: (_: unknown, record: SalesOrderLine) => (

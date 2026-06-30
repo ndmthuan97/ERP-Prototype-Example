@@ -53,3 +53,36 @@ export function clearTokens(): void {
     localStorage.removeItem(REFRESH_KEY);
   }
 }
+
+/**
+ * Decode JWT payload without verification (client-side only).
+ * Returns null if token is malformed.
+ */
+function decodeJwtPayload(token: string): { exp?: number; sub?: string } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
+/** Check if the access token has already expired. */
+export function isTokenExpired(): boolean {
+  const token = getAuthToken();
+  if (!token) return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return true;
+  return Date.now() >= payload.exp * 1000;
+}
+
+/** Check if the access token will expire within the given buffer (default 2 min). */
+export function isTokenExpiringSoon(bufferMs = 2 * 60 * 1000): boolean {
+  const token = getAuthToken();
+  if (!token) return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return true;
+  return Date.now() >= payload.exp * 1000 - bufferMs;
+}

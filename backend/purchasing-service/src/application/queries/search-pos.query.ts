@@ -24,14 +24,29 @@ export class SearchPOsQuery {
     status?: string,
     page: number = 1,
     limit: number = DEFAULT_PAGE_SIZE,
-  ): Promise<PaginatedResult<PurchaseOrder>> {
+  ) {
     const normalizedPage = Math.max(1, page);
     const normalizedLimit = Math.min(Math.max(1, limit), MAX_PAGE_SIZE);
 
-    return this.repo.search({
+    const result = await this.repo.search({
       status: status || undefined,
       page: normalizedPage,
       limit: normalizedLimit,
     });
+
+    return {
+      data: result.data.map((po) => ({
+        id: po.id,
+        supplierId: po.supplierId,
+        status: po.status,
+        totalCost: po.totalCost,
+        lineCount: po.lines.length,
+        createdAt: po.createdAt,
+        updatedAt: po.updatedAt,
+      })),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    };
   }
 }

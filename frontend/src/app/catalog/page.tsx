@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Table,
   Input,
@@ -30,7 +31,7 @@ import {
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
-import { catalogApi, type Product } from '@/lib/api/catalog';
+import { catalogApi, type Product, type CreateProductInput, type UpdateProductInput } from '@/lib/api/catalog';
 import { formatVnd } from '@/lib/format';
 import { StatCard } from '@/components/StatCard';
 import { toMessage } from '@/lib/api/errors';
@@ -38,6 +39,7 @@ import { toMessage } from '@/lib/api/errors';
 export default function CatalogPage() {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [q, setQ] = useState('');
   const [isActive, setIsActive] = useState<boolean | undefined>(undefined);
@@ -91,9 +93,9 @@ export default function CatalogPage() {
 
   // Mutations
   const createMutation = useMutation({
-    mutationFn: (data: any) => catalogApi.create(data),
+    mutationFn: (data: CreateProductInput) => catalogApi.create(data),
     onSuccess: () => {
-      message.success('Đã tạo sản phẩm');
+      message.success('Product created');
       setOpenCreate(false);
       createForm.resetFields();
       queryClient.invalidateQueries({ queryKey: ['catalog'] });
@@ -102,9 +104,9 @@ export default function CatalogPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) => catalogApi.update(editingId!, data),
+    mutationFn: (data: UpdateProductInput) => catalogApi.update(editingId!, data),
     onSuccess: () => {
-      message.success('Đã cập nhật sản phẩm');
+      message.success('Product updated');
       setEditingId(null);
       queryClient.invalidateQueries({ queryKey: ['catalog'] });
     },
@@ -114,7 +116,7 @@ export default function CatalogPage() {
   const activateMutation = useMutation({
     mutationFn: (id: string) => catalogApi.activate(id),
     onSuccess: () => {
-      message.success('Đã kích hoạt sản phẩm');
+      message.success('Product activated');
       queryClient.invalidateQueries({ queryKey: ['catalog'] });
     },
     onError: (err) => message.error(toMessage(err)),
@@ -123,7 +125,7 @@ export default function CatalogPage() {
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => catalogApi.deactivate(id),
     onSuccess: () => {
-      message.success('Đã ngừng hoạt động sản phẩm');
+      message.success('Product deactivated');
       queryClient.invalidateQueries({ queryKey: ['catalog'] });
     },
     onError: (err) => message.error(toMessage(err)),
@@ -136,6 +138,7 @@ export default function CatalogPage() {
       name: record.name,
       unit: record.unit,
       defaultSalePrice: record.defaultSalePrice,
+      taxRate: record.taxRate,
     });
   };
 
@@ -148,48 +151,56 @@ export default function CatalogPage() {
       render: (v) => <Typography.Text keyboard>{v}</Typography.Text>,
     },
     {
-      title: 'Tên sản phẩm',
+      title: 'Product Name',
       dataIndex: 'name',
       key: 'name',
       width: 250,
       render: (text) => <Typography.Text strong>{text}</Typography.Text>,
     },
     {
-      title: 'Đơn vị',
+      title: 'Unit',
       dataIndex: 'unit',
       key: 'unit',
       width: 100,
     },
     {
-      title: 'Giá bán mặc định',
+      title: 'Default Sale Price',
       dataIndex: 'defaultSalePrice',
       key: 'defaultSalePrice',
       width: 150,
       align: 'right',
-      render: (v) => formatVnd(v),
+      render: (v: number) => formatVnd(v),
     },
     {
-      title: 'Trạng thái',
+      title: 'Tax Rate',
+      dataIndex: 'taxRate',
+      key: 'taxRate',
+      width: 100,
+      align: 'center',
+      render: (v: number) => `${((v ?? 0) * 100).toFixed(0)}%`,
+    },
+    {
+      title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
       width: 140,
       render: (isActive: boolean) => (
         <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+          {isActive ? 'Active' : 'Inactive'}
         </Tag>
       ),
     },
     {
-      title: 'Hành động',
+      title: 'Actions',
       key: 'actions',
       width: 120,
       fixed: 'right',
       render: (_, record) => (
         <Space size={4}>
-          <Tooltip title="Chi tiết">
-            <Button type="text" icon={<EyeOutlined />} size="small" />
+          <Tooltip title="Details">
+            <Button type="text" icon={<EyeOutlined />} size="small" onClick={() => router.push(`/catalog/${record.id}`)} />
           </Tooltip>
-          <Tooltip title="Sửa">
+          <Tooltip title="Edit">
             <Button
               type="text"
               icon={<EditOutlined />}
@@ -198,7 +209,7 @@ export default function CatalogPage() {
             />
           </Tooltip>
           {record.isActive ? (
-            <Tooltip title="Ngừng hoạt động">
+            <Tooltip title="Inactive">
               <Button
                 type="text"
                 danger
@@ -209,7 +220,7 @@ export default function CatalogPage() {
               />
             </Tooltip>
           ) : (
-            <Tooltip title="Kích hoạt">
+            <Tooltip title="Activate">
               <Button
                 type="text"
                 style={{ color: '#52c41a' }}
@@ -230,35 +241,50 @@ export default function CatalogPage() {
       <Form.Item
         name="sku"
         label="SKU"
-        rules={[{ required: true, message: 'Vui lòng nhập SKU' }]}
+        rules={[{ required: true, message: 'Please enter SKU' }]}
       >
-        <Input placeholder="Nhập mã SKU..." />
+        <Input placeholder="Enter SKU..." />
       </Form.Item>
       <Form.Item
         name="name"
-        label="Tên sản phẩm"
-        rules={[{ required: true, message: 'Vui lòng nhập tên sản phẩm' }]}
+        label="Product Name"
+        rules={[{ required: true, message: 'Please enter product name' }]}
       >
-        <Input placeholder="Nhập tên sản phẩm..." />
+        <Input placeholder="Enter product name..." />
       </Form.Item>
       <Form.Item
         name="unit"
-        label="Đơn vị tính"
-        rules={[{ required: true, message: 'Vui lòng nhập đơn vị tính' }]}
+        label="Unit"
+        rules={[{ required: true, message: 'Please enter unit of measure' }]}
       >
-        <Input placeholder="VD: Cái, Hộp, Chiếc..." />
+        <Input placeholder="e.g. Piece, Box, Unit..." />
       </Form.Item>
       <Form.Item
         name="defaultSalePrice"
-        label="Giá bán mặc định"
-        rules={[{ required: true, message: 'Vui lòng nhập giá bán' }]}
+        label="Default Sale Price"
+        rules={[{ required: true, message: 'Please enter sale price' }]}
       >
         <InputNumber
           style={{ width: '100%' }}
           min={0}
           formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-          parser={(value) => value!.replace(/\$\s?|(,*)/g, '') as any}
+          parser={(value) => Number((value ?? '').replace(/,/g, '')) as 0}
           addonAfter="VNĐ"
+        />
+      </Form.Item>
+      <Form.Item
+        name="taxRate"
+        label="Tax Rate"
+        initialValue={0.10}
+        rules={[{ required: true, message: 'Please select tax rate' }]}
+      >
+        <Select
+          options={[
+            { value: 0, label: '0%' },
+            { value: 0.05, label: '5%' },
+            { value: 0.08, label: '8%' },
+            { value: 0.10, label: '10%' },
+          ]}
         />
       </Form.Item>
     </>
@@ -268,14 +294,14 @@ export default function CatalogPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
-          Danh mục sản phẩm
+          Product Catalog
         </Typography.Title>
         <Button
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => setOpenCreate(true)}
         >
-          Thêm sản phẩm
+          Add products
         </Button>
       </Space>
 
@@ -285,7 +311,7 @@ export default function CatalogPage() {
             icon={<AppstoreOutlined />}
             iconBgColor="rgba(22, 119, 255, 0.1)"
             iconColor="#1677ff"
-            label="Tổng sản phẩm"
+            label="Total Products"
             value={stats.total}
           />
         </Col>
@@ -294,7 +320,7 @@ export default function CatalogPage() {
             icon={<CheckCircleOutlined />}
             iconBgColor="rgba(82, 196, 26, 0.1)"
             iconColor="#52c41a"
-            label="Đang hoạt động"
+            label="Active"
             value={stats.activeCount}
           />
         </Col>
@@ -303,7 +329,7 @@ export default function CatalogPage() {
             icon={<StopOutlined />}
             iconBgColor="rgba(245, 34, 45, 0.1)"
             iconColor="#f5222d"
-            label="Ngừng hoạt động"
+            label="Inactive"
             value={stats.inactiveCount}
           />
         </Col>
@@ -312,7 +338,7 @@ export default function CatalogPage() {
             icon={<DollarOutlined />}
             iconBgColor="rgba(250, 173, 20, 0.1)"
             iconColor="#faad14"
-            label="Giá TB"
+            label="Avg Price"
             value={stats.averagePrice}
           />
         </Col>
@@ -325,7 +351,7 @@ export default function CatalogPage() {
         <Space wrap>
           <Input.Search
             allowClear
-            placeholder="Tìm theo mã SKU, tên..."
+            placeholder="Search by SKU, name..."
             style={{ width: 320 }}
             onSearch={(value) => {
               setQ(value);
@@ -334,22 +360,22 @@ export default function CatalogPage() {
           />
           <Select
             allowClear
-            placeholder="Trạng thái"
+            placeholder="Status"
             style={{ width: 180 }}
             onChange={(val) => {
               setIsActive(val);
               setPage(1);
             }}
             options={[
-              { value: true, label: 'Đang hoạt động' },
-              { value: false, label: 'Ngừng hoạt động' },
+              { value: true, label: 'Active' },
+              { value: false, label: 'Inactive' },
             ]}
           />
           <Button
             icon={<ReloadOutlined />}
             onClick={() => listQuery.refetch()}
           >
-            Tải lại
+            Reload
           </Button>
         </Space>
       </Card>
@@ -364,12 +390,16 @@ export default function CatalogPage() {
           dataSource={listQuery.data?.data ?? []}
           loading={listQuery.isFetching}
           scroll={{ x: 1000 }}
+          onRow={(record) => ({
+            onClick: () => router.push(`/catalog/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize: limit,
             total: listQuery.data?.total ?? 0,
             showSizeChanger: true,
-            showTotal: (total) => `${total} sản phẩm`,
+            showTotal: (total) => `${total} products`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);
@@ -379,13 +409,13 @@ export default function CatalogPage() {
       </Card>
 
       <Modal
-        title="Thêm sản phẩm"
+        title="Add products"
         open={openCreate}
         onCancel={() => setOpenCreate(false)}
         onOk={() => createForm.submit()}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <Form
@@ -398,13 +428,13 @@ export default function CatalogPage() {
       </Modal>
 
       <Modal
-        title="Sửa sản phẩm"
+        title="Edit Product"
         open={!!editingId}
         onCancel={() => setEditingId(null)}
         onOk={() => editForm.submit()}
         confirmLoading={updateMutation.isPending}
-        okText="Lưu"
-        cancelText="Hủy"
+        okText="Save"
+        cancelText="Cancel"
         destroyOnHidden
       >
         <Form

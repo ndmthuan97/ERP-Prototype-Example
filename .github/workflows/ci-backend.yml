@@ -1,0 +1,105 @@
+name: CI — Backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**']
+  pull_request:
+    branches: [main]
+    paths: ['backend/**']
+
+jobs:
+  # ============================================================
+  # Step 1: Detect which services changed
+  # ============================================================
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      auth: ${{ steps.filter.outputs.auth }}
+      customer: ${{ steps.filter.outputs.customer }}
+      sales: ${{ steps.filter.outputs.sales }}
+      inventory: ${{ steps.filter.outputs.inventory }}
+      catalog: ${{ steps.filter.outputs.catalog }}
+      purchasing: ${{ steps.filter.outputs.purchasing }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared: 'backend/shared/**'
+            auth: 'backend/auth-service/**'
+            customer: 'backend/customer-service/**'
+            sales: 'backend/sales-service/**'
+            inventory: 'backend/inventory-service/**'
+            catalog: 'backend/catalog-service/**'
+            purchasing: 'backend/purchasing-service/**'
+            gateway: 'backend/api-gateway/**'
+
+  # ============================================================
+  # Step 2: Build & push changed services
+  # ============================================================
+  build-and-push:
+    needs: detect-changes
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - service: auth-service
+            changed: ${{ needs.detect-changes.outputs.auth }}
+          - service: customer-service
+            changed: ${{ needs.detect-changes.outputs.customer }}
+          - service: sales-service
+            changed: ${{ needs.detect-changes.outputs.sales }}
+          - service: inventory-service
+            changed: ${{ needs.detect-changes.outputs.inventory }}
+          - service: catalog-service
+            changed: ${{ needs.detect-changes.outputs.catalog }}
+          - service: purchasing-service
+            changed: ${{ needs.detect-changes.outputs.purchasing }}
+          - service: api-gateway
+            changed: ${{ needs.detect-changes.outputs.gateway }}
+    steps:
+      - name: Skip unchanged service
+        if: matrix.changed != 'true' && needs.detect-changes.outputs.shared != 'true'
+        run: echo "Skipping ${{ matrix.service }} — no changes" && exit 0
+
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+
+      - name: Authenticate to GCP (WIF)
+        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+
+      - name: Setup gcloud
+        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build Docker image
+        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        run: |
+          docker build \
+            --build-arg SERVICE_DIR=${{ matrix.service }} \
+            -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }} \
+            -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:latest \
+            -f backend/Dockerfile backend/
+
+      - name: Push Docker image
+        if: matrix.changed == 'true' || needs.detect-changes.outputs.shared == 'true'
+        run: |
+          docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:latest

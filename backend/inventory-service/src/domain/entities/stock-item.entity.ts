@@ -134,4 +134,17 @@ export class StockItem {
   private touch(): void {
     this.updatedAt = new Date();
   }
+
+  toJSON() {
+    return {
+      id: this.id,
+      sku: this.sku,
+      name: this._name,
+      quantityAvailable: this._quantityAvailable,
+      quantityReserved: this._quantityReserved,
+      version: this.version,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
 }

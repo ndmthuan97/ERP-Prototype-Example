@@ -1,9 +1,9 @@
 // =============================================================================
-// API ERROR — chuẩn hoá lỗi BE thành 1 kiểu duy nhất cho toàn FE
+// API ERROR — standardize BE errors into a single type for the entire FE
 // =============================================================================
-// BE (ZodExceptionFilter) trả 400 dạng:
+// BE (ZodExceptionFilter) returns 400 as:
 //   { statusCode, error, message, issues: [{ path, message }] }
-// 409 = trùng (taxCode/sku). 404 = không tìm thấy.
+// 409 = conflict (taxCode/sku). 404 = not found.
 
 export interface ApiIssue {
   path: string;
@@ -41,8 +41,8 @@ export class ApiError extends Error {
   }
 
   /**
-   * Map issues[] → { fieldName: message } để gắn vào Ant Design Form
-   * (form.setFields). path "creditLimitAmount" khớp tên field trong form.
+   * Map issues[] → { fieldName: message } for Ant Design Form
+   * (form.setFields). path "creditLimitAmount" matches field name in form.
    */
   fieldErrors(): Record<string, string> {
     const out: Record<string, string> = {};
@@ -53,31 +53,31 @@ export class ApiError extends Error {
   }
 }
 
-// Vietnamese user-facing messages mapped by HTTP status
+// English user-facing messages mapped by HTTP status
 const STATUS_MESSAGES: Record<number, string> = {
-  400: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
-  401: 'Sai email hoặc mật khẩu.',
-  403: 'Bạn không có quyền thực hiện thao tác này.',
-  404: 'Không tìm thấy dữ liệu.',
-  409: 'Dữ liệu đã tồn tại. Vui lòng kiểm tra lại.',
-  422: 'Dữ liệu không hợp lệ.',
-  429: 'Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
-  500: 'Lỗi hệ thống. Vui lòng thử lại sau.',
-  502: 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.',
-  503: 'Dịch vụ tạm ngưng hoạt động. Vui lòng thử lại sau.',
-  504: 'Máy chủ phản hồi quá lâu. Vui lòng thử lại sau.',
+  400: 'Invalid data. Please check your input.',
+  401: 'Invalid email or password.',
+  403: 'You do not have permission to perform this action.',
+  404: 'Data not found.',
+  409: 'Data already exists. Please check your input.',
+  422: 'Invalid data.',
+  429: 'Too many requests. Please try again later.',
+  500: 'System error. Please try again later.',
+  502: 'Cannot connect to server. Please try again later.',
+  503: 'Service temporarily unavailable. Please try again later.',
+  504: 'Server took too long to respond. Please try again later.',
 };
 
-// Known BE error messages → Vietnamese translations
+// Known BE error messages → English translations
 const ERROR_TRANSLATIONS: Record<string, string> = {
-  'Invalid email or password': 'Sai email hoặc mật khẩu.',
-  'Invalid credentials': 'Sai email hoặc mật khẩu.',
-  'User account is inactive': 'Tài khoản đã bị vô hiệu hóa. Liên hệ quản trị viên.',
-  'Missing or invalid Authorization header': 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.',
-  'Invalid or expired token': 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.',
+  'Invalid email or password': 'Invalid email or password.',
+  'Invalid credentials': 'Invalid email or password.',
+  'User account is inactive': 'Account has been deactivated. Contact your administrator.',
+  'Missing or invalid Authorization header': 'Session expired. Please log in again.',
+  'Invalid or expired token': 'Session expired. Please log in again.',
 };
 
-/** Thông điệp gọn để hiển thị toast/message — Vietnamese, user-friendly. */
+/** Concise message for toast/notification display — English, user-friendly. */
 export function toMessage(err: unknown): string {
   if (err instanceof ApiError) {
     // Prioritize translated BE messages
@@ -98,14 +98,14 @@ export function toMessage(err: unknown): string {
 
   // Network errors
   if (err instanceof TypeError && err.message === 'Failed to fetch') {
-    return 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.';
+    return 'Cannot connect to server. Please check your network connection.';
   }
 
   if (err instanceof Error) return err.message;
-  return 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+  return 'An error occurred. Please try again.';
 }
 
 /** Get status-based default message. */
 export function statusMessage(status: number): string {
-  return STATUS_MESSAGES[status] ?? `Lỗi không xác định (HTTP ${status})`;
+  return STATUS_MESSAGES[status] ?? `Unknown error (HTTP ${status})`;
 }

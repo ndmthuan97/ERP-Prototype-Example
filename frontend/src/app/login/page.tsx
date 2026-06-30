@@ -86,7 +86,7 @@ export default function LoginPage() {
               <DeploymentUnitOutlined style={{ color: '#fff', fontSize: 24 }} />
             </div>
             <Title level={2} style={{ marginBottom: 8 }}>WeCare ERP</Title>
-            <Text style={{ color: '#8c8c8c', fontSize: 16, marginBottom: 32 }}>Hệ thống quản lý doanh nghiệp</Text>
+            <Text style={{ color: '#8c8c8c', fontSize: 16, marginBottom: 32 }}>Enterprise Resource Planning System</Text>
 
             {/* Decorative circle */}
             <div
@@ -127,8 +127,8 @@ export default function LoginPage() {
           }}
         >
           <div style={{ marginBottom: 32 }}>
-            <Title level={2} style={{ marginBottom: 8 }}>Đăng nhập</Title>
-            <Text style={{ color: '#8c8c8c' }}>Vui lòng nhập thông tin đăng nhập</Text>
+            <Title level={2} style={{ marginBottom: 8 }}>Sign In</Title>
+            <Text style={{ color: '#8c8c8c' }}>Enter your credentials to continue</Text>
           </div>
 
           <Form
@@ -139,8 +139,8 @@ export default function LoginPage() {
             <Form.Item
               name="email"
               rules={[
-                { required: true, message: 'Vui lòng nhập email!' },
-                { type: 'email', message: 'Email không hợp lệ!' }
+                { required: true, message: 'Please enter your email' },
+                { type: 'email', message: 'Invalid email format' }
               ]}
             >
               <Input prefix={<MailOutlined style={{ color: '#8c8c8c' }} />} placeholder="admin@gmail.com" />
@@ -148,9 +148,9 @@ export default function LoginPage() {
 
             <Form.Item
               name="password"
-              rules={[{ required: true, message: 'Vui lòng nhập mật khẩu!' }]}
+              rules={[{ required: true, message: 'Please enter your password' }]}
             >
-              <Input.Password prefix={<LockOutlined style={{ color: '#8c8c8c' }} />} placeholder="Mật khẩu" />
+              <Input.Password prefix={<LockOutlined style={{ color: '#8c8c8c' }} />} placeholder="Password" />
             </Form.Item>
 
             <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>
@@ -161,7 +161,7 @@ export default function LoginPage() {
                 icon={<LoginOutlined />}
                 loading={loading}
               >
-                Đăng nhập
+                Sign In
               </Button>
             </Form.Item>
           </Form>

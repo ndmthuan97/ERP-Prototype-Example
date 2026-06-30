@@ -4,6 +4,7 @@
 // =============================================================================
 
 import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Table,
   Button,
@@ -23,6 +24,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   EditOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -35,6 +37,7 @@ import { formatDateTime } from '@/lib/format';
 export default function SuppliersPage() {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
@@ -55,7 +58,7 @@ export default function SuppliersPage() {
   const createMutation = useMutation({
     mutationFn: (input: CreateSupplierInput) => supplierApi.create(input),
     onSuccess: () => {
-      message.success('Đã tạo nhà cung cấp');
+      message.success('Supplier created');
       setOpenCreate(false);
       createForm.resetFields();
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
@@ -67,7 +70,7 @@ export default function SuppliersPage() {
     mutationFn: ({ id, data }: { id: string; data: UpdateSupplierInput }) =>
       supplierApi.update(id, data),
     onSuccess: () => {
-      message.success('Đã cập nhật nhà cung cấp');
+      message.success('Supplier updated');
       setEditingSupplier(null);
       editForm.resetFields();
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
@@ -94,19 +97,19 @@ export default function SuppliersPage() {
 
   const columns: ColumnsType<Supplier> = [
     {
-      title: 'Tên NCC',
+      title: 'Supplier Name',
       dataIndex: 'name',
       key: 'name',
       render: (name: string) => <Typography.Text strong>{name}</Typography.Text>,
     },
     {
-      title: 'Mã số thuế',
+      title: 'Tax Code',
       dataIndex: 'taxCode',
       key: 'taxCode',
       render: (v: string | null) => v ?? '—',
     },
     {
-      title: 'Liên hệ',
+      title: 'Contact',
       key: 'contact',
       render: (_, record) => (
         <Space direction="vertical" size={0}>
@@ -121,25 +124,25 @@ export default function SuppliersPage() {
       ),
     },
     {
-      title: 'Thanh toán',
+      title: 'Payment',
       dataIndex: 'paymentTermDays',
       key: 'paymentTermDays',
       align: 'center',
-      render: (v: number) => `${v} ngày`,
+      render: (v: number) => `${v} days`,
     },
     {
-      title: 'Trạng thái',
+      title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
       align: 'center',
       render: (active: boolean) => (
         <Tag color={active ? 'success' : 'default'}>
-          {active ? 'Hoạt động' : 'Ngừng'}
+          {active ? 'Active' : 'Inactive'}
         </Tag>
       ),
     },
     {
-      title: 'Ngày tạo',
+      title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (v: string) => formatDateTime(v),
@@ -147,18 +150,30 @@ export default function SuppliersPage() {
     {
       title: '',
       key: 'actions',
-      width: 60,
+      width: 80,
       render: (_, record) => (
-        <Tooltip title="Chỉnh sửa">
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              openEditModal(record);
-            }}
-          />
-        </Tooltip>
+        <Space size={4}>
+          <Tooltip title="Details">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/purchasing/suppliers/${record.id}`);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="Edit">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                openEditModal(record);
+              }}
+            />
+          </Tooltip>
+        </Space>
       ),
     },
   ];
@@ -166,25 +181,25 @@ export default function SuppliersPage() {
   const supplierFormFields = (
     <>
       <Form.Item
-        label="Tên nhà cung cấp"
+        label="Supplier Name"
         name="name"
-        rules={[{ required: true, message: 'Nhập tên NCC' }]}
+        rules={[{ required: true, message: 'Enter supplier name' }]}
       >
-        <Input placeholder="VD: Công ty TNHH ABC" />
+        <Input placeholder="VD: e.g. ACME Corp" />
       </Form.Item>
-      <Form.Item label="Mã số thuế" name="taxCode">
+      <Form.Item label="Tax Code" name="taxCode">
         <Input placeholder="VD: 0123456789" />
       </Form.Item>
-      <Form.Item label="Người liên hệ" name="contactName">
-        <Input placeholder="VD: Nguyễn Văn A" />
+      <Form.Item label="Contact Person" name="contactName">
+        <Input placeholder="e.g. John Doe" />
       </Form.Item>
-      <Form.Item label="Số điện thoại" name="contactPhone">
+      <Form.Item label="Phone" name="contactPhone">
         <Input placeholder="VD: 0901234567" />
       </Form.Item>
       <Form.Item label="Email" name="contactEmail">
         <Input placeholder="VD: supplier@example.com" />
       </Form.Item>
-      <Form.Item label="Kỳ thanh toán (ngày)" name="paymentTermDays">
+      <Form.Item label="Payment Terms (days)" name="paymentTermDays">
         <InputNumber<number> style={{ width: '100%' }} min={0} max={365} precision={0} placeholder="VD: 30" />
       </Form.Item>
     </>
@@ -194,23 +209,23 @@ export default function SuppliersPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
-          Quản lý nhà cung cấp
+          Supplier Management
         </Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
-          Thêm NCC
+          Add Supplier
         </Button>
       </Space>
 
       <Card styles={{ body: { padding: 16 } }} style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
         <Space wrap>
           <Input.Search
-            placeholder="Tìm nhà cung cấp..."
+            placeholder="Search suppliers..."
             allowClear
             onSearch={handleSearch}
             style={{ width: 300 }}
           />
           <Button icon={<ReloadOutlined />} onClick={() => listQuery.refetch()}>
-            Tải lại
+            Reload
           </Button>
         </Space>
       </Card>
@@ -221,12 +236,16 @@ export default function SuppliersPage() {
           columns={columns}
           dataSource={data}
           loading={listQuery.isFetching}
+          onRow={(record) => ({
+            onClick: () => router.push(`/purchasing/suppliers/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize: limit,
             total,
             showSizeChanger: true,
-            showTotal: (t) => `${t} nhà cung cấp`,
+            showTotal: (t) => `${t} suppliers`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);
@@ -237,13 +256,13 @@ export default function SuppliersPage() {
 
       {/* Create Modal */}
       <Modal
-        title="Thêm nhà cung cấp"
+        title="Add suppliers"
         open={openCreate}
         onCancel={() => { setOpenCreate(false); createForm.resetFields(); }}
         onOk={() => createForm.submit()}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
       >
         <Form
           form={createForm}
@@ -256,13 +275,13 @@ export default function SuppliersPage() {
 
       {/* Edit Modal */}
       <Modal
-        title="Chỉnh sửa nhà cung cấp"
+        title="Edit suppliers"
         open={!!editingSupplier}
         onCancel={() => { setEditingSupplier(null); editForm.resetFields(); }}
         onOk={() => editForm.submit()}
         confirmLoading={updateMutation.isPending}
-        okText="Lưu"
-        cancelText="Hủy"
+        okText="Save"
+        cancelText="Cancel"
       >
         <Form
           form={editForm}

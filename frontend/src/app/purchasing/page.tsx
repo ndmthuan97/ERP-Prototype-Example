@@ -46,7 +46,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'Tất cả' },
+  { value: '', label: 'All' },
   { value: 'draft', label: 'Draft' },
   { value: 'placed', label: 'Placed' },
   { value: 'partially_received', label: 'Partially Received' },
@@ -106,7 +106,7 @@ export default function PurchasingPage() {
   const createMutation = useMutation({
     mutationFn: (input: CreatePurchaseOrderInput) => purchasingApi.create(input),
     onSuccess: (data) => {
-      message.success('Đã tạo đơn mua hàng');
+      message.success('Purchase order created');
       setOpenCreate(false);
       form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['purchasing'] });
@@ -127,7 +127,7 @@ export default function PurchasingPage() {
 
   const columns: ColumnsType<PurchaseOrder> = [
     {
-      title: 'Mã PO',
+      title: 'PO ID',
       dataIndex: 'id',
       key: 'id',
       render: (id: string) => (
@@ -137,26 +137,26 @@ export default function PurchasingPage() {
       ),
     },
     {
-      title: 'Nhà cung cấp',
+      title: 'Suppliers',
       dataIndex: 'supplierId',
       key: 'supplierId',
       render: (id: string) => supplierMap.get(id) ?? id.slice(0, 8) + '…',
     },
     {
-      title: 'Số dòng',
+      title: 'Lines',
       dataIndex: 'lineCount',
       key: 'lineCount',
       align: 'center',
     },
     {
-      title: 'Tổng tiền',
+      title: 'Total Amount',
       dataIndex: 'totalCost',
       key: 'totalCost',
       align: 'right',
       render: (v: number) => formatVnd(v),
     },
     {
-      title: 'Trạng thái',
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       render: (s: string) => (
@@ -164,7 +164,7 @@ export default function PurchasingPage() {
       ),
     },
     {
-      title: 'Ngày tạo',
+      title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (v: string) => formatDateTime(v),
@@ -175,7 +175,7 @@ export default function PurchasingPage() {
       align: 'center',
       width: 60,
       render: (_, record) => (
-        <Tooltip title="Chi tiết">
+        <Tooltip title="Details">
           <Button
             type="text"
             icon={<EyeOutlined />}
@@ -193,10 +193,10 @@ export default function PurchasingPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
-          Quản lý đơn mua hàng
+          Purchase Order Management
         </Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
-          Tạo đơn mua
+          Create purchase orders
         </Button>
       </Space>
 
@@ -206,7 +206,7 @@ export default function PurchasingPage() {
             icon={<FileTextOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(22,119,255,0.1)"
             iconColor="#1677ff"
-            label="Tổng PO"
+            label="Total POs"
             value={totalCount}
           />
         </Col>
@@ -215,7 +215,7 @@ export default function PurchasingPage() {
             icon={<ClockCircleOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(250,173,20,0.1)"
             iconColor="#faad14"
-            label="Chờ xử lý"
+            label="Pending"
             value={placedCount}
           />
         </Col>
@@ -224,7 +224,7 @@ export default function PurchasingPage() {
             icon={<CarOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(19,194,194,0.1)"
             iconColor="#13c2c2"
-            label="Đang nhận hàng"
+            label="Receiving"
             value={partiallyReceivedCount}
           />
         </Col>
@@ -233,7 +233,7 @@ export default function PurchasingPage() {
             icon={<CheckCircleOutlined style={{ fontSize: 24 }} />}
             iconBgColor="rgba(82,196,26,0.1)"
             iconColor="#52c41a"
-            label="Đã hoàn thành"
+            label="Completed"
             value={receivedCount}
           />
         </Col>
@@ -242,7 +242,7 @@ export default function PurchasingPage() {
       <Card styles={{ body: { padding: 16 } }} style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
         <Space wrap>
           <Input.Search
-            placeholder="Tìm kiếm PO..."
+            placeholder="Search PO..."
             allowClear
             onSearch={handleSearch}
             style={{ width: 260 }}
@@ -252,10 +252,10 @@ export default function PurchasingPage() {
             onChange={handleStatusChange}
             options={STATUS_OPTIONS}
             style={{ width: 180 }}
-            placeholder="Lọc trạng thái"
+            placeholder="Filter by status"
           />
           <Button icon={<ReloadOutlined />} onClick={() => listQuery.refetch()}>
-            Tải lại
+            Reload
           </Button>
         </Space>
       </Card>
@@ -275,7 +275,7 @@ export default function PurchasingPage() {
             pageSize: limit,
             total: totalCount,
             showSizeChanger: true,
-            showTotal: (total) => `${total} đơn mua`,
+            showTotal: (total) => `${total} purchase orders`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);
@@ -286,13 +286,13 @@ export default function PurchasingPage() {
 
       {/* Create PO Modal */}
       <Modal
-        title="Tạo đơn mua hàng"
+        title="Create purchase order"
         open={openCreate}
         onCancel={() => { setOpenCreate(false); form.resetFields(); }}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending}
-        okText="Tạo"
-        cancelText="Hủy"
+        okText="Create"
+        cancelText="Cancel"
       >
         <Form
           form={form}
@@ -300,16 +300,16 @@ export default function PurchasingPage() {
           onFinish={(values) => createMutation.mutate(values)}
         >
           <Form.Item
-            label="Nhà cung cấp"
+            label="Suppliers"
             name="supplierId"
-            rules={[{ required: true, message: 'Chọn nhà cung cấp' }]}
+            rules={[{ required: true, message: 'Select supplier' }]}
           >
             <Select
               showSearch
               filterOption={(input, option) =>
                 (option?.label?.toString() ?? '').toLowerCase().includes(input.toLowerCase())
               }
-              placeholder="Chọn nhà cung cấp..."
+              placeholder="Select supplier..."
               loading={suppliersQuery.isFetching}
               options={(suppliersQuery.data?.data ?? [])
                 .filter((s) => s.isActive)

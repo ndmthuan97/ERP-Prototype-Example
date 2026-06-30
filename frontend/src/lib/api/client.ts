@@ -2,15 +2,20 @@
 // API CLIENT — lớp HTTP TẬP TRUNG DUY NHẤT của FE
 // =============================================================================
 // MỌI call API phải đi qua đây. Lợi ích:
-// - Gắn Authorization + x-correlation-id ở 1 chỗ (auth thật chỉ sửa token.ts)
+// - Gắn Authorization + x-correlation-id ở 1 chỗ
+// - Token refresh interceptor: auto-refresh khi 401
 // - Chuẩn hoá lỗi BE → ApiError
 // - Xử lý 204 No Content (DELETE customer)
-//
-// KHÔNG import React ở file này (dùng được cả server/client component).
 
 import { API, type ServiceName } from './config';
 import { ApiError, type ApiIssue } from './errors';
-import { getAuthToken, clearTokens } from '../auth/token';
+import {
+  getAuthToken,
+  getRefreshToken,
+  setAuthToken,
+  setRefreshToken,
+  clearTokens,
+} from '../auth/token';
 
 type QueryValue = string | number | boolean | undefined | null;
 
@@ -20,6 +25,9 @@ interface RequestOptions {
   query?: Record<string, QueryValue>;
   signal?: AbortSignal;
 }
+
+// Mutex for token refresh — prevents multiple concurrent refreshes
+let refreshPromise: Promise<boolean> | null = null;
 
 function buildUrl(
   base: string,
@@ -43,6 +51,46 @@ function correlationId(): string {
   return uuid ?? `fe-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
+/**
+ * Attempt to refresh the access token using the stored refresh token.
+ * Returns true if refresh succeeded, false otherwise.
+ * Uses a mutex so only one refresh happens at a time.
+ */
+async function tryRefreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
+
+    try {
+      const res = await fetch(buildUrl(API.auth, '/api/auth/refresh'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      if (data.accessToken) {
+        setAuthToken(data.accessToken);
+        if (data.refreshToken) setRefreshToken(data.refreshToken);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  })();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
 async function request<T>(
   service: ServiceName,
   path: string,
@@ -53,7 +101,6 @@ async function request<T>(
     'x-correlation-id': correlationId(),
   };
 
-  // INTERCEPTOR auth — hiện token = null (mock). Có JWT thật chỉ cần token.ts đổi.
   const token = getAuthToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -63,28 +110,47 @@ async function request<T>(
     body = JSON.stringify(opts.body);
   }
 
-  const res = await fetch(buildUrl(API[service], path, opts.query), {
+  const url = buildUrl(API[service], path, opts.query);
+
+  let res = await fetch(url, {
     method: opts.method ?? 'GET',
     headers,
     body,
     signal: opts.signal,
   });
 
-  // 204 No Content (vd: DELETE /customers/:id)
-  if (res.status === 204) return undefined as T;
+  // 401 → attempt token refresh, then retry once
+  if (res.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/refresh')) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      const retryHeaders = { ...headers };
+      const newToken = getAuthToken();
+      if (newToken) retryHeaders.Authorization = `Bearer ${newToken}`;
 
-  const text = await res.text();
-  const data: unknown = text ? safeJson(text) : undefined;
+      res = await fetch(url, {
+        method: opts.method ?? 'GET',
+        headers: retryHeaders,
+        body,
+        signal: opts.signal,
+      });
+    }
 
-  if (!res.ok) {
-    // Session expired: clear tokens and redirect to login
+    // Still 401 after refresh attempt → redirect to login
     if (res.status === 401) {
       clearTokens();
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }
     }
+  }
 
+  // 204 No Content
+  if (res.status === 204) return undefined as T;
+
+  const text = await res.text();
+  const data: unknown = text ? safeJson(text) : undefined;
+
+  if (!res.ok) {
     const err = data as
       | { message?: string; issues?: ApiIssue[] }
       | undefined;

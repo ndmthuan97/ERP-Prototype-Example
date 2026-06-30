@@ -74,7 +74,9 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
   const router = useRouter();
 
   const [openAddLine, setOpenAddLine] = useState(false);
+  const [openReceive, setOpenReceive] = useState(false);
   const [form] = Form.useForm<AddPurchaseOrderLineInput>();
+  const [receiveForm] = Form.useForm();
   const [productSearch, setProductSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
@@ -104,7 +106,7 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
   const addLineMutation = useMutation({
     mutationFn: (input: AddPurchaseOrderLineInput) => purchasingApi.addLine(id, input),
     onSuccess: () => {
-      message.success('Đã thêm dòng hàng');
+      message.success('Line item added');
       setOpenAddLine(false);
       form.resetFields();
       setSelectedProduct(null);
@@ -117,7 +119,7 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
   const removeLineMutation = useMutation({
     mutationFn: (lineId: string) => purchasingApi.removeLine(id, lineId),
     onSuccess: () => {
-      message.success('Đã xóa dòng hàng');
+      message.success('Line item removed');
       queryClient.invalidateQueries({ queryKey: ['purchasing', 'orders', id] });
     },
     onError: (err) => message.error(toMessage(err)),
@@ -126,31 +128,47 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
   const placeMutation = useMutation({
     mutationFn: () => purchasingApi.place(id),
     onSuccess: () => {
-      message.success('Đã đặt đơn mua hàng');
+      message.success('Purchase order placed');
       queryClient.invalidateQueries({ queryKey: ['purchasing', 'orders', id] });
     },
     onError: (err) => message.error(toMessage(err)),
   });
 
   const receiveGoodsMutation = useMutation({
-    mutationFn: () => {
-      // Receive full remaining qty for all lines
-      const lines = (po?.lines ?? [])
-        .filter((l) => l.receivedQty < l.orderedQty)
-        .map((l) => ({ lineId: l.id, quantity: l.orderedQty - l.receivedQty }));
-      return purchasingApi.receiveGoods(id, { lines });
+    mutationFn: (lineInputs: Array<{ lineId: string; quantity: number }>) => {
+      return purchasingApi.receiveGoods(id, { lines: lineInputs });
     },
     onSuccess: () => {
-      message.success('Đã nhận hàng');
+      message.success('Goods received');
+      setOpenReceive(false);
+      receiveForm.resetFields();
       queryClient.invalidateQueries({ queryKey: ['purchasing', 'orders', id] });
     },
     onError: (err) => message.error(toMessage(err)),
   });
 
+  const handleReceiveAll = () => {
+    const lines = (po?.lines ?? [])
+      .filter((l) => l.receivedQty < l.orderedQty)
+      .map((l) => ({ lineId: l.id, quantity: l.orderedQty - l.receivedQty }));
+    receiveGoodsMutation.mutate(lines);
+  };
+
+  const handleReceivePerLine = (values: Record<string, number>) => {
+    const lines = Object.entries(values)
+      .filter(([, qty]) => qty > 0)
+      .map(([lineId, quantity]) => ({ lineId, quantity }));
+    if (lines.length === 0) {
+      message.warning('Please enter at least one quantity');
+      return;
+    }
+    receiveGoodsMutation.mutate(lines);
+  };
+
   const cancelMutation = useMutation({
     mutationFn: () => purchasingApi.cancel(id),
     onSuccess: () => {
-      message.success('Đã hủy đơn mua hàng');
+      message.success('Cancelled purchase order');
       queryClient.invalidateQueries({ queryKey: ['purchasing', 'orders', id] });
     },
     onError: (err) => message.error(toMessage(err)),
@@ -177,15 +195,15 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
   const canReceive = po?.status === 'placed' || po?.status === 'partially_received';
 
   const lineColumns: ColumnsType<PurchaseOrderLine> = [
-    { title: 'Sản phẩm', dataIndex: 'productName', key: 'productName' },
+    { title: 'Products', dataIndex: 'productName', key: 'productName' },
     {
-      title: 'SL đặt',
+      title: 'Ordered',
       dataIndex: 'orderedQty',
       key: 'orderedQty',
       align: 'center',
     },
     {
-      title: 'SL nhận',
+      title: 'Received',
       dataIndex: 'receivedQty',
       key: 'receivedQty',
       align: 'center',
@@ -196,14 +214,14 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
       ),
     },
     {
-      title: 'Đơn giá',
+      title: 'Unit Price',
       dataIndex: 'unitCost',
       key: 'unitCost',
       align: 'right',
       render: (v: number) => formatVnd(v),
     },
     {
-      title: 'Thành tiền',
+      title: 'Total',
       key: 'lineTotal',
       align: 'right',
       render: (_, record) => formatVnd(record.orderedQty * record.unitCost),
@@ -233,7 +251,7 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
   if (poQuery.isLoading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" tip="Đang tải đơn mua hàng…" />
+        <Spin size="large" tip="Loading purchase order…" />
       </div>
     );
   }
@@ -243,11 +261,11 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
       <Alert
         type="error"
         showIcon
-        message="Không thể tải đơn mua hàng"
-        description={poQuery.error ? toMessage(poQuery.error) : 'Không tìm thấy'}
+        message="Failed to load purchase order"
+        description={poQuery.error ? toMessage(poQuery.error) : 'Not found'}
         action={
           <Button onClick={() => router.push('/purchasing')}>
-            Về danh sách
+            Back to list
           </Button>
         }
       />
@@ -261,8 +279,8 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
       {/* Breadcrumb */}
       <Breadcrumb
         items={[
-          { title: <Link href="/">Trang chủ</Link> },
-          { title: <Link href="/purchasing">Đơn mua hàng</Link> },
+          { title: <Link href="/">Home</Link> },
+          { title: <Link href="/purchasing">Purchase Orders</Link> },
           { title: `PO ${id.slice(0, 8)}…` },
         ]}
       />
@@ -275,7 +293,7 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
             onClick={() => router.push('/purchasing')}
           />
           <Typography.Title level={4} style={{ margin: 0 }}>
-            Chi tiết đơn mua hàng
+            Details purchase order
           </Typography.Title>
           <Tag color={STATUS_COLOR[po.status] || 'default'} style={{ fontSize: 14 }}>
             {po.status}
@@ -291,18 +309,26 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
               onClick={() => placeMutation.mutate()}
               disabled={(po.lines?.length ?? 0) === 0}
             >
-              Đặt hàng
+              Place Order
             </Button>
           )}
           {canReceive && (
-            <Button
-              type="primary"
-              icon={<InboxOutlined />}
-              loading={receiveGoodsMutation.isPending}
-              onClick={() => receiveGoodsMutation.mutate()}
-            >
-              Nhận hàng (tất cả)
-            </Button>
+            <Space>
+              <Button
+                type="primary"
+                icon={<InboxOutlined />}
+                loading={receiveGoodsMutation.isPending}
+                onClick={handleReceiveAll}
+              >
+                Receive All
+              </Button>
+              <Button
+                icon={<InboxOutlined />}
+                onClick={() => setOpenReceive(true)}
+              >
+                Receive Per Line
+              </Button>
+            </Space>
           )}
           {(isDraft || po.status === 'placed') && (
             <Button
@@ -311,7 +337,7 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
               loading={cancelMutation.isPending}
               onClick={() => cancelMutation.mutate()}
             >
-              Hủy
+              Cancel
             </Button>
           )}
         </Space>
@@ -323,36 +349,36 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
           <Steps
             current={stepCurrent}
             items={[
-              { title: 'Nháp', icon: <ClockCircleOutlined /> },
-              { title: 'Đã đặt', icon: <SendOutlined /> },
-              { title: 'Nhận một phần', icon: <InboxOutlined /> },
-              { title: 'Hoàn tất', icon: <CheckCircleOutlined /> },
+              { title: 'Draft', icon: <ClockCircleOutlined /> },
+              { title: 'Placed', icon: <SendOutlined /> },
+              { title: 'Partially Received', icon: <InboxOutlined /> },
+              { title: 'Complete', icon: <CheckCircleOutlined /> },
             ]}
           />
         </Card>
       ) : (
-        <Alert type="error" showIcon message="Đơn mua hàng đã bị hủy" />
+        <Alert type="error" showIcon message="Purchase Orders has been cancelled" />
       )}
 
       {/* PO Info */}
       <Card styles={{ body: { padding: 16 } }} style={{ borderRadius: 12 }}>
         <Descriptions column={{ xs: 1, sm: 2, md: 3 }} bordered size="small">
-          <Descriptions.Item label="Mã PO">{id.slice(0, 8)}…</Descriptions.Item>
-          <Descriptions.Item label="Nhà cung cấp">
+          <Descriptions.Item label="PO ID">{id.slice(0, 8)}…</Descriptions.Item>
+          <Descriptions.Item label="Suppliers">
             {supplierQuery.data?.name ?? po.supplierId.slice(0, 8) + '…'}
           </Descriptions.Item>
-          <Descriptions.Item label="Tổng tiền">
+          <Descriptions.Item label="Total Amount">
             <Typography.Text strong>{formatVnd(po.totalCost)}</Typography.Text>
           </Descriptions.Item>
-          <Descriptions.Item label="Ngày tạo">{formatDateTime(po.createdAt)}</Descriptions.Item>
-          <Descriptions.Item label="Cập nhật">{formatDateTime(po.updatedAt)}</Descriptions.Item>
-          <Descriptions.Item label="Phiên bản">{po.version}</Descriptions.Item>
+          <Descriptions.Item label="Created">{formatDateTime(po.createdAt)}</Descriptions.Item>
+          <Descriptions.Item label="Updated">{formatDateTime(po.updatedAt)}</Descriptions.Item>
+          <Descriptions.Item label="Version">{po.version}</Descriptions.Item>
         </Descriptions>
       </Card>
 
       {/* Lines table */}
       <Card
-        title={`Dòng hàng (${po.lines?.length ?? 0})`}
+        title={`Line Items (${po.lines?.length ?? 0})`}
         styles={{ body: { padding: 0 } }}
         style={{ borderRadius: 12 }}
         extra={
@@ -363,7 +389,7 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
               icon={<PlusOutlined />}
               onClick={() => setOpenAddLine(true)}
             >
-              Thêm dòng
+              Add Line
             </Button>
           )
         }
@@ -373,13 +399,13 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
           columns={lineColumns}
           dataSource={po.lines ?? []}
           pagination={false}
-          locale={{ emptyText: <Empty description="Chưa có dòng hàng nào" /> }}
+          locale={{ emptyText: <Empty description="No line items yet" /> }}
         />
       </Card>
 
       {/* Add Line Modal */}
       <Modal
-        title="Thêm dòng hàng"
+        title="Add Line Item"
         open={openAddLine}
         onCancel={() => {
           setOpenAddLine(false);
@@ -389,8 +415,8 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
         }}
         onOk={() => form.submit()}
         confirmLoading={addLineMutation.isPending}
-        okText="Thêm"
-        cancelText="Hủy"
+        okText="Add"
+        cancelText="Cancel"
       >
         <Form
           form={form}
@@ -398,16 +424,16 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
           onFinish={(values) => addLineMutation.mutate(values)}
         >
           <Form.Item
-            label="Sản phẩm"
+            label="Products"
             name="productId"
-            rules={[{ required: true, message: 'Chọn sản phẩm' }]}
+            rules={[{ required: true, message: 'Select product' }]}
           >
             <Select
               showSearch
               filterOption={false}
               onSearch={setProductSearch}
               onChange={handleProductSelect}
-              placeholder="Tìm sản phẩm..."
+              placeholder="Search products..."
               loading={productSearchQuery.isFetching}
               options={(productSearchQuery.data?.data ?? []).map((p) => ({
                 value: p.id,
@@ -423,28 +449,28 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
           {selectedProduct && (
             <Alert
               type="info"
-              message={`${selectedProduct.name} — Giá bán: ${formatVnd(selectedProduct.defaultSalePrice)}`}
+              message={`${selectedProduct.name} — Sale Price: ${formatVnd(selectedProduct.defaultSalePrice)}`}
               style={{ marginBottom: 16 }}
             />
           )}
 
           <Form.Item
-            label="Số lượng"
+            label="Quantity"
             name="orderedQty"
             rules={[
-              { required: true, message: 'Nhập số lượng' },
-              { type: 'number', min: 1, message: 'Số lượng ≥ 1' },
+              { required: true, message: 'Enter quantity' },
+              { type: 'number', min: 1, message: 'Quantity ≥ 1' },
             ]}
           >
             <InputNumber<number> style={{ width: '100%' }} min={1} precision={0} placeholder="VD: 100" />
           </Form.Item>
 
           <Form.Item
-            label="Đơn giá mua (VND)"
+            label="Unit Price mua (VND)"
             name="unitCost"
             rules={[
-              { required: true, message: 'Nhập đơn giá' },
-              { type: 'number', min: 0, message: 'Đơn giá ≥ 0' },
+              { required: true, message: 'Enter unit price' },
+              { type: 'number', min: 0, message: 'Unit Price ≥ 0' },
             ]}
           >
             <InputNumber<number>
@@ -456,6 +482,64 @@ export default function PurchaseOrderDetailPage({ params }: PageProps) {
               placeholder="VD: 50,000"
             />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Receive Per Line Modal */}
+      <Modal
+        title="Receive Goods Per Line"
+        open={openReceive}
+        onCancel={() => {
+          setOpenReceive(false);
+          receiveForm.resetFields();
+        }}
+        onOk={() => receiveForm.submit()}
+        confirmLoading={receiveGoodsMutation.isPending}
+        okText="Receive"
+        cancelText="Cancel"
+        destroyOnHidden
+        width={600}
+      >
+        <Form
+          form={receiveForm}
+          layout="vertical"
+          onFinish={handleReceivePerLine}
+        >
+          {(po?.lines ?? [])
+            .filter((l) => l.receivedQty < l.orderedQty)
+            .map((line) => (
+              <Form.Item
+                key={line.id}
+                name={line.id}
+                label={
+                  <Space>
+                    <span style={{ fontWeight: 500 }}>{line.productName}</span>
+                    <span style={{ color: '#8c8c8c' }}>
+                      (Remaining: {line.orderedQty - line.receivedQty} / {line.orderedQty})
+                    </span>
+                  </Space>
+                }
+                initialValue={0}
+                rules={[
+                  {
+                    type: 'number',
+                    max: line.orderedQty - line.receivedQty,
+                    message: `Max ${line.orderedQty - line.receivedQty}`,
+                  },
+                ]}
+              >
+                <InputNumber<number>
+                  style={{ width: '100%' }}
+                  min={0}
+                  max={line.orderedQty - line.receivedQty}
+                  precision={0}
+                  placeholder={`0 – ${line.orderedQty - line.receivedQty}`}
+                />
+              </Form.Item>
+            ))}
+          {(po?.lines ?? []).filter((l) => l.receivedQty < l.orderedQty).length === 0 && (
+            <Alert type="success" message="All lines fully received" />
+          )}
         </Form>
       </Modal>
     </div>
