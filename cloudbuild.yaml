@@ -1,14 +1,15 @@
 # ============================================================
-# Cloud Build — Deploy all services to Cloud Run
+# Cloud Build — Deploy all services to Cloud Run (PARALLEL)
 # Triggered by GitHub Actions CD workflow
 # ============================================================
 
 steps:
-  # --- Backend Services ---
+  # --- Backend Services (all run in parallel) ---
 
   - id: deploy-auth-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
@@ -23,6 +24,7 @@ steps:
   - id: deploy-customer-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
@@ -37,6 +39,7 @@ steps:
   - id: deploy-sales-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
@@ -51,6 +54,7 @@ steps:
   - id: deploy-inventory-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
@@ -65,6 +69,7 @@ steps:
   - id: deploy-catalog-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
@@ -79,6 +84,7 @@ steps:
   - id: deploy-purchasing-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
@@ -93,6 +99,7 @@ steps:
   - id: deploy-api-gateway
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
@@ -110,6 +117,7 @@ steps:
   - id: deploy-frontend
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    waitFor: ['-']
     args:
       - run
       - deploy
