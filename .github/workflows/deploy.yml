@@ -1,4 +1,4 @@
-name: CD — Deploy to Cloud Run
+name: CD — Deploy via Cloud Build
 
 on:
   workflow_dispatch:
@@ -15,27 +15,9 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: auth-service
-            cloud_run: auth-service-dev
-          - service: customer-service
-            cloud_run: customer-service-dev
-          - service: sales-service
-            cloud_run: sales-service-dev
-          - service: inventory-service
-            cloud_run: inventory-service-dev
-          - service: catalog-service
-            cloud_run: catalog-service-dev
-          - service: purchasing-service
-            cloud_run: purchasing-service-dev
-          - service: api-gateway
-            cloud_run: api-gateway-dev
-          - service: frontend
-            cloud_run: frontend-dev
     steps:
+      - uses: actions/checkout@v4
+
       - name: Authenticate to GCP (WIF)
         uses: google-github-actions/auth@v2
         with:
@@ -45,13 +27,9 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy ${{ matrix.service }} to Cloud Run
+      - name: Trigger Cloud Build Deploy
         run: |
-          IMAGE="us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:latest"
-          
-          echo "Deploying $IMAGE to ${{ matrix.cloud_run }}"
-          gcloud run services update ${{ matrix.cloud_run }} \
-            --image="$IMAGE" \
-            --region=us-central1 \
-            --project=${{ vars.GCP_PROJECT }} \
-            --quiet
+          gcloud builds submit \
+            --config=cloudbuild.yaml \
+            --substitutions=_TAG=latest \
+            --project=${{ vars.GCP_PROJECT }}
