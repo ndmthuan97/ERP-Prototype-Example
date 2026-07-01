@@ -50,7 +50,10 @@ export function runWithCorrelation<T>(correlationId: string, fn: () => T): T {
 @Injectable()
 export class CorrelationMiddleware implements NestMiddleware {
   use(req: any, res: any, next: () => void): void {
-    const incoming = req?.headers?.[CORRELATION_HEADER];
+    // A duplicated header arrives as string[]; take the first entry so a valid
+    // incoming correlationId isn't discarded (which would break the trace chain).
+    const rawIncoming = req?.headers?.[CORRELATION_HEADER];
+    const incoming = Array.isArray(rawIncoming) ? rawIncoming[0] : rawIncoming;
     const correlationId =
       typeof incoming === 'string' && incoming.length > 0 ? incoming : randomUUID();
 

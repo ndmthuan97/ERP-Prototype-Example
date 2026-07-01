@@ -34,10 +34,14 @@ RUN mkdir -p ${SERVICE_DIR}/prisma
 # ---- Stage 3: Production runtime ----
 FROM base AS runner
 ARG SERVICE_DIR
-ARG SERVICE_PORT=3001
 
 ENV NODE_ENV=production
-ENV PORT=${SERVICE_PORT}
+# Do NOT bake PORT here. Cloud Run injects PORT (= the service's configured
+# container_port) at runtime and the app reads process.env.PORT. A hardcoded
+# ENV PORT=3001 would pin every service to 3001 regardless of its real port,
+# so the startup probe (which targets the configured port) never connects.
+# Locally (docker run / compose) PORT is unset → each service falls back to its
+# own default (auth 3004, gateway 3010, ...).
 
 COPY --from=shared-builder /app/shared shared/
 COPY --from=service-builder /app/${SERVICE_DIR}/node_modules ${SERVICE_DIR}/node_modules
@@ -46,6 +50,12 @@ COPY --from=service-builder /app/${SERVICE_DIR}/package.json ${SERVICE_DIR}/pack
 COPY --from=service-builder /app/${SERVICE_DIR}/prisma ${SERVICE_DIR}/prisma
 
 WORKDIR /app/${SERVICE_DIR}
-EXPOSE ${SERVICE_PORT}
+# EXPOSE is documentation only (Cloud Run ignores it and routes to the
+# configured container_port via the injected PORT env var).
+EXPOSE 8080
+
+# Drop root — run as the unprivileged `node` user (uid 1000, present in the
+# base image). Copied artifacts are world-readable, so reads still work.
+USER node
 
 CMD ["sh", "-c", "if [ -f dist/src/main.js ]; then node dist/src/main.js; else node dist/main.js; fi"]

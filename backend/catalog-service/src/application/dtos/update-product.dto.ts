@@ -15,6 +15,14 @@ export const updateProductSchema = z.object({
     .number()
     .min(0, "Default sale price must be >= 0")
     .optional(),
+
+  taxRate: z
+    .number()
+    .refine(
+      (v) => [0, 0.05, 0.08, 0.1].includes(v),
+      "Tax rate must be one of: 0%, 5%, 8%, 10%",
+    )
+    .optional(),
 });
 
 export type UpdateProductDto = z.infer<typeof updateProductSchema>;

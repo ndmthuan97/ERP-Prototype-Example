@@ -174,14 +174,34 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
   // ---- Create form ----
 
   const handleCreate = (values: Record<string, number>) => {
-    const lines = orderLines
-      .map((line) => ({
-        salesOrderLineId: line.id,
-        itemId: line.itemId,
-        itemName: line.itemName,
-        quantity: values[`qty_${line.id}`] ?? 0,
-      }))
-      .filter((l) => l.quantity > 0);
+    const mapped = orderLines.map((line) => ({
+      salesOrderLineId: line.id,
+      itemId: line.itemId,
+      itemName: line.itemName,
+      ordered: line.quantity,
+      quantity: values[`qty_${line.id}`] ?? 0,
+    }));
+
+    // Native <input max> is advisory only — a typed value can exceed it and go
+    // straight to the backend (over-delivery). Enforce the cap here.
+    const overDelivered = mapped.filter((l) => l.quantity > l.ordered);
+    if (overDelivered.length > 0) {
+      message.error(
+        `Delivery quantity cannot exceed ordered quantity for: ${overDelivered
+          .map((l) => l.itemName)
+          .join(', ')}`,
+      );
+      return;
+    }
+
+    const lines = mapped
+      .filter((l) => l.quantity > 0)
+      .map(({ salesOrderLineId, itemId, itemName, quantity }) => ({
+        salesOrderLineId,
+        itemId,
+        itemName,
+        quantity,
+      }));
 
     if (lines.length === 0) {
       message.warning('Select at least 1 line item');

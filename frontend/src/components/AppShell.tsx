@@ -304,7 +304,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   size={32}
                   style={{ background: '#1677ff' }}
                 >
-                  {user.name[0].toUpperCase()}
+                  {(user.name?.[0] ?? '?').toUpperCase()}
                 </Avatar>
                 {!isMobile && (
                   <Typography.Text style={{ fontSize: 13, fontWeight: 500 }}>

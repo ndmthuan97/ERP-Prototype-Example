@@ -86,3 +86,15 @@ variable "secret_env_vars" {
   default     = {}
   description = "Secret Manager references (key = env var name, value = secret ID)"
 }
+
+variable "startup_probe_path" {
+  type        = string
+  default     = "/health/live"
+  description = <<-EOT
+    HTTP path for the Cloud Run startup probe. Must be a LIVENESS check (is the
+    server up?), NOT readiness — using a readiness path like /health (which
+    returns 503 when the DB/Redis is unreachable) causes a transient dependency
+    hiccup to fail startup and tear the revision down. Backend services expose
+    /health/live; the gateway and frontend use /health.
+  EOT
+}

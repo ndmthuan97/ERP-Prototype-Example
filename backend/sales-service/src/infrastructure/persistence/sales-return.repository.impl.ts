@@ -3,14 +3,18 @@
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';
-import type {
-  SalesReturn as PrismaSalesReturn,
-  SalesReturnLine as PrismaSalesReturnLine,
+import {
+  Prisma,
+  type SalesReturn as PrismaSalesReturn,
+  type SalesReturnLine as PrismaSalesReturnLine,
 } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid';
+import { getCorrelationId } from '@erp/shared';
 
 import { SalesReturn } from '../../domain/entities/sales-return.entity.js';
 import { SalesReturnLine } from '../../domain/entities/sales-return-line.entity.js';
 import type { ISalesReturnRepository } from '../../domain/repositories/sales-return.repository.js';
+import type { OutboxEventInput } from '../../domain/repositories/sales-order.repository.js';
 import { PrismaService } from './prisma.service.js';
 
 @Injectable()
@@ -99,18 +103,48 @@ export class PrismaSalesReturnRepository implements ISalesReturnRepository {
     return this.toDomain(record);
   }
 
-  async update(salesReturn: SalesReturn): Promise<SalesReturn> {
-    const record = await this.prisma.salesReturn.update({
-      where: { id: salesReturn.id },
-      data: {
-        status: salesReturn.status,
-        totalRefundAmount: salesReturn.totalRefundAmount,
-        approvedAt: salesReturn.approvedAt,
-        completedAt: salesReturn.completedAt,
-        updatedAt: salesReturn.updatedAt,
-      },
-      include: { lines: true },
+  async update(
+    salesReturn: SalesReturn,
+    events?: OutboxEventInput[],
+  ): Promise<SalesReturn> {
+    const record = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.salesReturn.update({
+        where: { id: salesReturn.id },
+        data: {
+          status: salesReturn.status,
+          totalRefundAmount: salesReturn.totalRefundAmount,
+          approvedAt: salesReturn.approvedAt,
+          completedAt: salesReturn.completedAt,
+          updatedAt: salesReturn.updatedAt,
+        },
+        include: { lines: true },
+      });
+
+      // Outbox events written in the same transaction as the status change so
+      // the event is published iff the return actually transitioned.
+      if (events && events.length > 0) {
+        for (const event of events) {
+          await tx.outbox.create({
+            data: {
+              id: uuidv4(),
+              aggregateType: 'SalesReturn',
+              aggregateId: salesReturn.id,
+              eventType: event.eventType,
+              payload: {
+                ...event.payload,
+                _meta: {
+                  correlationId: getCorrelationId() ?? null,
+                  occurredAt: new Date().toISOString(),
+                },
+              } as Prisma.InputJsonObject,
+            },
+          });
+        }
+      }
+
+      return updated;
     });
+
     return this.toDomain(record);
   }
 }

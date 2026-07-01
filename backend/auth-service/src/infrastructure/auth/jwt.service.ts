@@ -20,7 +20,15 @@ export class JwtTokenService {
   private readonly refreshTtl: string;
 
   constructor() {
-    this.accessSecret = process.env.JWT_SECRET || '';
+    // Fail fast: signing/verifying with an empty secret means anyone can forge
+    // valid tokens. Refuse to start rather than silently accept forged JWTs.
+    const accessSecret = process.env.JWT_SECRET;
+    if (!accessSecret) {
+      throw new Error(
+        'FATAL: JWT_SECRET environment variable is required. Auth service cannot start without it.',
+      );
+    }
+    this.accessSecret = accessSecret;
     this.refreshSecret = process.env.JWT_REFRESH_SECRET || this.accessSecret;
     this.accessTtl = process.env.JWT_EXPIRES_IN || '15m';
     this.refreshTtl = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
@@ -42,11 +50,17 @@ export class JwtTokenService {
 
   /** Verify and decode an access token */
   verifyAccessToken(token: string): JwtPayload {
-    return jwt.verify(token, this.accessSecret) as JwtPayload;
+    // Pin the algorithm so a token can't be verified with an unexpected alg
+    // (defends against algorithm-confusion if an asymmetric key is introduced).
+    return jwt.verify(token, this.accessSecret, {
+      algorithms: ['HS256'],
+    }) as JwtPayload;
   }
 
   /** Verify and decode a refresh token */
   verifyRefreshToken(token: string): { sub: string } {
-    return jwt.verify(token, this.refreshSecret) as { sub: string };
+    return jwt.verify(token, this.refreshSecret, {
+      algorithms: ['HS256'],
+    }) as { sub: string };
   }
 }

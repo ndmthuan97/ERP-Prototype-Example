@@ -17,6 +17,7 @@ import { HandleSalesOrderCancelledCommand } from '../../application/commands/han
 import { HandleProductCreatedCommand } from '../../application/commands/handle-product-created.command.js';
 import { HandleGoodsReceivedCommand } from '../../application/commands/handle-goods-received.command.js';
 import { HandleSalesOrderFulfilledCommand } from '../../application/commands/handle-sales-order-fulfilled.command.js';
+import { HandleSalesReturnReceivedCommand } from '../../application/commands/handle-sales-return-received.command.js';
 
 @Injectable()
 export class InventoryEventSubscriber implements OnModuleInit {
@@ -28,6 +29,7 @@ export class InventoryEventSubscriber implements OnModuleInit {
     private readonly handleProductCreated: HandleProductCreatedCommand,
     private readonly handleGoodsReceived: HandleGoodsReceivedCommand,
     private readonly handleSalesOrderFulfilled: HandleSalesOrderFulfilledCommand,
+    private readonly handleSalesReturnReceived: HandleSalesReturnReceivedCommand,
   ) {}
 
   onModuleInit(): void {
@@ -66,6 +68,15 @@ export class InventoryEventSubscriber implements OnModuleInit {
       subscription: 'inventory-service.sales-order.fulfilled',
       handler: async (envelope) => {
         await this.handleSalesOrderFulfilled.execute(envelope);
+      },
+    });
+
+    // Cross-context: restock available stock when returned goods are received
+    this.subscriber.register({
+      topic: EVENT.SALES_RETURN_GOODS_RECEIVED,
+      subscription: 'inventory-service.sales-return.goods-received',
+      handler: async (envelope) => {
+        await this.handleSalesReturnReceived.execute(envelope);
       },
     });
   }

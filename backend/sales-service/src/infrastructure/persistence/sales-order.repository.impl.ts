@@ -6,7 +6,7 @@
 // + lifecycle_view (CQRS read model).
 // Decimal ↔ number conversion happens at this boundary only.
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ConflictException } from '@nestjs/common';
 import {
   Prisma,
   type SalesOrder as PrismaSalesOrder,
@@ -236,9 +236,9 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
         },
       });
 
-      // Update header totalAmount + version
-      const rec = await tx.salesOrder.update({
-        where: { id: order.id },
+      // Update header totalAmount + version (optimistic lock on version).
+      const headerResult = await tx.salesOrder.updateMany({
+        where: { id: order.id, version: order.version },
         data: {
           subtotalAmount: order.subtotalAmount,
           totalTaxAmount: order.totalTaxAmount,
@@ -246,6 +246,14 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
           version: { increment: 1 },
           updatedAt: order.updatedAt,
         },
+      });
+      if (headerResult.count === 0) {
+        throw new ConflictException(
+          `Sales order "${order.id}" was modified concurrently (optimistic lock)`,
+        );
+      }
+      const rec = await tx.salesOrder.findUniqueOrThrow({
+        where: { id: order.id },
         include: { lines: { orderBy: { createdAt: 'asc' } } },
       });
 
@@ -282,8 +290,11 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
     lifecycleData?: LifecycleViewData,
   ): Promise<SalesOrder> {
     const updated = await this.prisma.$transaction(async (tx) => {
-      const rec = await tx.salesOrder.update({
-        where: { id: order.id },
+      // Optimistic lock: only write if the version still matches what was read.
+      // Without this a concurrent read-modify-write (e.g. two deliveries
+      // completing at once) silently clobbers the other's status/totals.
+      const result = await tx.salesOrder.updateMany({
+        where: { id: order.id, version: order.version },
         data: {
           status: order.status,
           subtotalAmount: order.subtotalAmount,
@@ -293,6 +304,14 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
           version: { increment: 1 },
           updatedAt: order.updatedAt,
         },
+      });
+      if (result.count === 0) {
+        throw new ConflictException(
+          `Sales order "${order.id}" was modified concurrently (optimistic lock)`,
+        );
+      }
+      const rec = await tx.salesOrder.findUniqueOrThrow({
+        where: { id: order.id },
         include: { lines: { orderBy: { createdAt: 'asc' } } },
       });
 

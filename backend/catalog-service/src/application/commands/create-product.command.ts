@@ -39,6 +39,7 @@ export class CreateProductCommand {
       validatedData.name,
       validatedData.unit ?? "PCS",
       validatedData.defaultSalePrice ?? 0,
+      validatedData.taxRate,
     );
 
     const savedProduct = await this.productRepository.create(product, {
@@ -49,6 +50,7 @@ export class CreateProductCommand {
         name: product.name,
         unit: product.unit,
         defaultSalePrice: String(product.defaultSalePrice),
+        taxRate: String(product.taxRate),
         isActive: product.isActive,
       },
     });

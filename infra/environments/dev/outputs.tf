@@ -29,6 +29,16 @@ output "deployer_sa_email" {
   value       = module.iam.deployer_sa_email
 }
 
+output "backend_sa_email" {
+  description = "Backend runtime service account email (debug invoker/secret access)"
+  value       = module.iam.backend_sa_email
+}
+
+output "frontend_sa_email" {
+  description = "Frontend runtime service account email"
+  value       = module.iam.frontend_sa_email
+}
+
 output "vpc_connector_id" {
   description = "VPC Connector ID"
   value       = module.networking.vpc_connector_id

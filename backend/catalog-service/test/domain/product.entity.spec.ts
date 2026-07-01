@@ -7,6 +7,7 @@ describe("Product Entity", () => {
     name: "Test Product",
     unit: "PCS",
     defaultSalePrice: 100,
+    taxRate: 0.1,
     isActive: true,
     version: 0,
     createdAt: new Date("2025-01-01"),

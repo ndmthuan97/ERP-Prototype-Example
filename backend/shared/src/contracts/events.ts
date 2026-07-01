@@ -23,6 +23,9 @@ export const EVENT = {
   SALES_ORDER_CONFIRMED: 'sales-order.confirmed',
   SALES_ORDER_FULFILLED: 'sales-order.fulfilled',
   SALES_ORDER_CANCELLED: 'sales-order.cancelled',
+  // Returned goods physically arrived back at the warehouse → inventory
+  // receives (restocks) the returned quantities.
+  SALES_RETURN_GOODS_RECEIVED: 'sales-return.goods-received',
 
   // --- Catalog context ---
   PRODUCT_CREATED: 'product.created',
@@ -111,6 +114,7 @@ export interface ProductCreatedPayload {
   name: string;
   unit: string;
   defaultSalePrice: string;
+  taxRate: string;
   isActive: boolean;
   _meta?: EventMetadata;
 }
@@ -155,6 +159,15 @@ export interface SalesOrderCancelledPayload {
   orderId: string;
   reason: string;
   /** Line items for inventory compensation (release reserved stock) */
+  lines: SalesOrderLineRef[];
+  _meta?: EventMetadata;
+}
+
+export interface SalesReturnGoodsReceivedPayload {
+  returnId: string;
+  orderId: string;
+  customerId: string;
+  /** Returned line items for inventory to receive (restock available). */
   lines: SalesOrderLineRef[];
   _meta?: EventMetadata;
 }

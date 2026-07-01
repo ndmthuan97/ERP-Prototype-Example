@@ -37,6 +37,9 @@ export class UpdateProductCommand {
     if (validatedData.unit !== undefined) {
       product.changeUnit(validatedData.unit);
     }
+    if (validatedData.taxRate !== undefined) {
+      product.changeTaxRate(validatedData.taxRate);
+    }
 
     const updatedProduct = await this.productRepository.update(product, [
       {
@@ -47,6 +50,7 @@ export class UpdateProductCommand {
           name: product.name,
           unit: product.unit,
           defaultSalePrice: String(product.defaultSalePrice),
+          taxRate: String(product.taxRate),
           isActive: product.isActive,
         },
       },

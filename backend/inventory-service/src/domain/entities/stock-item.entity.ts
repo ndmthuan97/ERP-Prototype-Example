@@ -17,6 +17,16 @@ export class InsufficientStockError extends Error {
   }
 }
 
+/** Domain error: trying to issue more than is currently reserved */
+export class InsufficientReservedError extends Error {
+  constructor(sku: string, requested: number, reserved: number) {
+    super(
+      `Insufficient reserved stock for SKU "${sku}": requested ${requested}, reserved ${reserved}`,
+    );
+    this.name = 'InsufficientReservedError';
+  }
+}
+
 export interface StockItemProps {
   id: string;
   sku: string;
@@ -104,8 +114,9 @@ export class StockItem {
   }
 
   /**
-   * Issue stock — reduce available quantity (outbound shipment).
-   * If reserved stock is being fulfilled, also reduce reserved accordingly.
+   * Issue UNRESERVED stock — reduce available quantity only (manual outbound:
+   * damage, adjustment, direct issue). Reserved stock is untouched; use
+   * `issueReserved()` to ship stock that was previously reserved for an order.
    * @throws InsufficientStockError if not enough available stock
    */
   issue(quantity: number, _reference?: string): void {
@@ -118,8 +129,27 @@ export class StockItem {
       );
     }
     this._quantityAvailable -= quantity;
-    const reservedToRelease = Math.min(this._quantityReserved, quantity);
-    this._quantityReserved -= reservedToRelease;
+    this.touch();
+  }
+
+  /**
+   * Issue previously RESERVED stock (fulfilment / shipment of an order).
+   * The quantity already moved out of `available` at reserve() time, so this
+   * only draws down `reserved`. Net on-hand (available + reserved) drops by
+   * `quantity`. This is the correct path for `sales-order.fulfilled` — using
+   * `issue()` here would decrement `available` a SECOND time (double count).
+   * @throws InsufficientReservedError if reserved < quantity
+   */
+  issueReserved(quantity: number, _reference?: string): void {
+    this.assertPositive(quantity);
+    if (this._quantityReserved < quantity) {
+      throw new InsufficientReservedError(
+        this.sku,
+        quantity,
+        this._quantityReserved,
+      );
+    }
+    this._quantityReserved -= quantity;
     this.touch();
   }
 

@@ -65,7 +65,9 @@ locals {
 
   frontend_service = {
     "frontend" = {
-      port      = 3000
+      # Must match the frontend Dockerfile's baked PORT/EXPOSE (8080), otherwise
+      # Cloud Run routes to a port the Next standalone server isn't listening on.
+      port      = 8080
       memory    = "512Mi"
       cpu       = "1"
       ingress   = "all"
@@ -146,8 +148,9 @@ module "secrets" {
   jwt_secret          = var.jwt_secret
   upstash_redis_url   = var.upstash_redis_url
   upstash_redis_token = var.upstash_redis_token
+  backend_sa_email    = module.iam.backend_sa_email
 
-  depends_on = [module.database]
+  depends_on = [module.database, module.iam]
 }
 
 # ============================================================
@@ -209,6 +212,12 @@ module "cloud_run" {
   cpu            = each.value.cpu
   ingress        = each.value.ingress
   is_public      = each.value.is_public
+
+  # Startup probe must hit a LIVENESS path. Backend services expose
+  # /health/live (no dependency checks); the gateway and frontend only serve
+  # /health (a plain 200). Never probe the backend /health (readiness → 503
+  # when the DB is briefly unreachable, which would fail startup).
+  startup_probe_path = contains(["api-gateway", "frontend"], each.key) ? "/health" : "/health/live"
 
   # VPC Connector — only for backend services that need DB access
   vpc_connector = each.value.needs_vpc ? module.networking.vpc_connector_id : null
@@ -292,16 +301,9 @@ resource "null_resource" "gateway_env_vars" {
   depends_on = [module.cloud_run]
 }
 
-resource "null_resource" "frontend_env_vars" {
-  triggers = {
-    frontend_url = module.cloud_run["frontend"].service_url
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["powershell", "-Command"]
-    command     = "gcloud run services update ${module.cloud_run["frontend"].service_name} --region=${var.region} --update-env-vars=NEXT_PUBLIC_API_URL=${module.cloud_run["api-gateway"].service_url} --quiet"
-  }
-
-  depends_on = [module.cloud_run]
-}
+# NOTE: the former `null_resource.frontend_env_vars` was removed — it set
+# NEXT_PUBLIC_API_URL as a RUNTIME env var, which is a no-op: NEXT_PUBLIC_*
+# values are inlined into the client bundle at build time, and the app reads
+# NEXT_PUBLIC_API_GATEWAY (not _API_URL). The gateway URL must instead be passed
+# as --build-arg NEXT_PUBLIC_API_GATEWAY in ci-frontend.yml.
 

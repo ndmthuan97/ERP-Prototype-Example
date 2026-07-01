@@ -20,6 +20,7 @@ import { resolve } from 'path';
 config({ path: resolve(__dirname, '../../.env') });
 
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Request, Response, NextFunction } from 'express';
@@ -123,7 +124,11 @@ function isPublicRoute(method: string, path: string): boolean {
   // per-service spec proxies (/docs/<service>-json) and the Swagger static
   // assets (/docs/swagger-ui-bundle.js, etc.). `startsWith('/docs/')` already
   // matches every /docs/*-json proxy route below, so no extra entry is needed.
-  if (path === '/docs' || path.startsWith('/docs/') || path.startsWith('/docs-json')) {
+  if (
+    path === '/docs' ||
+    path.startsWith('/docs/') ||
+    path.startsWith('/docs-json')
+  ) {
     return true;
   }
   return PUBLIC_ROUTES.some(
@@ -132,15 +137,35 @@ function isPublicRoute(method: string, path: string): boolean {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const logger = new Logger('APIGateway');
+
+  // Behind Cloud Run's proxy the real client IP is in X-Forwarded-For. Without
+  // trusting the proxy hop, express-rate-limit keys on the proxy's socket IP —
+  // a single shared bucket for ALL clients (5 failed logins would lock out
+  // everyone). Trust exactly one hop (Cloud Run's front end).
+  app.set('trust proxy', 1);
+
+  // Health check endpoint (Cloud Run startup/liveness probe). Registered FIRST,
+  // before helmet / CORS / rate limiting, so probes are cheap and never consume
+  // the rate-limit budget (which would cause false-unhealthy restarts).
+  app.use('/health', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'GET') {
+      return res.status(200).json({ status: 'ok' });
+    }
+    next();
+  });
 
   // Log the service-to-service auth mode once at boot so operators can see
   // whether ID-token minting is active.
   if (serviceAuthMode === 'id-token') {
-    logger.log('🔑 Service-to-service auth: id-token (forced via SERVICE_AUTH_MODE)');
+    logger.log(
+      '🔑 Service-to-service auth: id-token (forced via SERVICE_AUTH_MODE)',
+    );
   } else {
-    logger.log('🔑 Service-to-service auth: id-token for *.run.app targets only');
+    logger.log(
+      '🔑 Service-to-service auth: id-token for *.run.app targets only',
+    );
   }
 
   // CORS for frontend — restrict to allowed origins (fix: was `origin: true`)
@@ -186,14 +211,6 @@ async function bootstrap() {
     );
   }
 
-  // Health check endpoint (Cloud Run startup/liveness probe)
-  app.use('/health', (req: Request, res: Response, next: NextFunction) => {
-    if (req.method === 'GET') {
-      return res.status(200).json({ status: 'ok' });
-    }
-    next();
-  });
-
   // JWT verification middleware — runs BEFORE proxy forwarding
   app.use((req: Request, res: Response, next: NextFunction) => {
     // Skip JWT check for public routes
@@ -212,7 +229,11 @@ async function bootstrap() {
 
     const token = authHeader.slice(7);
     try {
-      const payload = jwt.verify(token, jwtSecret) as JwtPayload;
+      // Pin the algorithm: with only an HMAC secret configured, accepting any
+      // alg the token declares invites algorithm-confusion attacks.
+      const payload = jwt.verify(token, jwtSecret, {
+        algorithms: ['HS256'],
+      }) as JwtPayload;
       // Attach user info as headers for downstream services
       req.headers['x-user-id'] = payload.sub;
       req.headers['x-user-role'] = payload.role;
@@ -259,7 +280,10 @@ async function bootstrap() {
   // header — downstream services trust the x-user-* headers the gateway sets,
   // not the user JWT, so replacing Authorization with the service ID token is
   // exactly what Cloud Run needs to authorize the call.
-  function attachIdTokenHeader(proxyReq: ClientRequest, req: IncomingMessage): void {
+  function attachIdTokenHeader(
+    proxyReq: ClientRequest,
+    req: IncomingMessage,
+  ): void {
     const token = (req as GatewayRequest).__idToken;
     if (token) {
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
@@ -318,13 +342,21 @@ async function bootstrap() {
   // runs. This covers BOTH the /docs/<service>-json spec proxies AND the
   // /api/* proxies — the downstream services are private on prod, so even the
   // (public, JWT-free) docs proxies need the service ID token to fetch specs.
-  app.use('/docs/auth-json', serviceAuth(serviceUrls.auth), createDocsProxy(serviceUrls.auth));
+  app.use(
+    '/docs/auth-json',
+    serviceAuth(serviceUrls.auth),
+    createDocsProxy(serviceUrls.auth),
+  );
   app.use(
     '/docs/customers-json',
     serviceAuth(serviceUrls.customer),
     createDocsProxy(serviceUrls.customer),
   );
-  app.use('/docs/orders-json', serviceAuth(serviceUrls.order), createDocsProxy(serviceUrls.order));
+  app.use(
+    '/docs/orders-json',
+    serviceAuth(serviceUrls.order),
+    createDocsProxy(serviceUrls.order),
+  );
   app.use(
     '/docs/inventory-json',
     serviceAuth(serviceUrls.inventory),
@@ -341,7 +373,11 @@ async function bootstrap() {
     createDocsProxy(serviceUrls.purchasing),
   );
 
-  app.use('/api/auth', serviceAuth(serviceUrls.auth), createProxy(serviceUrls.auth, '/v1/auth'));
+  app.use(
+    '/api/auth',
+    serviceAuth(serviceUrls.auth),
+    createProxy(serviceUrls.auth, '/v1/auth'),
+  );
   app.use(
     '/api/customers',
     serviceAuth(serviceUrls.customer),
@@ -430,19 +466,35 @@ async function bootstrap() {
     },
   });
 
-  const port = parseInt(process.env.PORT || process.env.API_GATEWAY_PORT || '3010', 10);
+  const port = parseInt(
+    process.env.PORT || process.env.API_GATEWAY_PORT || '3010',
+    10,
+  );
   await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 API Gateway running at http://localhost:${port}`);
   logger.log(`🔒 JWT verification enabled for protected routes`);
   logger.log(`📋 Routing:`);
   logger.log(`   /api/auth/*       → Auth Service     (${serviceUrls.auth})`);
-  logger.log(`   /api/customers/*  → Customer Service  (${serviceUrls.customer})`);
+  logger.log(
+    `   /api/customers/*  → Customer Service  (${serviceUrls.customer})`,
+  );
   logger.log(`   /api/orders/*     → Order Service     (${serviceUrls.order})`);
-  logger.log(`   /api/inventory/*  → Inventory Service (${serviceUrls.inventory})`);
-  logger.log(`   /api/catalog/*    → Catalog Service   (${serviceUrls.catalog})`);
-  logger.log(`   /api/purchasing/* → Purchasing Service (${serviceUrls.purchasing})`);
-  logger.log(`   /api/suppliers/*  → Purchasing Service (${serviceUrls.purchasing})`);
+  logger.log(
+    `   /api/inventory/*  → Inventory Service (${serviceUrls.inventory})`,
+  );
+  logger.log(
+    `   /api/catalog/*    → Catalog Service   (${serviceUrls.catalog})`,
+  );
+  logger.log(
+    `   /api/purchasing/* → Purchasing Service (${serviceUrls.purchasing})`,
+  );
+  logger.log(
+    `   /api/suppliers/*  → Purchasing Service (${serviceUrls.purchasing})`,
+  );
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  new Logger('APIGateway').error(err);
+  process.exit(1);
+});

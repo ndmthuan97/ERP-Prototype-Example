@@ -35,11 +35,15 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=8080
 
-# Copy standalone output (includes only needed node_modules)
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Copy standalone output (includes only needed node_modules). --chown so the
+# non-root `node` user owns the files (Next standalone may write .next/cache).
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
 
 EXPOSE 8080
+
+# Drop root — run as the unprivileged `node` user (present in the base image).
+USER node
 
 CMD ["node", "server.js"]

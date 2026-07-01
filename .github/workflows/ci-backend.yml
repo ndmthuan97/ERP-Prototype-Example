@@ -51,8 +51,7 @@ jobs:
   # rồi cài service, sau đó chạy các script THỰC SỰ TỒN TẠI:
   #   - shared:   typecheck (tsc --noEmit) + test (jest)
   #   - service:  lint:check (eslint, KHÔNG --fix) nếu có + test (jest)
-  # Lưu ý: api-gateway hiện chỉ có 'lint' (eslint --fix, mutate file) →
-  # thiếu 'lint:check' nên bước Lint của nó bị bỏ qua (xem run_lint).
+  # Tất cả service (kể cả api-gateway) đều có 'lint:check' non-mutating.
   # Chỉ verify service có thay đổi (hoặc khi shared đổi → verify hết).
   # ============================================================
   verify:
@@ -80,10 +79,9 @@ jobs:
           - service: purchasing-service
             changed: ${{ needs.detect-changes.outputs.purchasing }}
             run_lint: true
-          # api-gateway thiếu script 'lint:check' → tạm bỏ qua bước Lint.
           - service: api-gateway
             changed: ${{ needs.detect-changes.outputs.gateway }}
-            run_lint: false
+            run_lint: true
     steps:
       - name: Check if verify needed
         id: check

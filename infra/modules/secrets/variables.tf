@@ -37,3 +37,8 @@ variable "upstash_redis_token" {
   sensitive   = true
   description = "Upstash Redis REST API token"
 }
+
+variable "backend_sa_email" {
+  type        = string
+  description = "Backend service account email — granted secretAccessor per-secret"
+}

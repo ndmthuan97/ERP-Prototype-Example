@@ -44,7 +44,19 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiBody({ type: RegisterBodyDto })
-  async register(@Body() body: RegisterBodyDto) {
+  async register(
+    @Body() body: RegisterBodyDto,
+    @Headers('x-user-role') role?: string,
+  ) {
+    // Admin-only: the DTO accepts a `role` field, so without this guard any
+    // authenticated user could self-register an `admin` account (privilege
+    // escalation). The gateway forwards the caller's role via x-user-role.
+    if (role !== 'admin') {
+      throw new HttpException(
+        'Forbidden: admin access required',
+        HttpStatus.FORBIDDEN,
+      );
+    }
     return this.registerCommand.execute(body);
   }
 

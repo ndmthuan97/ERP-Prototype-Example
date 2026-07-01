@@ -64,7 +64,7 @@ resource "google_cloud_run_v2_service" "service" {
 
       startup_probe {
         http_get {
-          path = "/health"
+          path = var.startup_probe_path
           port = var.container_port
         }
         initial_delay_seconds = 5

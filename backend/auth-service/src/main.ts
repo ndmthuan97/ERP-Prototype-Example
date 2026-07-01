@@ -83,4 +83,9 @@ async function bootstrap() {
   );
 }
 
-void bootstrap();
+bootstrap().catch((err) => {
+  // Surface startup failures (missing JWT_SECRET, port in use, DB adapter
+  // errors) and exit non-zero so the orchestrator restarts / reports unhealthy.
+  new Logger('Bootstrap').error(err);
+  process.exit(1);
+});

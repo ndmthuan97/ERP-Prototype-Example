@@ -2,7 +2,7 @@
 // PRISMA DELIVERY ORDER REPOSITORY — Implementation (Infrastructure Layer)
 // =============================================================================
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ConflictException } from '@nestjs/common';
 import type {
   DeliveryOrder as PrismaDeliveryOrder,
   DeliveryLine as PrismaDeliveryLine,
@@ -90,16 +90,28 @@ export class PrismaDeliveryOrderRepository implements IDeliveryOrderRepository {
   }
 
   async update(delivery: DeliveryOrder): Promise<DeliveryOrder> {
-    const record = await this.prisma.deliveryOrder.update({
-      where: { id: delivery.id },
-      data: {
-        status: delivery.status,
-        failReason: delivery.failReason,
-        version: { increment: 1 },
-        updatedAt: delivery.updatedAt,
-      },
-      include: { lines: true },
+    return this.prisma.$transaction(async (tx) => {
+      // Optimistic lock: guard on the version read into the entity so two
+      // concurrent transitions of the same delivery can't clobber each other.
+      const result = await tx.deliveryOrder.updateMany({
+        where: { id: delivery.id, version: delivery.version },
+        data: {
+          status: delivery.status,
+          failReason: delivery.failReason,
+          version: { increment: 1 },
+          updatedAt: delivery.updatedAt,
+        },
+      });
+      if (result.count === 0) {
+        throw new ConflictException(
+          `Delivery order "${delivery.id}" was modified concurrently (optimistic lock)`,
+        );
+      }
+      const record = await tx.deliveryOrder.findUniqueOrThrow({
+        where: { id: delivery.id },
+        include: { lines: true },
+      });
+      return this.toDomain(record);
     });
-    return this.toDomain(record);
   }
 }

@@ -29,6 +29,10 @@ interface RequestOptions {
 // Mutex for token refresh — prevents multiple concurrent refreshes
 let refreshPromise: Promise<boolean> | null = null;
 
+// Guards against a stampede of concurrent 401s each firing window.location =
+// '/login' (a dashboard fires several queries at once). Only the first redirects.
+let redirecting = false;
+
 function buildUrl(
   base: string,
   path: string,
@@ -56,7 +60,8 @@ function correlationId(): string {
  * Returns true if refresh succeeded, false otherwise.
  * Uses a mutex so only one refresh happens at a time.
  */
-async function tryRefreshToken(): Promise<boolean> {
+function tryRefreshToken(): Promise<boolean> {
+  // Reuse the in-flight refresh if one is already running (real mutex).
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
@@ -82,13 +87,13 @@ async function tryRefreshToken(): Promise<boolean> {
     } catch {
       return false;
     }
-  })();
-
-  try {
-    return await refreshPromise;
-  } finally {
+  })().finally(() => {
+    // Reset on the promise chain itself so the mutex is released exactly once,
+    // only after the single refresh settles — not per awaiting caller.
     refreshPromise = null;
-  }
+  });
+
+  return refreshPromise;
 }
 
 async function request<T>(
@@ -135,10 +140,15 @@ async function request<T>(
       });
     }
 
-    // Still 401 after refresh attempt → redirect to login
+    // Still 401 after refresh attempt → redirect to login (once).
     if (res.status === 401) {
       clearTokens();
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+      if (
+        typeof window !== 'undefined' &&
+        !window.location.pathname.includes('/login') &&
+        !redirecting
+      ) {
+        redirecting = true;
         window.location.href = '/login';
       }
     }

@@ -5,6 +5,7 @@ import {
   StockItem,
   StockItemProps,
   InsufficientStockError,
+  InsufficientReservedError,
 } from '../../src/domain/entities/stock-item.entity';
 
 function makeItem(overrides: Partial<StockItemProps> = {}): StockItem {
@@ -54,21 +55,13 @@ describe('StockItem.issue()', () => {
     expect(item.quantityAvailable).toBe(50);
   });
 
-  it('should reduce reserved stock when there is reserved quantity', () => {
+  it('should NOT touch reserved stock (issue draws down available only)', () => {
     const item = makeItem({ quantityAvailable: 100, quantityReserved: 30 });
     item.issue(20);
     // available reduced by 20
     expect(item.quantityAvailable).toBe(80);
-    // reserved reduced by min(30, 20) = 20
-    expect(item.quantityReserved).toBe(10);
-  });
-
-  it('should reduce reserved stock to 0 when issuing more than reserved', () => {
-    const item = makeItem({ quantityAvailable: 100, quantityReserved: 10 });
-    item.issue(50);
-    expect(item.quantityAvailable).toBe(50);
-    // reserved reduced by min(10, 50) = 10 → 0
-    expect(item.quantityReserved).toBe(0);
+    // reserved is a separate pool — a direct issue must not raid it
+    expect(item.quantityReserved).toBe(30);
   });
 
   it('should update the updatedAt timestamp', () => {
@@ -76,5 +69,34 @@ describe('StockItem.issue()', () => {
     const item = makeItem({ updatedAt: originalDate });
     item.issue(10);
     expect(item.updatedAt.getTime()).toBeGreaterThan(originalDate.getTime());
+  });
+});
+
+describe('StockItem.issueReserved()', () => {
+  it('should draw down reserved only, leaving available unchanged', () => {
+    const item = makeItem({ quantityAvailable: 80, quantityReserved: 20 });
+    item.issueReserved(20);
+    // available already lost the qty at reserve() time — do not touch it again
+    expect(item.quantityAvailable).toBe(80);
+    expect(item.quantityReserved).toBe(0);
+    // net on-hand dropped by exactly 20 (no double count)
+    expect(item.totalQuantity()).toBe(80);
+  });
+
+  it('reserve() then issueReserved() nets a single decrement of on-hand', () => {
+    const item = makeItem({ quantityAvailable: 100, quantityReserved: 0 });
+    const before = item.totalQuantity(); // 100
+    item.reserve(20); // available 80, reserved 20, total 100
+    item.issueReserved(20); // available 80, reserved 0, total 80
+    expect(item.quantityAvailable).toBe(80);
+    expect(item.quantityReserved).toBe(0);
+    expect(item.totalQuantity()).toBe(before - 20);
+  });
+
+  it('should throw InsufficientReservedError when issuing more than reserved', () => {
+    const item = makeItem({ quantityAvailable: 100, quantityReserved: 10 });
+    expect(() => item.issueReserved(50)).toThrow(InsufficientReservedError);
+    expect(item.quantityReserved).toBe(10);
+    expect(item.quantityAvailable).toBe(100);
   });
 });

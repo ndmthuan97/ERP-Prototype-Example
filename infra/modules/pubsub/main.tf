@@ -5,14 +5,15 @@
 
 locals {
   topics = {
-    "customer.created"        = { subscriptions = [] }
-    "customer.updated"        = { subscriptions = [] }
-    "sales-order.submitted"   = { subscriptions = [] }
-    "sales-order.confirmed"   = { subscriptions = [] }
-    "sales-order.cancelled"   = { subscriptions = ["inventory-service"] }
-    "sales-order.fulfilled"   = { subscriptions = ["inventory-service"] }
-    "product.created"         = { subscriptions = ["inventory-service"] }
-    "goods.received"          = { subscriptions = ["inventory-service"] }
+    "customer.created"            = { subscriptions = [] }
+    "customer.updated"            = { subscriptions = [] }
+    "sales-order.submitted"       = { subscriptions = [] }
+    "sales-order.confirmed"       = { subscriptions = [] }
+    "sales-order.cancelled"       = { subscriptions = ["inventory-service"] }
+    "sales-order.fulfilled"       = { subscriptions = ["inventory-service"] }
+    "sales-return.goods-received" = { subscriptions = ["inventory-service"] }
+    "product.created"             = { subscriptions = ["inventory-service"] }
+    "goods.received"              = { subscriptions = ["inventory-service"] }
   }
 
   # Flatten subscriptions for for_each
@@ -77,4 +78,34 @@ resource "google_pubsub_subscription" "dead_letter_sub" {
 
   ack_deadline_seconds       = 60
   message_retention_duration = "604800s"
+}
+
+# ============================================================
+# Dead-letter IAM — REQUIRED for dead-lettering to actually work.
+# Pub/Sub forwards undeliverable messages using its own service agent, which
+# needs publisher on the dead-letter topic and subscriber on each source
+# subscription. Without these grants dead-lettering silently fails at runtime.
+# ============================================================
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
+locals {
+  pubsub_agent = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
+resource "google_pubsub_topic_iam_member" "dead_letter_publisher" {
+  project = var.project_id
+  topic   = google_pubsub_topic.dead_letter.name
+  role    = "roles/pubsub.publisher"
+  member  = local.pubsub_agent
+}
+
+resource "google_pubsub_subscription_iam_member" "dead_letter_subscriber" {
+  for_each = google_pubsub_subscription.subs
+
+  project      = var.project_id
+  subscription = each.value.name
+  role         = "roles/pubsub.subscriber"
+  member       = local.pubsub_agent
 }

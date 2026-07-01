@@ -46,7 +46,10 @@ export class HandleSalesOrderFulfilledCommand {
           return;
         }
 
-        item.issue(line.quantity, orderId);
+        // Ship reserved stock: draw down `reserved` only (the quantity already
+        // left `available` when the order was submitted/reserved). Using
+        // issue() here would double-count against `available`.
+        item.issueReserved(line.quantity, orderId);
 
         await this.repo.saveWithMovement(item, {
           itemId: item.id,

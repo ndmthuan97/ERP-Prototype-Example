@@ -4,7 +4,10 @@
 // Tests command handlers with mocked repository.
 
 import { PurchaseOrder, PurchaseOrderLine } from "../../src/domain/entities";
-import type { IPurchaseOrderRepository } from "../../src/domain/repositories";
+import type {
+  IPurchaseOrderRepository,
+  ISupplierRepository,
+} from "../../src/domain/repositories";
 import { CreatePOCommand } from "../../src/application/commands/create-po.command";
 import { AddLinePOCommand } from "../../src/application/commands/add-line-po.command";
 import { RemoveLinePOCommand } from "../../src/application/commands/remove-line-po.command";
@@ -23,6 +26,15 @@ function mockRepo(): IPurchaseOrderRepository {
     save: jest.fn((order) => Promise.resolve(order)),
     addLine: jest.fn((order) => Promise.resolve(order)),
     removeLine: jest.fn(() => Promise.resolve()),
+  };
+}
+
+function mockSupplierRepo(active = true): ISupplierRepository {
+  return {
+    findById: jest.fn(() => Promise.resolve({ isActive: active } as any)),
+    findAll: jest.fn(),
+    save: jest.fn((s) => Promise.resolve(s)),
+    update: jest.fn((s) => Promise.resolve(s)),
   };
 }
 
@@ -57,7 +69,7 @@ function makeLine(id = "line-1"): PurchaseOrderLine {
 describe("CreatePOCommand", () => {
   it("creates a draft PO with valid input", async () => {
     const repo = mockRepo();
-    const cmd = new CreatePOCommand(repo);
+    const cmd = new CreatePOCommand(repo, mockSupplierRepo());
 
     const result = await cmd.execute({ supplierId: "sup-1" });
     expect(result.status).toBe("draft");
@@ -67,9 +79,29 @@ describe("CreatePOCommand", () => {
 
   it("throws ZodError on invalid input", async () => {
     const repo = mockRepo();
-    const cmd = new CreatePOCommand(repo);
+    const cmd = new CreatePOCommand(repo, mockSupplierRepo());
 
     await expect(cmd.execute({})).rejects.toThrow();
+  });
+
+  it("throws NotFound when supplier does not exist", async () => {
+    const repo = mockRepo();
+    const supplierRepo = mockSupplierRepo();
+    (supplierRepo.findById as jest.Mock).mockResolvedValue(null);
+    const cmd = new CreatePOCommand(repo, supplierRepo);
+
+    await expect(cmd.execute({ supplierId: "missing" })).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inactive supplier", async () => {
+    const repo = mockRepo();
+    const cmd = new CreatePOCommand(repo, mockSupplierRepo(false));
+
+    await expect(cmd.execute({ supplierId: "sup-1" })).rejects.toThrow();
+    expect(repo.create).not.toHaveBeenCalled();
   });
 });
 

@@ -22,7 +22,10 @@ export function setAuthToken(token: string | null): void {
 }
 
 export function getAuthToken(): string | null {
-  if (cachedToken) return cachedToken;
+  // On the client, always read localStorage so a token rotated by the refresh
+  // flow (or another tab) is picked up immediately — a stale in-memory copy
+  // would keep sending the old, now-invalid token. `cachedToken` is only an
+  // SSR fallback where localStorage is unavailable.
   if (typeof window !== 'undefined') {
     cachedToken = localStorage.getItem(STORAGE_KEY);
   }

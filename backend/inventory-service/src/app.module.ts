@@ -36,6 +36,7 @@ import { HandleSalesOrderCancelledCommand } from './application/commands/handle-
 import { HandleProductCreatedCommand } from './application/commands/handle-product-created.command';
 import { HandleGoodsReceivedCommand } from './application/commands/handle-goods-received.command';
 import { HandleSalesOrderFulfilledCommand } from './application/commands/handle-sales-order-fulfilled.command';
+import { HandleSalesReturnReceivedCommand } from './application/commands/handle-sales-return-received.command';
 import { InventoryEventSubscriber } from './infrastructure/messaging/inventory-event.subscriber';
 import { GetItemQuery } from './application/queries/get-item.query';
 import { SearchItemsQuery } from './application/queries/search-items.query';
@@ -71,6 +72,7 @@ import { InventoryController } from './presentation/inventory.controller';
     HandleProductCreatedCommand,
     HandleGoodsReceivedCommand,
     HandleSalesOrderFulfilledCommand,
+    HandleSalesReturnReceivedCommand,
 
     // Health: chỉ kiểm tra Postgres
     {

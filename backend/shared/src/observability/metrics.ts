@@ -49,7 +49,21 @@ export class MetricsService {
    */
   private labelKey(labels: Record<string, string>): string {
     const keys = Object.keys(labels).sort();
-    return keys.map((k) => `${k}="${labels[k]}"`).join(',');
+    return keys
+      .map((k) => `${k}="${this.escapeLabelValue(labels[k])}"`)
+      .join(',');
+  }
+
+  /**
+   * Escape a Prometheus label value: backslash, double-quote and newline must
+   * be escaped, otherwise a value containing `"` or `\n` (e.g. an error string)
+   * produces invalid exposition text and breaks the entire /metrics scrape.
+   */
+  private escapeLabelValue(value: string): string {
+    return String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n');
   }
 
   /**

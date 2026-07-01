@@ -68,8 +68,10 @@ export class DeliveryController {
   @Post(':id/deliver')
   async deliver(@Param('orderId') orderId: string, @Param('id') id: string) {
     const result = await this.updateStatusCommand.execute(id, 'deliver');
-    // After delivery completes, update the SO status (partial/full)
-    await this.handleDeliveryCompleted.execute(orderId);
+    // After delivery completes, update the SO status (partial/full) and issue
+    // the just-delivered quantities out of reserved inventory. Passing the DO id
+    // lets the handler emit only this delivery's lines (the delta).
+    await this.handleDeliveryCompleted.execute(orderId, id);
     return result;
   }
 
