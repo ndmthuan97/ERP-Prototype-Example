@@ -49,7 +49,9 @@ describe('UpdateSalesReturnStatusCommand — restock emission', () => {
     expect(events[0].eventType).toBe('sales-return.goods-received');
     expect(events[0].payload.returnId).toBe('ret-1');
     expect(events[0].payload.orderId).toBe('order-1');
-    expect(events[0].payload.lines).toEqual([{ itemId: 'item-1', quantity: 3 }]);
+    expect(events[0].payload.lines).toEqual([
+      { itemId: 'item-1', quantity: 3 },
+    ]);
   });
 
   it('does not emit a restock event on approve', async () => {

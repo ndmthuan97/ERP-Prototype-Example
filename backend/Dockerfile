@@ -3,7 +3,7 @@
 # ============================================================
 # Build args:
 #   SERVICE_DIR  — tên folder service (customer-service, sales-service, ...)
-#   SERVICE_PORT — port service listen
+# Port: KHÔNG bake — Cloud Run inject PORT lúc runtime (xem stage runner).
 # ============================================================
 
 FROM node:22-alpine AS base

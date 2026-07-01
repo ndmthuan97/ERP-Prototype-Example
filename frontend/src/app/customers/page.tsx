@@ -130,7 +130,6 @@ export default function CustomersPage() {
   });
 
   // ---- Mutations ----
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleApiError = (err: unknown, form: FormInstance<any>) => {
     if (err instanceof ApiError) {
       const fields = err.fieldErrors();

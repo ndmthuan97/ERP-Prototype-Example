@@ -3,10 +3,9 @@
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  Prisma,
-  type SalesReturn as PrismaSalesReturn,
-  type SalesReturnLine as PrismaSalesReturnLine,
+import type {
+  SalesReturn as PrismaSalesReturn,
+  SalesReturnLine as PrismaSalesReturnLine,
 } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { getCorrelationId } from '@erp/shared';
@@ -136,7 +135,7 @@ export class PrismaSalesReturnRepository implements ISalesReturnRepository {
                   correlationId: getCorrelationId() ?? null,
                   occurredAt: new Date().toISOString(),
                 },
-              } as Prisma.InputJsonObject,
+              },
             },
           });
         }

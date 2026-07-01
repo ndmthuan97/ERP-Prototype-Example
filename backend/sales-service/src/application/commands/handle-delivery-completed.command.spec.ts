@@ -80,7 +80,10 @@ describe('HandleDeliveryCompletedCommand — inventory issue emission', () => {
 
   it('emits sales-order.fulfilled with ONLY the just-delivered DO lines (full)', async () => {
     soRepo.findByIdWithLines.mockResolvedValue(
-      makeOrder([soLine('line-1', 'item-1', 10), soLine('line-2', 'item-2', 5)]),
+      makeOrder([
+        soLine('line-1', 'item-1', 10),
+        soLine('line-2', 'item-2', 5),
+      ]),
     );
     const do1 = deliveredDO('do-1', [
       delLine('line-1', 'item-1', 10),
@@ -117,7 +120,9 @@ describe('HandleDeliveryCompletedCommand — inventory issue emission', () => {
     expect(result.status).toBe('partially_delivered');
 
     const events = soRepo.update.mock.calls[0][1];
-    expect(events[0].payload.lines).toEqual([{ itemId: 'item-1', quantity: 6 }]);
+    expect(events[0].payload.lines).toEqual([
+      { itemId: 'item-1', quantity: 6 },
+    ]);
   });
 
   it('emits no event when the delivered DO id is unknown (no stock issued)', async () => {

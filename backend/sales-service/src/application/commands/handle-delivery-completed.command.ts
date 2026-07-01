@@ -87,7 +87,11 @@ export class HandleDeliveryCompletedCommand {
     // lines means partial deliveries each issue their own delta exactly once
     // (inventory's subscriber is idempotent per message). Without this the
     // reserved quantity would stay locked forever after goods physically ship.
-    const events = this.buildFulfilledEvents(order, deliveries, deliveredDeliveryId);
+    const events = this.buildFulfilledEvents(
+      order,
+      deliveries,
+      deliveredDeliveryId,
+    );
 
     await this.soRepo.update(
       order,

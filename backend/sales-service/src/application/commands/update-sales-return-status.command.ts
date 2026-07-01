@@ -7,10 +7,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import {
-  EVENT,
-  type SalesReturnGoodsReceivedPayload,
-} from '@erp/shared';
+import { EVENT, type SalesReturnGoodsReceivedPayload } from '@erp/shared';
 
 import {
   SALES_RETURN_REPOSITORY,
@@ -57,10 +54,7 @@ export class UpdateSalesReturnStatusCommand {
               itemId: l.itemId,
               quantity: l.quantity,
             })),
-          } satisfies SalesReturnGoodsReceivedPayload as unknown as Record<
-            string,
-            unknown
-          >,
+          } satisfies SalesReturnGoodsReceivedPayload,
         });
         break;
       case 'complete':
