@@ -1,12 +1,20 @@
 name: CI — Backend
 
 on:
+  # Cho phép trigger tay từ tab Actions (không phụ thuộc path filter).
+  workflow_dispatch:
   push:
     branches: [main]
-    paths: ['backend/**']
+    # Bao gồm chính file workflow này: sửa CI mà không đụng backend/** vẫn chạy
+    # lại (nếu không, push riêng workflow sẽ KHÔNG khớp path → không trigger).
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
   pull_request:
     branches: [main]
-    paths: ['backend/**']
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
 
 jobs:
   # ============================================================
@@ -33,6 +41,7 @@ jobs:
               - 'backend/shared/**'
               - 'backend/Dockerfile'
               - 'backend/.dockerignore'
+              - '.github/workflows/ci-backend.yml'
             auth: 'backend/auth-service/**'
             customer: 'backend/customer-service/**'
             sales: 'backend/sales-service/**'

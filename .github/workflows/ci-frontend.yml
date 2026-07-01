@@ -1,12 +1,17 @@
 name: CI — Frontend
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
-    paths: ['frontend/**']
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-frontend.yml'
   pull_request:
     branches: [main]
-    paths: ['frontend/**']
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-frontend.yml'
 
 jobs:
   # ============================================================
