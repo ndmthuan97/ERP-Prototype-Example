@@ -51,7 +51,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = parseInt(process.env.AUTH_SERVICE_PORT || String(DEFAULT_PORT), 10);
+  const port = parseInt(process.env.PORT || process.env.AUTH_SERVICE_PORT || String(DEFAULT_PORT), 10);
   await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 Auth Service running at http://localhost:${port}`);

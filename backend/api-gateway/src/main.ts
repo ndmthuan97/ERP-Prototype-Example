@@ -39,6 +39,7 @@ interface JwtPayload {
 const PUBLIC_ROUTES: Array<{ method: string; path: RegExp }> = [
   { method: 'POST', path: /^\/api\/auth\/login$/ },
   { method: 'POST', path: /^\/api\/auth\/refresh$/ },
+  { method: 'GET', path: /^\/health$/ },
 ];
 
 function isPublicRoute(method: string, path: string): boolean {
@@ -93,6 +94,14 @@ async function bootstrap() {
       'FATAL: JWT_SECRET environment variable is required. Gateway cannot start without it.',
     );
   }
+
+  // Health check endpoint (Cloud Run startup/liveness probe)
+  app.use('/health', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'GET') {
+      return res.status(200).json({ status: 'ok' });
+    }
+    next();
+  });
 
   // JWT verification middleware — runs BEFORE proxy forwarding
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -157,7 +166,7 @@ async function bootstrap() {
   app.use('/api/purchasing', createProxy(serviceUrls.purchasing, '/v1/purchasing'));
   app.use('/api/suppliers', createProxy(serviceUrls.purchasing, '/v1/suppliers'));
 
-  const port = parseInt(process.env.API_GATEWAY_PORT || '3010', 10);
+  const port = parseInt(process.env.PORT || process.env.API_GATEWAY_PORT || '3010', 10);
   await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 API Gateway running at http://localhost:${port}`);
