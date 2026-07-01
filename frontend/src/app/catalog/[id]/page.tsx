@@ -129,44 +129,58 @@ export default function CatalogDetailPage({ params }: PageProps) {
         ]}
       />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/catalog')} />
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {product.name}
-          </Typography.Title>
-          <Tag color={product.isActive ? 'green' : 'red'}>
-            {product.isActive ? 'Active' : 'Inactive'}
-          </Tag>
-        </Space>
-        <Space>
-          <Button type="primary" icon={<EditOutlined />} onClick={handleOpenEdit}>
-            Edit
+      <Space align="center" size={12}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {product.name}
+        </Typography.Title>
+        <Tag color={product.isActive ? 'green' : 'red'}>
+          {product.isActive ? 'Active' : 'Inactive'}
+        </Tag>
+      </Space>
+
+      {/* Fluent / D365 command bar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '4px 8px',
+          background: '#fff',
+          border: '1px solid #f0f0f0',
+          borderRadius: 4,
+        }}
+      >
+        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/catalog')}>
+          Back
+        </Button>
+        <Button type="text" icon={<EditOutlined />} onClick={handleOpenEdit}>
+          Edit
+        </Button>
+        {product.isActive ? (
+          <Button
+            type="text"
+            danger
+            icon={<StopOutlined />}
+            loading={deactivateMutation.isPending}
+            onClick={() => deactivateMutation.mutate()}
+          >
+            Deactivate
           </Button>
-          {product.isActive ? (
-            <Button
-              danger
-              icon={<StopOutlined />}
-              loading={deactivateMutation.isPending}
-              onClick={() => deactivateMutation.mutate()}
-            >
-              Deactivate
-            </Button>
-          ) : (
-            <Button
-              style={{ color: '#52c41a', borderColor: '#52c41a' }}
-              icon={<CheckCircleOutlined />}
-              loading={activateMutation.isPending}
-              onClick={() => activateMutation.mutate()}
-            >
-              Activate
-            </Button>
-          )}
-        </Space>
+        ) : (
+          <Button
+            type="text"
+            style={{ color: '#52c41a' }}
+            icon={<CheckCircleOutlined />}
+            loading={activateMutation.isPending}
+            onClick={() => activateMutation.mutate()}
+          >
+            Activate
+          </Button>
+        )}
       </div>
 
-      <Card style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
-        <Descriptions bordered column={{ xs: 1, sm: 2 }}>
+      <Card style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}>
+        <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
           <Descriptions.Item label="SKU">
             <Typography.Text keyboard>{product.sku}</Typography.Text>
           </Descriptions.Item>

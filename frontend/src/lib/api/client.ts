@@ -38,6 +38,9 @@ function buildUrl(
   path: string,
   query?: RequestOptions['query'],
 ): string {
+  if (!base) {
+    throw new Error('API base URL is empty — NEXT_PUBLIC_API_GATEWAY was not set at build time.');
+  }
   const root = base.endsWith('/') ? base : `${base}/`;
   const url = new URL(path.replace(/^\//, ''), root);
   if (query) {

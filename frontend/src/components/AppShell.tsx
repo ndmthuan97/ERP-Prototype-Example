@@ -24,19 +24,44 @@ import { useAuth } from '@/lib/auth/AuthProvider';
 
 const { Header, Sider, Content } = Layout;
 
+// Flat list of all navigable keys — used to compute the active selection.
+const NAV_KEYS = ['/', '/customers', '/orders', '/inventory', '/catalog', '/purchasing', '/purchasing/suppliers'];
+
+// Dynamics-365-style grouped navigation.
 const MENU = [
-  { key: '/', icon: <DashboardOutlined />, label: <Link href="/">Dashboard</Link> },
-  { key: '/customers', icon: <TeamOutlined />, label: <Link href="/customers">Customers</Link> },
-  { key: '/orders', icon: <ShoppingCartOutlined />, label: <Link href="/orders">Orders</Link> },
-  { key: '/inventory', icon: <AppstoreOutlined />, label: <Link href="/inventory">Inventory</Link> },
-  { key: '/catalog', icon: <BookOutlined />, label: <Link href="/catalog">Product Catalog</Link> },
   {
-    key: '/purchasing',
-    icon: <FileTextOutlined />,
-    label: 'Purchasing',
+    key: 'grp-home',
+    type: 'group' as const,
+    label: 'Home',
     children: [
-      { key: '/purchasing', label: <Link href="/purchasing">Purchase Orders</Link> },
-      { key: '/purchasing/suppliers', label: <Link href="/purchasing/suppliers">Suppliers</Link> },
+      { key: '/', icon: <DashboardOutlined />, label: <Link href="/">Dashboard</Link> },
+    ],
+  },
+  {
+    key: 'grp-sales',
+    type: 'group' as const,
+    label: 'Sales',
+    children: [
+      { key: '/customers', icon: <TeamOutlined />, label: <Link href="/customers">Customers</Link> },
+      { key: '/orders', icon: <ShoppingCartOutlined />, label: <Link href="/orders">Orders</Link> },
+    ],
+  },
+  {
+    key: 'grp-operations',
+    type: 'group' as const,
+    label: 'Operations',
+    children: [
+      { key: '/inventory', icon: <AppstoreOutlined />, label: <Link href="/inventory">Inventory</Link> },
+      { key: '/catalog', icon: <BookOutlined />, label: <Link href="/catalog">Product Catalog</Link> },
+      {
+        key: '/purchasing',
+        icon: <FileTextOutlined />,
+        label: 'Purchasing',
+        children: [
+          { key: '/purchasing', label: <Link href="/purchasing">Purchase Orders</Link> },
+          { key: '/purchasing/suppliers', label: <Link href="/purchasing/suppliers">Suppliers</Link> },
+        ],
+      },
     ],
   },
 ];
@@ -97,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const selected =
-    MENU.map((m) => m.key)
+    NAV_KEYS
       .filter((k) => k !== '/' && pathname.startsWith(k))
       .sort((a, b) => b.length - a.length)[0] ?? '/';
 
@@ -138,8 +163,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             style={{
               width: 32,
               height: 32,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #1677ff, #4096ff)',
+              borderRadius: 4,
+              background: 'linear-gradient(135deg, #0F6CBD, #2886DE)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -302,7 +327,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                 <Avatar
                   size={32}
-                  style={{ background: '#1677ff' }}
+                  style={{ background: '#0F6CBD' }}
                 >
                   {(user.name?.[0] ?? '?').toUpperCase()}
                 </Avatar>

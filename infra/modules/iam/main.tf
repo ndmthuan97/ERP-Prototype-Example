@@ -50,11 +50,6 @@ resource "google_project_iam_member" "deployer_roles" {
     "roles/iam.serviceAccountUser",
     "roles/cloudbuild.builds.editor",
     "roles/storage.admin",
-    # Required to manage the Domain Restricted Sharing org-policy override
-    # (org-policy.tf), which every public Cloud Run service depends_on. Without
-    # this the whole apply fails at the org-policy resource. Granted at project
-    # scope; must be bootstrapped by an owner on the first apply.
-    "roles/orgpolicy.policyAdmin",
   ])
 
   project = var.project_id

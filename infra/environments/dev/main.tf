@@ -3,7 +3,16 @@
 # ============================================================
 
 locals {
-  # Service definitions for Cloud Run
+  # Service definitions for Cloud Run.
+  #
+  # ingress = "all" for backend services does NOT make them public: is_public =
+  # false means no allUsers invoker binding, so only callers holding
+  # roles/run.invoker (the api-gateway's runtime SA) can reach them — the gateway
+  # mints a per-request ID token. ingress = "internal" was the original intent but
+  # the gateway's VPC egress is private-ranges-only and the VPC has no Cloud NAT,
+  # so gateway→service calls over the public *.run.app URL never entered the VPC
+  # and Cloud Run answered 404. IAM-gated ingress = "all" is the simplest correct
+  # posture here (alternative: Cloud NAT + gateway egress = all-traffic).
   backend_services = {
     "api-gateway" = {
       port      = 3010
@@ -17,7 +26,7 @@ locals {
       port      = 3004
       memory    = "512Mi"
       cpu       = "1"
-      ingress   = "internal"
+      ingress   = "all"
       needs_vpc = true
       is_public = false
     }
@@ -25,7 +34,7 @@ locals {
       port      = 3001
       memory    = "512Mi"
       cpu       = "1"
-      ingress   = "internal"
+      ingress   = "all"
       needs_vpc = true
       is_public = false
     }
@@ -33,7 +42,7 @@ locals {
       port      = 3002
       memory    = "512Mi"
       cpu       = "1"
-      ingress   = "internal"
+      ingress   = "all"
       needs_vpc = true
       is_public = false
     }
@@ -41,7 +50,7 @@ locals {
       port      = 3003
       memory    = "512Mi"
       cpu       = "1"
-      ingress   = "internal"
+      ingress   = "all"
       needs_vpc = true
       is_public = false
     }
@@ -49,7 +58,7 @@ locals {
       port      = 3005
       memory    = "512Mi"
       cpu       = "1"
-      ingress   = "internal"
+      ingress   = "all"
       needs_vpc = true
       is_public = false
     }
@@ -57,7 +66,7 @@ locals {
       port      = 3006
       memory    = "512Mi"
       cpu       = "1"
-      ingress   = "internal"
+      ingress   = "all"
       needs_vpc = true
       is_public = false
     }
@@ -254,9 +263,6 @@ module "cloud_run" {
     module.secrets,
     module.iam,
     module.registry,
-    # Public (allUsers) invoker binding for is_public services requires the
-    # Domain Restricted Sharing override to exist first.
-    google_org_policy_policy.allow_public_member_domains,
   ]
 }
 
@@ -290,12 +296,27 @@ resource "google_cloud_run_v2_service_iam_member" "gateway_invoker" {
 
 resource "null_resource" "gateway_env_vars" {
   triggers = {
-    gateway_url = module.cloud_run["api-gateway"].service_url
+    # Re-run if the gateway OR any downstream service URL changes (not just the
+    # gateway's own URL — otherwise a rebuilt downstream service would leave the
+    # gateway pointing at a stale URL).
+    gateway_url    = module.cloud_run["api-gateway"].service_url
+    auth_url       = module.cloud_run["auth-service"].service_url
+    customer_url   = module.cloud_run["customer-service"].service_url
+    order_url      = module.cloud_run["sales-service"].service_url
+    inventory_url  = module.cloud_run["inventory-service"].service_url
+    catalog_url    = module.cloud_run["catalog-service"].service_url
+    purchasing_url = module.cloud_run["purchasing-service"].service_url
   }
 
   provisioner "local-exec" {
     interpreter = ["powershell", "-Command"]
-    command     = "gcloud run services update ${module.cloud_run["api-gateway"].service_name} --region=${var.region} --update-env-vars=AUTH_SERVICE_URL=${module.cloud_run["auth-service"].service_url},CUSTOMER_SERVICE_URL=${module.cloud_run["customer-service"].service_url},ORDER_SERVICE_URL=${module.cloud_run["sales-service"].service_url},INVENTORY_SERVICE_URL=${module.cloud_run["inventory-service"].service_url},CATALOG_SERVICE_URL=${module.cloud_run["catalog-service"].service_url},PURCHASING_SERVICE_URL=${module.cloud_run["purchasing-service"].service_url} --quiet"
+    # gcloud's --update-env-vars uses ',' as its KEY=VALUE delimiter by default.
+    # On Windows PowerShell a bare ',' in the command string is parsed as the
+    # array operator, which splits the list and collapses EVERY value into the
+    # first var (AUTH_SERVICE_URL, space-joined) — breaking gateway routing
+    # (Invalid URL → 503). Use gcloud's custom-delimiter syntax (leading `^@^`)
+    # so '@' delimits the pairs and no comma ever reaches PowerShell.
+    command = "gcloud run services update ${module.cloud_run["api-gateway"].service_name} --region=${var.region} --update-env-vars=\"^@^AUTH_SERVICE_URL=${module.cloud_run["auth-service"].service_url}@CUSTOMER_SERVICE_URL=${module.cloud_run["customer-service"].service_url}@ORDER_SERVICE_URL=${module.cloud_run["sales-service"].service_url}@INVENTORY_SERVICE_URL=${module.cloud_run["inventory-service"].service_url}@CATALOG_SERVICE_URL=${module.cloud_run["catalog-service"].service_url}@PURCHASING_SERVICE_URL=${module.cloud_run["purchasing-service"].service_url}\" --quiet"
   }
 
   depends_on = [module.cloud_run]

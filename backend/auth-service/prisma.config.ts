@@ -14,6 +14,9 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
+    // Prisma v7: `prisma db seed` reads the seed command from here
+    // (the package.json `"prisma": { "seed" }` key is no longer supported).
+    seed: 'ts-node prisma/seed.ts',
   },
   // Prefer DIRECT_URL (port 5432, direct) for migrations.
   // Transaction pooler (DATABASE_URL, 6543/PgBouncer) may cause issues.

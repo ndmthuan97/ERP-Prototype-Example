@@ -2,6 +2,12 @@
 
 Nhật ký thay đổi của knowledge bundle này.
 
+## 2026-07-01
+
+- Added: [Frontend Fix & UI Revamp Plan](./frontend-fix-and-ui-revamp-plan.md) — Runbook: plan sửa 2 bug tích hợp (1B FE gọi sai URL do `NEXT_PUBLIC_API_GATEWAY` build-time; 1C Swagger Try-it-out ở gateway `/docs` gọi `/v1/*` thay vì `/api/*`) + Part 2 re-theme UI giữ Tailwind+AntD theo Fluent 2/Dynamics 365, pilot Catalog
+- Updated: [Frontend Fix & UI Revamp Plan](./frontend-fix-and-ui-revamp-plan.md) — thêm **Part 3 — Database: Migrate & Seed** (blocker): hiện trạng DB rỗng đã kiểm tra thật (`TableDoesNotExist`, login 503), ranh giới IaC (Cloud SQL Studio không quản bằng Terraform), 3 cách migrate, seed 3 bootstrap user admin/manager/staff (bcrypt), cách xem data qua Cloud SQL Studio; ghi URL Cloud Run thật đã lấy được
+- Updated: [docs/index.md](./index.md) — thêm entry Frontend Fix & UI Revamp Plan
+
 ## 2026-06-30
 
 - Added: [GCP Cloud Architecture](./architecture/gcp-cloud-architecture.md) — System Component: target infrastructure trên GCP (Cloud Run, Cloud SQL, Pub/Sub, VPC, IAM, WIF, Terraform modules, chi phí ~$15-20/month)
@@ -57,10 +63,10 @@ Nhật ký thay đổi của knowledge bundle này.
 
 - Updated: [Implementation Status](./IMPLEMENTATION-STATUS.md) — thêm OKF frontmatter (Reference)
 - Updated: [Technical Review](./technical-review.md) — thêm OKF frontmatter (Technical Review)
-- Updated: [Domain Gap Analysis](./domain-gap-analysis.md) — thêm OKF frontmatter (Technical Review)
+- Updated: [Domain Gap Analysis](./archive/domain-gap-analysis.md) — thêm OKF frontmatter (Technical Review)
 - Updated: [E2E Test Plan](./e2e-test-plan.md) — thêm OKF frontmatter (Runbook)
 - Updated: [System Flows](./flows.md) — thêm OKF frontmatter (Reference)
-- Updated: [Upgrade Plan](./upgrade-plan.md) — thêm OKF frontmatter (Runbook)
+- Updated: [Upgrade Plan](./archive/upgrade-plan.md) — thêm OKF frontmatter (Runbook)
 - Updated: [Project Goals](./overview/project-goals.md) — thêm OKF frontmatter (System Component)
 - Updated: [Business Requirements](./overview/business-requirements.md) — thêm OKF frontmatter (Business Rule)
 - Updated: [Tech Decisions](./overview/tech-decisions.md) — thêm OKF frontmatter (Architecture Decision)

@@ -291,19 +291,35 @@ export default function CatalogPage() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Product Catalog
-        </Typography.Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setOpenCreate(true)}
-        >
-          Add products
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Typography.Title level={4} style={{ margin: 0 }}>
+        Product Catalog
+      </Typography.Title>
+
+      {/* Fluent / D365 command bar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '4px 8px',
+          background: '#fff',
+          border: '1px solid #f0f0f0',
+          borderRadius: 4,
+        }}
+      >
+        <Button type="text" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
+          New
         </Button>
-      </Space>
+        <Button
+          type="text"
+          icon={<ReloadOutlined />}
+          loading={listQuery.isFetching}
+          onClick={() => listQuery.refetch()}
+        >
+          Refresh
+        </Button>
+      </div>
 
       <Row gutter={16}>
         <Col xs={24} sm={12} lg={6}>
@@ -346,7 +362,7 @@ export default function CatalogPage() {
 
       <Card
         styles={{ body: { padding: 16 } }}
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}
       >
         <Space wrap>
           <Input.Search
@@ -371,21 +387,16 @@ export default function CatalogPage() {
               { value: false, label: 'Inactive' },
             ]}
           />
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => listQuery.refetch()}
-          >
-            Reload
-          </Button>
         </Space>
       </Card>
 
       <Card
         styles={{ body: { padding: 0 } }}
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}
       >
         <Table<Product>
           rowKey="id"
+          size="small"
           columns={columns}
           dataSource={listQuery.data?.data ?? []}
           loading={listQuery.isFetching}

@@ -46,17 +46,28 @@ export function Providers({ children }: { children: ReactNode }) {
         locale={enUS}
         theme={{
           token: {
-            colorPrimary: '#1677ff',
+            // Fluent 2 / Dynamics 365 brand blue
+            colorPrimary: '#0F6CBD',
             colorSuccess: '#52c41a',
             colorWarning: '#faad14',
             colorError: '#ff4d4f',
-            colorBgLayout: '#f0f2f5',
-            borderRadius: 8,
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            colorBgLayout: '#f5f5f5',
+            borderRadius: 4,
+            fontFamily:
+              "'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif",
           },
           components: {
-            Card: { borderRadiusLG: 12 },
-            Table: { headerBg: '#fafafa' },
+            // Denser, flatter surfaces closer to Fluent/D365
+            Card: { borderRadiusLG: 4 },
+            Table: {
+              headerBg: '#f5f5f5',
+              headerColor: '#424242',
+              borderRadius: 4,
+              cellPaddingBlock: 10,
+            },
+            Button: { borderRadius: 4, primaryShadow: 'none' },
+            Menu: { itemBorderRadius: 4, itemHeight: 36 },
+            Layout: { bodyBg: '#f5f5f5' },
           },
         }}
       >

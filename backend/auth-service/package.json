@@ -22,7 +22,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:seed": "npx ts-node prisma/seed.ts"
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@erp/shared": "file:../shared",

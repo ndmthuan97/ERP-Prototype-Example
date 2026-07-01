@@ -1,41 +1,20 @@
 # ============================================================
-# Org Policy override — cho phép public (allUsers) invoker
+# Org Policy override — REMOVED
 # ============================================================
-# Domain Restricted Sharing (constraint iam.allowedPolicyMemberDomains) mặc định
-# CHẶN allUsers / allAuthenticatedUsers. Vì vậy Cloud Run --allow-unauthenticated
-# (các service is_public = true: api-gateway, frontend) bị từ chối IAM binding
-# → đúng lỗi "Setting IAM policy failed ... allUsers" khi deploy.
+# Trước đây file này tạo google_org_policy_policy.allow_public_member_domains để
+# override Domain Restricted Sharing (constraint iam.allowedPolicyMemberDomains)
+# cho phép allUsers trên các service is_public (api-gateway, frontend).
 #
-# Resource dưới override constraint ở cấp PROJECT để cho phép mọi member,
-# nhờ đó binding allUsers (trong module cloud-run) mới apply được.
+# Thực tế project portfolio-497506 (project cá nhân) KHÔNG enforce DRS: gateway &
+# frontend đã public và chạy được mà không cần override này (binding allUsers đã
+# tồn tại trong state). Ngược lại, resource org-policy gây fail `terraform apply`:
+#   - orgpolicy.googleapis.com đòi ADC quota project (403), và
+#   - roles/orgpolicy.policyAdmin không gán được ở cấp project (400).
+# Vì mọi is_public service depends_on nó, cả apply bị chặn → ingress/invoker bị bỏ.
 #
-# ------------------------------------------------------------
-# ⚠️ 1. BẢO MẬT: allow_all = "TRUE" nới Domain Restricted Sharing cho TOÀN BỘ
-#    project portfolio-497506 — mọi resource (không chỉ gateway) có thể được
-#    chia sẻ ra ngoài domain, gồm allUsers. Chỉ apply nếu chấp nhận rủi ro này.
-#    (DRS là constraint cấp project/folder/org, không thể giới hạn theo từng
-#    service; muốn hẹp hơn thì đặt gateway sau Cloud IAP thay vì mở allUsers.)
+# ⇒ Đã gỡ: resource org-policy (file này), role orgpolicy.policyAdmin của deployer
+#   (modules/iam/main.tf), và depends_on tương ứng trong main.tf (module cloud_run).
 #
-# ⚠️ 2. QUYỀN: apply cần identity có roles/orgpolicy.policyAdmin ở cấp project
-#    (hoặc org/folder). Nếu tổ chức KHÓA override ở cấp org, project không tự
-#    ghi đè được → phải nhờ GCP org-admin. WIF DEPLOYER_SA hiện nhiều khả năng
-#    KHÔNG có quyền này.
-#
-# ⚠️ 3. PROPAGATION: thay đổi org policy có độ trễ (tới ~vài phút). Nếu lần
-#    `terraform apply` đầu vẫn báo binding allUsers fail, chờ ~2–5 phút rồi
-#    `terraform apply` lại — resource org policy đã tạo, binding sẽ qua.
+# Nếu sau này chuyển sang org CÓ enforce DRS, khôi phục lại resource này + cấp
+# roles/orgpolicy.policyAdmin ở cấp org cho identity chạy apply.
 # ============================================================
-
-resource "google_org_policy_policy" "allow_public_member_domains" {
-  name   = "projects/${var.project_id}/policies/iam.allowedPolicyMemberDomains"
-  parent = "projects/${var.project_id}"
-
-  spec {
-    rules {
-      allow_all = "TRUE"
-    }
-  }
-
-  # Cần Org Policy API bật trước.
-  depends_on = [google_project_service.apis]
-}

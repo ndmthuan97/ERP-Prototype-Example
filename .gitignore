@@ -5,6 +5,9 @@ node_modules/
 .env
 .env.local
 .env.*.local
+# Prod config filled with real secrets, run locally — never commit
+.env.production
+.env.prod
 
 # Build output
 dist/

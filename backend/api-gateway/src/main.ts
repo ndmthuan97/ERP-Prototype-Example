@@ -28,7 +28,10 @@ import type { ClientRequest, IncomingMessage } from 'http';
 import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { createProxyMiddleware } from 'http-proxy-middleware';
+import {
+  createProxyMiddleware,
+  responseInterceptor,
+} from 'http-proxy-middleware';
 import { GoogleAuth, type IdTokenClient } from 'google-auth-library';
 import { AppModule } from './app.module.js';
 
@@ -134,6 +137,84 @@ function isPublicRoute(method: string, path: string): boolean {
   return PUBLIC_ROUTES.some(
     (route) => route.method === method.toUpperCase() && route.path.test(path),
   );
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI spec rewriting for the aggregate /docs UI
+// ---------------------------------------------------------------------------
+// Each downstream service serves its RAW spec with paths under its INTERNAL
+// prefix `/v1/<svc>` (services call `app.setGlobalPrefix('v1')`) and declares NO
+// `servers`. Swagger UI then defaults the server to the /docs page origin (the
+// gateway) and "Try it out" fires at `<gateway>/v1/<svc>/...` — but the gateway
+// only routes `/api/<alias>/*` (rewriting `/api/catalog` → `/v1/catalog`), so
+// those calls 404. We fix this by transforming the proxied spec on the fly:
+//   1. rewrite each `paths` key from `/v1/<svc>` to the public `/api/<alias>`
+//   2. force `servers: [{ url: '/' }]` (same-origin as the /docs page) so
+//      Try-it-out targets `<gateway>/api/<alias>/...`.
+// A prefix map is a list of {from,to} pairs — one per alias a service exposes
+// (purchasing serves BOTH `/v1/purchasing` and `/v1/suppliers`).
+interface PrefixPair {
+  from: string;
+  to: string;
+}
+
+// Rewrite ONLY the leading service prefix of a path, and ONLY on a segment
+// boundary so `/v1/customer` never matches a `/v1/customers` request (and vice
+// versa). A key matches `from` when it equals `from` exactly or continues with a
+// `/` (e.g. `/v1/catalog` and `/v1/catalog/products` match `/v1/catalog`, but
+// `/v1/catalogs` does not).
+function rewritePathKey(key: string, prefixMap: PrefixPair[]): string {
+  for (const { from, to } of prefixMap) {
+    if (key === from) {
+      return to;
+    }
+    if (key.startsWith(`${from}/`)) {
+      return `${to}${key.slice(from.length)}`;
+    }
+  }
+  return key;
+}
+
+// Transform a downstream service's raw OpenAPI JSON (as a Buffer) into a spec the
+// aggregate /docs UI can "Try it out" against. Defensive by design: if the body
+// isn't valid JSON or has no rewritable `paths`, the original buffer is returned
+// untouched so the proxy never throws on an unexpected payload. Everything else
+// in the spec (components, securitySchemes, etc.) is preserved verbatim so the
+// "Authorize" bearer button keeps working.
+function transformOpenApiSpec(
+  buffer: Buffer,
+  prefixMap: PrefixPair[],
+): Buffer | string {
+  const raw = buffer.toString('utf8');
+  let spec: unknown;
+  try {
+    spec = JSON.parse(raw);
+  } catch {
+    return buffer;
+  }
+  if (
+    typeof spec !== 'object' ||
+    spec === null ||
+    Array.isArray(spec) ||
+    typeof (spec as { paths?: unknown }).paths !== 'object' ||
+    (spec as { paths?: unknown }).paths === null
+  ) {
+    return buffer;
+  }
+
+  const specObj = spec as Record<string, unknown>;
+  const originalPaths = specObj.paths as Record<string, unknown>;
+  const rewrittenPaths: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(originalPaths)) {
+    rewrittenPaths[rewritePathKey(key, prefixMap)] = value;
+  }
+
+  return JSON.stringify({
+    ...specObj,
+    paths: rewrittenPaths,
+    // Same-origin as the /docs page → Try-it-out hits <gateway>/api/<alias>/...
+    servers: [{ url: '/' }],
+  });
 }
 
 async function bootstrap() {
@@ -327,15 +408,32 @@ async function bootstrap() {
   // (see isPublicRoute) — no JWT required. Registered BEFORE SwaggerModule.setup
   // so they intercept the request instead of hitting the Nest 404 handler, and
   // they never collide with the /api/* proxies above (different path prefix).
-  const createDocsProxy = (target: string) =>
-    createProxyMiddleware({
+  // `selfHandleResponse: true` lets responseInterceptor buffer the upstream
+  // response (auto-decompressing gzip/br) so we can rewrite the JSON before it
+  // reaches the browser. `attachIdTokenHeader` still runs on proxyReq so the
+  // Cloud Run service-to-service ID token is attached when fetching the spec.
+  const createDocsProxy = (target: string, prefixMap: PrefixPair[]) => {
+    // responseInterceptor(...) returns an async (Promise<void>) handler, but
+    // proxyRes (ProxyResCallback) expects a void return. Wrap it in a sync,
+    // void-returning arrow that explicitly discards the promise so the proxy
+    // library's internal error handling still applies and `no-misused-promises`
+    // is satisfied without an eslint-disable.
+    const interceptor = responseInterceptor((responseBuffer) =>
+      Promise.resolve(transformOpenApiSpec(responseBuffer, prefixMap)),
+    );
+    return createProxyMiddleware({
       target,
       changeOrigin: true,
+      selfHandleResponse: true,
       pathRewrite: () => '/docs-json',
       on: {
         proxyReq: attachIdTokenHeader,
+        proxyRes: (proxyRes, req, res) => {
+          void interceptor(proxyRes, req, res);
+        },
       },
     });
+  };
 
   // Each proxy is preceded by `serviceAuth(target)` so that, on Cloud Run, the
   // gateway mints an ID token (aud = target origin) BEFORE the sync proxy hook
@@ -345,32 +443,44 @@ async function bootstrap() {
   app.use(
     '/docs/auth-json',
     serviceAuth(serviceUrls.auth),
-    createDocsProxy(serviceUrls.auth),
+    createDocsProxy(serviceUrls.auth, [{ from: '/v1/auth', to: '/api/auth' }]),
   );
   app.use(
     '/docs/customers-json',
     serviceAuth(serviceUrls.customer),
-    createDocsProxy(serviceUrls.customer),
+    createDocsProxy(serviceUrls.customer, [
+      { from: '/v1/customers', to: '/api/customers' },
+    ]),
   );
   app.use(
     '/docs/orders-json',
     serviceAuth(serviceUrls.order),
-    createDocsProxy(serviceUrls.order),
+    createDocsProxy(serviceUrls.order, [
+      { from: '/v1/orders', to: '/api/orders' },
+    ]),
   );
   app.use(
     '/docs/inventory-json',
     serviceAuth(serviceUrls.inventory),
-    createDocsProxy(serviceUrls.inventory),
+    createDocsProxy(serviceUrls.inventory, [
+      { from: '/v1/inventory', to: '/api/inventory' },
+    ]),
   );
   app.use(
     '/docs/catalog-json',
     serviceAuth(serviceUrls.catalog),
-    createDocsProxy(serviceUrls.catalog),
+    createDocsProxy(serviceUrls.catalog, [
+      { from: '/v1/catalog', to: '/api/catalog' },
+    ]),
   );
+  // Purchasing service serves BOTH the purchasing and suppliers aliases.
   app.use(
     '/docs/purchasing-json',
     serviceAuth(serviceUrls.purchasing),
-    createDocsProxy(serviceUrls.purchasing),
+    createDocsProxy(serviceUrls.purchasing, [
+      { from: '/v1/purchasing', to: '/api/purchasing' },
+      { from: '/v1/suppliers', to: '/api/suppliers' },
+    ]),
   );
 
   app.use(
