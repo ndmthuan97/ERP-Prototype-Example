@@ -41,14 +41,23 @@ export function validateCancelOrder(data: unknown): CancelOrderDto {
 export class CancelOrderBodyDto extends createZodDto(cancelOrderSchema) {}
 
 // --- Search Orders ---
-const validStatuses = ['draft', 'submitted', 'confirmed', 'partially_delivered', 'fully_delivered', 'cancelled'];
+const validStatuses = [
+  'draft',
+  'submitted',
+  'confirmed',
+  'partially_delivered',
+  'fully_delivered',
+  'cancelled',
+];
 const searchOrdersSchema = z.object({
   page: z.number().int().positive().optional().default(1),
   limit: z.number().int().positive().max(100).optional().default(20),
-  status: z.string().refine(
-    (s) => validStatuses.includes(s),
-    { message: `status phải là: ${validStatuses.join(', ')}` },
-  ).optional(),
+  status: z
+    .string()
+    .refine((s) => validStatuses.includes(s), {
+      message: `status phải là: ${validStatuses.join(', ')}`,
+    })
+    .optional(),
 });
 export type SearchOrdersDto = z.infer<typeof searchOrdersSchema>;
 export function validateSearchOrders(data: unknown): SearchOrdersDto {

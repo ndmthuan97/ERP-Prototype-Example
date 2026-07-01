@@ -11,22 +11,22 @@
 //   3. Write outbox events in the same transaction (Outbox Pattern)
 //   4. Optimistic locking via version field
 
-import { Injectable, Logger, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { Injectable, Logger, ConflictException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { v4 as uuidv4 } from "uuid";
 
 import {
   PurchaseOrder,
   PurchaseOrderLine,
   type PurchaseOrderStatus,
-} from '../../domain/entities/index.js';
+} from "../../domain/entities/index.js";
 import type {
   IPurchaseOrderRepository,
   PaginatedResult,
   SearchPurchaseOrdersParams,
   OutboxEventInput,
-} from '../../domain/repositories/index.js';
-import { PrismaService } from './prisma.service.js';
+} from "../../domain/repositories/index.js";
+import { PrismaService } from "./prisma.service.js";
 
 // Type alias for Prisma record with lines included
 type PORecord = {
@@ -50,9 +50,7 @@ type POLineRecord = {
 };
 
 @Injectable()
-export class PrismaPurchaseOrderRepository
-  implements IPurchaseOrderRepository
-{
+export class PrismaPurchaseOrderRepository implements IPurchaseOrderRepository {
   private readonly logger = new Logger(PrismaPurchaseOrderRepository.name);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -114,7 +112,7 @@ export class PrismaPurchaseOrderRepository
         include: { lines: true },
         skip,
         take: params.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
@@ -183,7 +181,7 @@ export class PrismaPurchaseOrderRepository
         await tx.outbox.createMany({
           data: events.map((e) => ({
             id: uuidv4(),
-            aggregateType: 'PurchaseOrder',
+            aggregateType: "PurchaseOrder",
             aggregateId: order.id,
             eventType: e.eventType,
             payload: e.payload as Prisma.InputJsonValue,

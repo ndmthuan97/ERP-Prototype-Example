@@ -1,12 +1,12 @@
 // =============================================================================
 // SEARCH SUPPLIERS QUERY — List suppliers with pagination + search
 // =============================================================================
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject } from "@nestjs/common";
 
 import {
   SUPPLIER_REPOSITORY,
   type ISupplierRepository,
-} from '../../domain/repositories/index.js';
+} from "../../domain/repositories/index.js";
 
 @Injectable()
 export class SearchSuppliersQuery {

@@ -7,18 +7,18 @@
 //
 // Supports optimistic locking via version field on updates.
 
-import { Injectable, Logger, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { Injectable, Logger, ConflictException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { v4 as uuidv4 } from "uuid";
 
-import { Product } from '../../domain/entities/index.js';
+import { Product } from "../../domain/entities/index.js";
 import type {
   IProductRepository,
   PaginatedResult,
   SearchProductsParams,
-} from '../../domain/repositories/index.js';
-import { PrismaService } from './prisma.service.js';
-import { getCorrelationId } from '@erp/shared';
+} from "../../domain/repositories/index.js";
+import { PrismaService } from "./prisma.service.js";
+import { getCorrelationId } from "@erp/shared";
 
 function buildEventMeta() {
   return {
@@ -85,14 +85,16 @@ export class PrismaProductRepository implements IProductRepository {
     return this.toDomain(record);
   }
 
-  async search(params: SearchProductsParams): Promise<PaginatedResult<Product>> {
+  async search(
+    params: SearchProductsParams,
+  ): Promise<PaginatedResult<Product>> {
     const { query, page, limit, isActive } = params;
 
     const whereCondition: Prisma.ProductWhereInput = {
       ...(query && {
         OR: [
-          { name: { contains: query, mode: 'insensitive' as const } },
-          { sku: { contains: query, mode: 'insensitive' as const } },
+          { name: { contains: query, mode: "insensitive" as const } },
+          { sku: { contains: query, mode: "insensitive" as const } },
         ],
       }),
       ...(isActive !== undefined && { isActive }),
@@ -106,7 +108,7 @@ export class PrismaProductRepository implements IProductRepository {
         where: whereCondition,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
@@ -144,7 +146,7 @@ export class PrismaProductRepository implements IProductRepository {
           await tx.outbox.create({
             data: {
               id: uuidv4(),
-              aggregateType: 'Product',
+              aggregateType: "Product",
               aggregateId: product.id,
               eventType: event.eventType,
               payload: {
@@ -166,7 +168,7 @@ export class PrismaProductRepository implements IProductRepository {
       // Unique SKU violation at DB level (race condition safety net)
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === "P2002"
       ) {
         throw new ConflictException(
           `SKU "${product.sku}" already exists in the catalog`,
@@ -204,7 +206,7 @@ export class PrismaProductRepository implements IProductRepository {
           await tx.outbox.create({
             data: {
               id: uuidv4(),
-              aggregateType: 'Product',
+              aggregateType: "Product",
               aggregateId: product.id,
               eventType: event.eventType,
               payload: {

@@ -1,7 +1,12 @@
 // =============================================================================
 // CREATE SALES RETURN COMMAND — Create a return for a fulfilled order
 // =============================================================================
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
@@ -37,8 +42,10 @@ export class CreateReturnBodyDto extends createZodDto(createReturnSchema) {}
 @Injectable()
 export class CreateSalesReturnCommand {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly soRepo: ISalesOrderRepository,
-    @Inject(SALES_RETURN_REPOSITORY) private readonly returnRepo: ISalesReturnRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly soRepo: ISalesOrderRepository,
+    @Inject(SALES_RETURN_REPOSITORY)
+    private readonly returnRepo: ISalesReturnRepository,
   ) {}
 
   async execute(salesOrderId: string, dto: unknown) {
@@ -62,7 +69,9 @@ export class CreateSalesReturnCommand {
     );
 
     for (const lineInput of validated.lines) {
-      const soLine = order.lines.find((l) => l.id === lineInput.salesOrderLineId);
+      const soLine = order.lines.find(
+        (l) => l.id === lineInput.salesOrderLineId,
+      );
       if (!soLine) {
         throw new NotFoundException(
           `Sales order line "${lineInput.salesOrderLineId}" not found`,

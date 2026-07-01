@@ -2,7 +2,11 @@ import { RegisterCommand } from '../../src/application/commands/register.command
 import { LoginCommand } from '../../src/application/commands/login.command';
 import { RefreshTokenCommand } from '../../src/application/commands/refresh-token.command';
 import { User } from '../../src/domain/entities/user.entity';
-import { DuplicateEmailError, InvalidCredentialsError, InactiveUserError } from '../../src/domain/errors';
+import {
+  DuplicateEmailError,
+  InvalidCredentialsError,
+  InactiveUserError,
+} from '../../src/domain/errors';
 
 // Mock bcryptjs
 jest.mock('bcryptjs', () => ({
@@ -105,7 +109,11 @@ describe('Auth Application Layer', () => {
     let command: LoginCommand;
 
     beforeEach(() => {
-      command = new LoginCommand(mockUserRepo, mockJwtService as any, mockPrisma as any);
+      command = new LoginCommand(
+        mockUserRepo,
+        mockJwtService as any,
+        mockPrisma as any,
+      );
     });
 
     it('should login successfully with valid credentials', async () => {
@@ -135,12 +143,21 @@ describe('Auth Application Layer', () => {
       mockUserRepo.findByEmail.mockResolvedValue(null);
 
       await expect(
-        command.execute({ email: 'nonexistent@example.com', password: 'password' }),
+        command.execute({
+          email: 'nonexistent@example.com',
+          password: 'password',
+        }),
       ).rejects.toThrow(InvalidCredentialsError);
     });
 
     it('should throw InactiveUserError for inactive user', async () => {
-      const inactiveUser = new User({ ...testUser, isActive: false, id: 'inactive', createdAt: new Date(), updatedAt: new Date() });
+      const inactiveUser = new User({
+        ...testUser,
+        isActive: false,
+        id: 'inactive',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
       mockUserRepo.findByEmail.mockResolvedValue(inactiveUser);
 
       await expect(
@@ -156,7 +173,10 @@ describe('Auth Application Layer', () => {
     let command: RefreshTokenCommand;
 
     beforeEach(() => {
-      command = new RefreshTokenCommand(mockJwtService as any, mockPrisma as any);
+      command = new RefreshTokenCommand(
+        mockJwtService as any,
+        mockPrisma as any,
+      );
     });
 
     it('should refresh tokens successfully', async () => {
@@ -165,12 +185,20 @@ describe('Auth Application Layer', () => {
         id: 'rt-1',
         token: 'old-refresh-token',
         expiresAt: new Date(Date.now() + 86400000),
-        user: { id: 'user-1', email: 'test@example.com', role: 'staff', fullName: 'Test User', isActive: true },
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          role: 'staff',
+          fullName: 'Test User',
+          isActive: true,
+        },
       });
       mockJwtService.signAccessToken.mockReturnValue('new-access-token');
       mockJwtService.signRefreshToken.mockReturnValue('new-refresh-token');
 
-      const result = await command.execute({ refreshToken: 'old-refresh-token' });
+      const result = await command.execute({
+        refreshToken: 'old-refresh-token',
+      });
 
       expect(result.accessToken).toBe('new-access-token');
       expect(result.refreshToken).toBe('new-refresh-token');
@@ -184,7 +212,13 @@ describe('Auth Application Layer', () => {
         id: 'rt-1',
         token: 'expired-token',
         expiresAt: new Date(Date.now() - 86400000),
-        user: { id: 'user-1', email: 'test@example.com', role: 'staff', fullName: 'Test User', isActive: true },
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          role: 'staff',
+          fullName: 'Test User',
+          isActive: true,
+        },
       });
 
       await expect(

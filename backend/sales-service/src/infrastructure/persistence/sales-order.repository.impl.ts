@@ -7,7 +7,11 @@
 // Decimal ↔ number conversion happens at this boundary only.
 
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, type SalesOrder as PrismaSalesOrder, type SalesOrderLine as PrismaSalesOrderLine } from '@prisma/client';
+import {
+  Prisma,
+  type SalesOrder as PrismaSalesOrder,
+  type SalesOrderLine as PrismaSalesOrderLine,
+} from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 
 import { SalesOrder, SalesOrderLine } from '../../domain/entities/index.js';
@@ -104,7 +108,9 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
     return record ? this.toDomain(record) : null;
   }
 
-  async search(params: SearchOrdersParams): Promise<PaginatedResult<SalesOrder>> {
+  async search(
+    params: SearchOrdersParams,
+  ): Promise<PaginatedResult<SalesOrder>> {
     const where: Prisma.SalesOrderWhereInput = params.status
       ? { status: params.status }
       : {};
@@ -148,7 +154,10 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
   // MUTATIONS (all transactional)
   // ==========================================================================
 
-  async create(order: SalesOrder, event?: OutboxEventInput): Promise<SalesOrder> {
+  async create(
+    order: SalesOrder,
+    event?: OutboxEventInput,
+  ): Promise<SalesOrder> {
     const created = await this.prisma.$transaction(async (tx) => {
       const rec = await tx.salesOrder.create({
         data: {
@@ -198,7 +207,9 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
       return rec;
     });
 
-    this.logger.log(`Order created: id="${created.id}", customer="${created.customerId}"`);
+    this.logger.log(
+      `Order created: id="${created.id}", customer="${created.customerId}"`,
+    );
     return this.toDomain(created);
   }
 
@@ -338,7 +349,10 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
   // PENDING ORDERS TOTAL — for credit check
   // ==========================================================================
 
-  async sumPendingOrdersTotal(customerId: string, excludeOrderId: string): Promise<number> {
+  async sumPendingOrdersTotal(
+    customerId: string,
+    excludeOrderId: string,
+  ): Promise<number> {
     const result = await this.prisma.salesOrder.aggregate({
       where: {
         customerId,

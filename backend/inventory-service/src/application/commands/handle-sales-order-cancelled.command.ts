@@ -49,7 +49,7 @@ export class HandleSalesOrderCancelledCommand {
         });
       } catch (error) {
         this.logger.error(
-          `Release thất bại cho item "${line.itemId}": ${error}`,
+          `Release thất bại cho item "${line.itemId}": ${String(error)}`,
         );
       }
     }

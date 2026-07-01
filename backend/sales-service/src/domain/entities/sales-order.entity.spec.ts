@@ -5,7 +5,9 @@ import {
 } from './sales-order.entity';
 import { SalesOrderLine } from './sales-order-line.entity';
 
-function createLine(overrides: Partial<{ id: string; quantity: number; unitPrice: number }> = {}): SalesOrderLine {
+function createLine(
+  overrides: Partial<{ id: string; quantity: number; unitPrice: number }> = {},
+): SalesOrderLine {
   return SalesOrderLine.create(
     overrides.id ?? 'line-1',
     'item-1',

@@ -1,7 +1,12 @@
 // =============================================================================
 // CREATE DELIVERY ORDER COMMAND — Create a new delivery for a confirmed SO
 // =============================================================================
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
@@ -35,8 +40,10 @@ export class CreateDeliveryBodyDto extends createZodDto(createDeliverySchema) {}
 @Injectable()
 export class CreateDeliveryOrderCommand {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly soRepo: ISalesOrderRepository,
-    @Inject(DELIVERY_ORDER_REPOSITORY) private readonly deliveryRepo: IDeliveryOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly soRepo: ISalesOrderRepository,
+    @Inject(DELIVERY_ORDER_REPOSITORY)
+    private readonly deliveryRepo: IDeliveryOrderRepository,
   ) {}
 
   async execute(salesOrderId: string, dto: unknown) {
@@ -56,7 +63,9 @@ export class CreateDeliveryOrderCommand {
     const delivery = DeliveryOrder.createFromOrder(uuidv4(), salesOrderId);
 
     for (const lineInput of validated.lines) {
-      const soLine = order.lines.find((l) => l.id === lineInput.salesOrderLineId);
+      const soLine = order.lines.find(
+        (l) => l.id === lineInput.salesOrderLineId,
+      );
       if (!soLine) {
         throw new NotFoundException(
           `Sales order line "${lineInput.salesOrderLineId}" not found`,

@@ -5,12 +5,7 @@
 // HTTP endpoint. ALL items are reserved in ONE transaction — either all succeed
 // or none (fixing the non-atomic reserve issue).
 
-import {
-  Injectable,
-  Inject,
-  ConflictException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Inject, ConflictException, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
 import { InsufficientStockError } from '../../domain/entities/index.js';
@@ -88,7 +83,7 @@ export class ReserveBatchCommand {
           });
         } catch (rollbackError) {
           this.logger.error(
-            `Rollback failed for item "${res.itemId}": ${rollbackError instanceof Error ? rollbackError.message : rollbackError}`,
+            `Rollback failed for item "${res.itemId}": ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
           );
         }
       }

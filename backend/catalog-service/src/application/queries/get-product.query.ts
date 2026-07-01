@@ -2,13 +2,13 @@
 // GET PRODUCT QUERY — Use case for fetching a single product by ID or SKU
 // =============================================================================
 
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from "@nestjs/common";
 
-import { Product } from '../../domain/entities/index.js';
+import { Product } from "../../domain/entities/index.js";
 import {
   PRODUCT_REPOSITORY,
   type IProductRepository,
-} from '../../domain/repositories/index.js';
+} from "../../domain/repositories/index.js";
 
 @Injectable()
 export class GetProductQuery {
@@ -19,7 +19,10 @@ export class GetProductQuery {
 
   async execute(idOrSku: string): Promise<Product> {
     // Try by ID first (UUID pattern), then by SKU
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSku);
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        idOrSku,
+      );
 
     let product: Product | null = null;
 

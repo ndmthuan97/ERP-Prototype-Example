@@ -66,10 +66,7 @@ export class DeliveryController {
 
   /** POST .../deliveries/:id/deliver — shipped → delivered, then updates SO */
   @Post(':id/deliver')
-  async deliver(
-    @Param('orderId') orderId: string,
-    @Param('id') id: string,
-  ) {
+  async deliver(@Param('orderId') orderId: string, @Param('id') id: string) {
     const result = await this.updateStatusCommand.execute(id, 'deliver');
     // After delivery completes, update the SO status (partial/full)
     await this.handleDeliveryCompleted.execute(orderId);

@@ -27,11 +27,7 @@ import { ListUsersQuery } from './application/queries/list-users.query.js';
 import { AuthController } from './presentation/auth.controller.js';
 
 @Module({
-  controllers: [
-    AuthController,
-    HealthController,
-    MetricsController,
-  ],
+  controllers: [AuthController, HealthController, MetricsController],
   providers: [
     // Infrastructure
     PrismaService,

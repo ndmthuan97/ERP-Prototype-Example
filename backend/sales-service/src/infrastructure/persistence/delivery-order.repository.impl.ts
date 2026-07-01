@@ -83,7 +83,9 @@ export class PrismaDeliveryOrderRepository implements IDeliveryOrderRepository {
       include: { lines: true },
     });
 
-    this.logger.log(`Delivery order created: id="${record.id}", SO="${record.salesOrderId}"`);
+    this.logger.log(
+      `Delivery order created: id="${record.id}", SO="${record.salesOrderId}"`,
+    );
     return this.toDomain(record);
   }
 

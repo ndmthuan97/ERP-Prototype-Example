@@ -2,14 +2,14 @@
 // SEARCH PRODUCTS QUERY — Use case for searching products with pagination
 // =============================================================================
 
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject } from "@nestjs/common";
 
-import { Product } from '../../domain/entities/index.js';
+import { Product } from "../../domain/entities/index.js";
 import {
   PRODUCT_REPOSITORY,
   type IProductRepository,
   type PaginatedResult,
-} from '../../domain/repositories/index.js';
+} from "../../domain/repositories/index.js";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -22,7 +22,7 @@ export class SearchProductsQuery {
   ) {}
 
   async execute(
-    query: string = '',
+    query: string = "",
     page: number = 1,
     limit: number = DEFAULT_PAGE_SIZE,
     isActive?: boolean,

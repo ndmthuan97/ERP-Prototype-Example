@@ -19,4 +19,4 @@ export {
   updateSupplierSchema,
   type UpdateSupplierDto,
   validateUpdateSupplier,
-} from './purchasing.dto';
+} from "./purchasing.dto";

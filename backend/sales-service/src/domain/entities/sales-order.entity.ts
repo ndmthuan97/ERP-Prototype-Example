@@ -63,11 +63,21 @@ export class SalesOrder {
   readonly createdAt: Date;
   updatedAt: Date;
 
-  get status(): SalesOrderStatus { return this._status; }
-  get subtotalAmount(): number { return this._subtotalAmount; }
-  get totalTaxAmount(): number { return this._totalTaxAmount; }
-  get totalAmount(): number { return this._totalAmount; }
-  get cancelReason(): string | null { return this._cancelReason; }
+  get status(): SalesOrderStatus {
+    return this._status;
+  }
+  get subtotalAmount(): number {
+    return this._subtotalAmount;
+  }
+  get totalTaxAmount(): number {
+    return this._totalTaxAmount;
+  }
+  get totalAmount(): number {
+    return this._totalAmount;
+  }
+  get cancelReason(): string | null {
+    return this._cancelReason;
+  }
 
   constructor(props: SalesOrderProps) {
     this.id = props.id;
@@ -163,7 +173,11 @@ export class SalesOrder {
    * submitted → saga đang xử lý, cancel qua saga compensation.
    */
   cancel(reason: string): void {
-    const cancellable: SalesOrderStatus[] = ['draft', 'confirmed', 'partially_delivered'];
+    const cancellable: SalesOrderStatus[] = [
+      'draft',
+      'confirmed',
+      'partially_delivered',
+    ];
     if (!cancellable.includes(this._status)) {
       throw new InvalidStatusTransitionError(this._status, 'cancel');
     }

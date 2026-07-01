@@ -2,16 +2,16 @@
 // CREATE PRODUCT COMMAND — Use case for creating a new product
 // =============================================================================
 
-import { Injectable, Inject, ConflictException } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
+import { Injectable, Inject, ConflictException } from "@nestjs/common";
+import { v4 as uuidv4 } from "uuid";
 
-import { Product } from '../../domain/entities/index.js';
+import { Product } from "../../domain/entities/index.js";
 import {
   PRODUCT_REPOSITORY,
   type IProductRepository,
-} from '../../domain/repositories/index.js';
-import { validateCreateProduct } from '../dtos/index.js';
-import { EVENT } from '@erp/shared';
+} from "../../domain/repositories/index.js";
+import { validateCreateProduct } from "../dtos/index.js";
+import { EVENT } from "@erp/shared";
 
 @Injectable()
 export class CreateProductCommand {
@@ -25,7 +25,8 @@ export class CreateProductCommand {
 
     // Check unique SKU before creating
     const normalizedSku = validatedData.sku.trim().toUpperCase();
-    const existingProduct = await this.productRepository.findBySku(normalizedSku);
+    const existingProduct =
+      await this.productRepository.findBySku(normalizedSku);
     if (existingProduct) {
       throw new ConflictException(
         `SKU "${normalizedSku}" already exists (product: "${existingProduct.name}")`,
@@ -36,7 +37,7 @@ export class CreateProductCommand {
       uuidv4(),
       validatedData.sku,
       validatedData.name,
-      validatedData.unit ?? 'PCS',
+      validatedData.unit ?? "PCS",
       validatedData.defaultSalePrice ?? 0,
     );
 

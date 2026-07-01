@@ -8,7 +8,8 @@ import {
 @Injectable()
 export class GetSalesOrderQuery {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
   ) {}
 
   /** Lấy chi tiết đơn hàng (header + lines) */

@@ -21,7 +21,8 @@ import {
 @Injectable()
 export class FulfilSalesOrderCommand {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
   ) {}
 
   /**
@@ -55,7 +56,12 @@ export class FulfilSalesOrderCommand {
 
     await this.repo.update(
       order,
-      [{ eventType: EVENT.SALES_ORDER_FULFILLED, payload: payload as unknown as Record<string, unknown> }],
+      [
+        {
+          eventType: EVENT.SALES_ORDER_FULFILLED,
+          payload: payload as unknown as Record<string, unknown>,
+        },
+      ],
       {
         fromStatus: previousStatus,
         toStatus: order.status,

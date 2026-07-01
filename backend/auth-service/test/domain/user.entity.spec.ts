@@ -1,16 +1,18 @@
 import { User, UserRole } from '../../src/domain/entities/user.entity';
 
 describe('User Entity', () => {
-  const createUser = (overrides: Partial<{
-    id: string;
-    email: string;
-    passwordHash: string;
-    fullName: string;
-    role: UserRole;
-    isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  }> = {}): User => {
+  const createUser = (
+    overrides: Partial<{
+      id: string;
+      email: string;
+      passwordHash: string;
+      fullName: string;
+      role: UserRole;
+      isActive: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }> = {},
+  ): User => {
     return new User({
       id: 'user-1',
       email: 'test@example.com',

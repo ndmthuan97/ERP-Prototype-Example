@@ -34,8 +34,14 @@ const TIMEOUT_MS = 5000;
 @Injectable()
 export class InventoryClient implements OnModuleInit {
   private readonly logger = new Logger(InventoryClient.name);
-  private reserveBreaker!: CircuitBreaker<[string, BatchLineInput[]], ReserveBatchResult>;
-  private releaseBreaker!: CircuitBreaker<[string, BatchLineInput[]], ReleaseBatchResult>;
+  private reserveBreaker!: CircuitBreaker<
+    [string, BatchLineInput[]],
+    ReserveBatchResult
+  >;
+  private releaseBreaker!: CircuitBreaker<
+    [string, BatchLineInput[]],
+    ReleaseBatchResult
+  >;
 
   onModuleInit(): void {
     this.reserveBreaker = new CircuitBreaker(
@@ -49,14 +55,18 @@ export class InventoryClient implements OnModuleInit {
       },
     );
 
-    this.reserveBreaker.fallback((_orderId: string, _lines: BatchLineInput[]) => ({
-      reserved: false,
-      reservationId: '',
-      orderId: _orderId,
-    }));
+    this.reserveBreaker.fallback(
+      (_orderId: string, _lines: BatchLineInput[]) => ({
+        reserved: false,
+        reservationId: '',
+        orderId: _orderId,
+      }),
+    );
 
     this.reserveBreaker.on('open', () =>
-      this.logger.warn('Circuit OPEN — reserve-batch calls will be short-circuited'),
+      this.logger.warn(
+        'Circuit OPEN — reserve-batch calls will be short-circuited',
+      ),
     );
     this.reserveBreaker.on('halfOpen', () =>
       this.logger.log('Circuit HALF-OPEN — probing inventory service'),
@@ -77,11 +87,13 @@ export class InventoryClient implements OnModuleInit {
     );
 
     // Release fallback: log error but don't fail the flow
-    this.releaseBreaker.fallback((_orderId: string, _lines: BatchLineInput[]) => ({
-      released: false,
-      orderId: _orderId,
-      itemCount: 0,
-    }));
+    this.releaseBreaker.fallback(
+      (_orderId: string, _lines: BatchLineInput[]) => ({
+        released: false,
+        orderId: _orderId,
+        itemCount: 0,
+      }),
+    );
   }
 
   /**
@@ -128,7 +140,6 @@ export class InventoryClient implements OnModuleInit {
 
       if (response.status === 409) {
         // Insufficient stock — expected business error, not a circuit-breaker failure
-        const body = await response.json().catch(() => ({ message: 'Insufficient stock' }));
         return {
           reserved: false,
           reservationId: '',
@@ -138,7 +149,9 @@ export class InventoryClient implements OnModuleInit {
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
-        throw new Error(`Reserve batch failed: HTTP ${response.status} — ${body}`);
+        throw new Error(
+          `Reserve batch failed: HTTP ${response.status} — ${body}`,
+        );
       }
 
       return (await response.json()) as ReserveBatchResult;
@@ -169,7 +182,9 @@ export class InventoryClient implements OnModuleInit {
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
-        throw new Error(`Release batch failed: HTTP ${response.status} — ${body}`);
+        throw new Error(
+          `Release batch failed: HTTP ${response.status} — ${body}`,
+        );
       }
 
       return (await response.json()) as ReleaseBatchResult;

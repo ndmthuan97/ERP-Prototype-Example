@@ -1,15 +1,15 @@
 // =============================================================================
 // CREATE SUPPLIER COMMAND — Create a new supplier
 // =============================================================================
-import { Injectable, Inject } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
+import { Injectable, Inject } from "@nestjs/common";
+import { v4 as uuidv4 } from "uuid";
 
-import { Supplier } from '../../domain/entities/index.js';
+import { Supplier } from "../../domain/entities/index.js";
 import {
   SUPPLIER_REPOSITORY,
   type ISupplierRepository,
-} from '../../domain/repositories/index.js';
-import { validateCreateSupplier } from '../dtos/index.js';
+} from "../../domain/repositories/index.js";
+import { validateCreateSupplier } from "../dtos/index.js";
 
 @Injectable()
 export class CreateSupplierCommand {

@@ -2,16 +2,16 @@
 // PRISMA SUPPLIER REPOSITORY — Implementation (Infrastructure Layer)
 // =============================================================================
 
-import { Injectable, Logger } from '@nestjs/common';
-import type { Supplier as PrismaSupplier } from '@prisma/client';
+import { Injectable, Logger } from "@nestjs/common";
+import type { Supplier as PrismaSupplier } from "@prisma/client";
 
-import { Supplier } from '../../domain/entities/supplier.entity.js';
+import { Supplier } from "../../domain/entities/supplier.entity.js";
 import type {
   ISupplierRepository,
   PaginatedResult,
   SearchSuppliersParams,
-} from '../../domain/repositories/supplier.repository.js';
-import { PrismaService } from './prisma.service.js';
+} from "../../domain/repositories/supplier.repository.js";
+import { PrismaService } from "./prisma.service.js";
 
 @Injectable()
 export class PrismaSupplierRepository implements ISupplierRepository {
@@ -39,13 +39,15 @@ export class PrismaSupplierRepository implements ISupplierRepository {
     return record ? this.toDomain(record) : null;
   }
 
-  async findAll(params: SearchSuppliersParams): Promise<PaginatedResult<Supplier>> {
+  async findAll(
+    params: SearchSuppliersParams,
+  ): Promise<PaginatedResult<Supplier>> {
     const { page, limit, query, isActive } = params;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {};
     if (query) {
-      where.name = { contains: query, mode: 'insensitive' };
+      where.name = { contains: query, mode: "insensitive" };
     }
     if (isActive !== undefined) {
       where.isActive = isActive;
@@ -56,7 +58,7 @@ export class PrismaSupplierRepository implements ISupplierRepository {
         where,
         skip,
         take: limit,
-        orderBy: { name: 'asc' },
+        orderBy: { name: "asc" },
       }),
       this.prisma.supplier.count({ where }),
     ]);

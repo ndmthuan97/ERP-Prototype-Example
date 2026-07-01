@@ -166,16 +166,20 @@ export class Customer {
    *
    * @param changes - Partial set of updatable fields
    */
-  update(
-    changes: Partial<Omit<CustomerProps, 'id' | 'createdAt'>>,
-  ): void {
-    if (changes.businessName !== undefined) this.businessName = changes.businessName;
+  update(changes: Partial<Omit<CustomerProps, 'id' | 'createdAt'>>): void {
+    if (changes.businessName !== undefined)
+      this.businessName = changes.businessName;
     if (changes.taxCode !== undefined) this.taxCode = changes.taxCode;
-    if (changes.contactName !== undefined) this.contactName = changes.contactName;
-    if (changes.contactPhone !== undefined) this.contactPhone = changes.contactPhone;
-    if (changes.contactEmail !== undefined) this.contactEmail = changes.contactEmail;
-    if (changes.creditLimitAmount !== undefined) this.creditLimitAmount = changes.creditLimitAmount;
-    if (changes.creditUsedAmount !== undefined) this.creditUsedAmount = changes.creditUsedAmount;
+    if (changes.contactName !== undefined)
+      this.contactName = changes.contactName;
+    if (changes.contactPhone !== undefined)
+      this.contactPhone = changes.contactPhone;
+    if (changes.contactEmail !== undefined)
+      this.contactEmail = changes.contactEmail;
+    if (changes.creditLimitAmount !== undefined)
+      this.creditLimitAmount = changes.creditLimitAmount;
+    if (changes.creditUsedAmount !== undefined)
+      this.creditUsedAmount = changes.creditUsedAmount;
     if (changes.status !== undefined) this.status = changes.status;
     if (changes.deletedAt !== undefined) this.deletedAt = changes.deletedAt;
     this.updatedAt = new Date();

@@ -24,7 +24,9 @@ describe('AddLineCommand', () => {
   beforeEach(() => {
     mockRepo = {
       findByIdWithLines: jest.fn(),
-      addLine: jest.fn().mockImplementation((order: SalesOrder) => Promise.resolve(order)),
+      addLine: jest
+        .fn()
+        .mockImplementation((order: SalesOrder) => Promise.resolve(order)),
     };
     command = new AddLineCommand(mockRepo as any);
   });

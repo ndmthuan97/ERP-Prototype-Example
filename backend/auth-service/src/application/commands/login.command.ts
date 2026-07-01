@@ -4,8 +4,14 @@
 import { Injectable, Inject } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { v4 } from 'uuid';
-import { USER_REPOSITORY, type IUserRepository } from '../../domain/repositories/user.repository.js';
-import { InvalidCredentialsError, InactiveUserError } from '../../domain/errors.js';
+import {
+  USER_REPOSITORY,
+  type IUserRepository,
+} from '../../domain/repositories/user.repository.js';
+import {
+  InvalidCredentialsError,
+  InactiveUserError,
+} from '../../domain/errors.js';
 import { JwtTokenService } from '../../infrastructure/auth/jwt.service.js';
 import { PrismaService } from '../../infrastructure/persistence/prisma.service.js';
 import { loginSchema } from '../dtos/auth.dto.js';
@@ -19,11 +25,16 @@ function parseDurationToMs(duration: string): number {
   const value = parseInt(match[1], 10);
   const unit = match[2];
   switch (unit) {
-    case 's': return value * 1000;
-    case 'm': return value * 60 * 1000;
-    case 'h': return value * 60 * 60 * 1000;
-    case 'd': return value * 24 * 60 * 60 * 1000;
-    default: return 7 * 24 * 60 * 60 * 1000;
+    case 's':
+      return value * 1000;
+    case 'm':
+      return value * 60 * 1000;
+    case 'h':
+      return value * 60 * 60 * 1000;
+    case 'd':
+      return value * 24 * 60 * 60 * 1000;
+    default:
+      return 7 * 24 * 60 * 60 * 1000;
   }
 }
 

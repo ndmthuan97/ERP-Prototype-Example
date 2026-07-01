@@ -2,7 +2,10 @@
 // GET ME QUERY — Return current user info from JWT payload
 // =============================================================================
 import { Injectable, Inject } from '@nestjs/common';
-import { USER_REPOSITORY, type IUserRepository } from '../../domain/repositories/user.repository.js';
+import {
+  USER_REPOSITORY,
+  type IUserRepository,
+} from '../../domain/repositories/user.repository.js';
 import { UserNotFoundError } from '../../domain/errors.js';
 
 @Injectable()

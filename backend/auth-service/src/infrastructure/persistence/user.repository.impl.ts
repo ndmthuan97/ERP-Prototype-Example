@@ -4,7 +4,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service.js';
 import { User, type UserRole } from '../../domain/entities/user.entity.js';
-import type { IUserRepository, PaginatedResult } from '../../domain/repositories/user.repository.js';
+import type {
+  IUserRepository,
+  PaginatedResult,
+} from '../../domain/repositories/user.repository.js';
 
 // Prisma generated type for the User model
 type PrismaUser = {

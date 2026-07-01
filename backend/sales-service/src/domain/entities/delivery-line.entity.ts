@@ -33,9 +33,19 @@ export class DeliveryLine {
     itemName: string,
     quantity: number,
   ): DeliveryLine {
-    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0) {
+    if (
+      typeof quantity !== 'number' ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
       throw new Error('Delivery quantity must be a positive number');
     }
-    return new DeliveryLine({ id, salesOrderLineId, itemId, itemName, quantity });
+    return new DeliveryLine({
+      id,
+      salesOrderLineId,
+      itemId,
+      itemName,
+      quantity,
+    });
   }
 }

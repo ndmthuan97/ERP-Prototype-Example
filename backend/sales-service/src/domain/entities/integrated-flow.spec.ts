@@ -16,23 +16,29 @@ import { SalesReturnLine } from './sales-return-line.entity';
 
 // === Helpers ==============================================================
 
-function createLine(opts: {
-  id?: string; itemId?: string; name?: string;
-  qty?: number; price?: number; taxRate?: number;
-} = {}): SalesOrderLine {
+function createLine(
+  opts: {
+    id?: string;
+    itemId?: string;
+    name?: string;
+    qty?: number;
+    price?: number;
+    taxRate?: number;
+  } = {},
+): SalesOrderLine {
   return SalesOrderLine.create(
     opts.id ?? 'line-1',
     opts.itemId ?? 'item-1',
     opts.name ?? 'Widget A',
     opts.qty ?? 10,
     opts.price ?? 1000,
-    opts.taxRate ?? 0.10,
+    opts.taxRate ?? 0.1,
   );
 }
 
 function createConfirmedOrder(lines?: SalesOrderLine[]): SalesOrder {
   const order = SalesOrder.createDraft('so-1', 'cust-1');
-  for (const line of (lines ?? [createLine()])) {
+  for (const line of lines ?? [createLine()]) {
     order.addLine(line);
   }
   order.submit();
@@ -55,7 +61,7 @@ describe('Flow 1: Sales Order Lifecycle + VAT', () => {
     const order = SalesOrder.createDraft('so-1', 'cust-1');
 
     // Line: 10 × 1000 @ 10% VAT = subtotal 10000, tax 1000, total 11000
-    order.addLine(createLine({ qty: 10, price: 1000, taxRate: 0.10 }));
+    order.addLine(createLine({ qty: 10, price: 1000, taxRate: 0.1 }));
 
     expect(order.subtotalAmount).toBe(10000);
     expect(order.totalTaxAmount).toBe(1000);
@@ -66,7 +72,7 @@ describe('Flow 1: Sales Order Lifecycle + VAT', () => {
     const order = SalesOrder.createDraft('so-1', 'cust-1');
 
     // Line 1: 10 × 1000 @ 10% = subtotal 10000, tax 1000
-    order.addLine(createLine({ id: 'l1', qty: 10, price: 1000, taxRate: 0.10 }));
+    order.addLine(createLine({ id: 'l1', qty: 10, price: 1000, taxRate: 0.1 }));
     // Line 2: 5 × 2000 @ 8% = subtotal 10000, tax 800
     order.addLine(createLine({ id: 'l2', qty: 5, price: 2000, taxRate: 0.08 }));
 
@@ -81,7 +87,7 @@ describe('Flow 1: Sales Order Lifecycle + VAT', () => {
     const freeLine = createLine({ id: 'l1', price: 0 });
     order.addLine(freeLine);
     // Must have a paid line to have meaningful total
-    order.addLine(createLine({ id: 'l2', qty: 1, price: 5000, taxRate: 0.10 }));
+    order.addLine(createLine({ id: 'l2', qty: 1, price: 5000, taxRate: 0.1 }));
 
     expect(freeLine.lineTotal).toBe(0);
     expect(order.subtotalAmount).toBe(5000);
@@ -132,7 +138,9 @@ describe('Flow 2: Saga Compensation Scenarios', () => {
     order.addLine(createLine());
     order.submit();
 
-    order.markFailedCredit('Insufficient credit: required 50000, available 10000');
+    order.markFailedCredit(
+      'Insufficient credit: required 50000, available 10000',
+    );
 
     expect(order.status).toBe('cancelled');
     expect(order.cancelReason).toContain('Insufficient credit');
@@ -144,7 +152,9 @@ describe('Flow 2: Saga Compensation Scenarios', () => {
     order.submit();
 
     // Direct cancel not allowed during saga
-    expect(() => order.cancel('user wants to cancel')).toThrow(InvalidStatusTransitionError);
+    expect(() => order.cancel('user wants to cancel')).toThrow(
+      InvalidStatusTransitionError,
+    );
   });
 
   it('should prevent any action on cancelled order', () => {
@@ -153,7 +163,9 @@ describe('Flow 2: Saga Compensation Scenarios', () => {
 
     expect(() => order.submit()).toThrow(InvalidStatusTransitionError);
     expect(() => order.confirm()).toThrow(InvalidStatusTransitionError);
-    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(
+      InvalidStatusTransitionError,
+    );
   });
 });
 
@@ -232,7 +244,9 @@ describe('Flow 3: Partial Delivery Flow', () => {
     order.recordDelivery(true);
 
     expect(order.status).toBe('fully_delivered');
-    expect(() => order.cancel('too late')).toThrow(InvalidStatusTransitionError);
+    expect(() => order.cancel('too late')).toThrow(
+      InvalidStatusTransitionError,
+    );
   });
 });
 
@@ -249,11 +263,26 @@ describe('Flow 4: Sales Return Flow', () => {
     expect(order.status).toBe('fully_delivered');
 
     // Step 2: Create return
-    const ret = SalesReturn.createDraft('ret-1', order.id, order.customerId, 'Defective batch');
+    const ret = SalesReturn.createDraft(
+      'ret-1',
+      order.id,
+      order.customerId,
+      'Defective batch',
+    );
     expect(ret.status).toBe('draft');
 
     // Step 3: Add return lines (return 3 of 10 units)
-    ret.addLine(SalesReturnLine.create('srl-1', 'l1', 'item-1', 'Widget A', 3, 1000, 'Scratched'));
+    ret.addLine(
+      SalesReturnLine.create(
+        'srl-1',
+        'l1',
+        'item-1',
+        'Widget A',
+        3,
+        1000,
+        'Scratched',
+      ),
+    );
     expect(ret.totalRefundAmount).toBe(3000); // 3 × 1000
 
     // Step 4: Approve
@@ -279,13 +308,27 @@ describe('Flow 4: Sales Return Flow', () => {
     order.recordDelivery(true);
 
     // Return #1: 3 units of item-1
-    const ret1 = SalesReturn.createDraft('ret-1', order.id, order.customerId, 'Wrong size');
-    ret1.addLine(SalesReturnLine.create('srl-1', 'l1', 'item-1', 'Widget A', 3, 1000));
+    const ret1 = SalesReturn.createDraft(
+      'ret-1',
+      order.id,
+      order.customerId,
+      'Wrong size',
+    );
+    ret1.addLine(
+      SalesReturnLine.create('srl-1', 'l1', 'item-1', 'Widget A', 3, 1000),
+    );
     expect(ret1.totalRefundAmount).toBe(3000);
 
     // Return #2: 2 units of item-2
-    const ret2 = SalesReturn.createDraft('ret-2', order.id, order.customerId, 'Damaged in transit');
-    ret2.addLine(SalesReturnLine.create('srl-2', 'l2', 'item-2', 'Widget B', 2, 2000));
+    const ret2 = SalesReturn.createDraft(
+      'ret-2',
+      order.id,
+      order.customerId,
+      'Damaged in transit',
+    );
+    ret2.addLine(
+      SalesReturnLine.create('srl-2', 'l2', 'item-2', 'Widget B', 2, 2000),
+    );
     expect(ret2.totalRefundAmount).toBe(4000);
 
     // Both returns are independent
@@ -297,8 +340,15 @@ describe('Flow 4: Sales Return Flow', () => {
   });
 
   it('return with decimal quantity', () => {
-    const ret = SalesReturn.createDraft('ret-1', 'so-1', 'c1', 'Excess material');
-    ret.addLine(SalesReturnLine.create('srl-1', 'l1', 'item-1', 'Fabric', 1.5, 200));
+    const ret = SalesReturn.createDraft(
+      'ret-1',
+      'so-1',
+      'c1',
+      'Excess material',
+    );
+    ret.addLine(
+      SalesReturnLine.create('srl-1', 'l1', 'item-1', 'Fabric', 1.5, 200),
+    );
 
     expect(ret.totalRefundAmount).toBe(300); // 1.5 × 200
   });
@@ -311,8 +361,22 @@ describe('Flow 5: Full End-to-End — Order → Deliver → Return', () => {
   it('complete business cycle with VAT + partial delivery + return', () => {
     // === Step 1: Create Order with Tax ===
     const order = SalesOrder.createDraft('so-1', 'cust-1');
-    const lineA = createLine({ id: 'la', itemId: 'A', name: 'Laptop', qty: 3, price: 15000000, taxRate: 0.10 });
-    const lineB = createLine({ id: 'lb', itemId: 'B', name: 'Mouse', qty: 10, price: 200000, taxRate: 0.10 });
+    const lineA = createLine({
+      id: 'la',
+      itemId: 'A',
+      name: 'Laptop',
+      qty: 3,
+      price: 15000000,
+      taxRate: 0.1,
+    });
+    const lineB = createLine({
+      id: 'lb',
+      itemId: 'B',
+      name: 'Mouse',
+      qty: 10,
+      price: 200000,
+      taxRate: 0.1,
+    });
     order.addLine(lineA);
     order.addLine(lineB);
 
@@ -346,8 +410,23 @@ describe('Flow 5: Full End-to-End — Order → Deliver → Return', () => {
     expect(order.status).toBe('fully_delivered');
 
     // === Step 5: Sales Return (1 defective laptop) ===
-    const ret = SalesReturn.createDraft('ret-1', 'so-1', 'cust-1', 'Defective screen');
-    ret.addLine(SalesReturnLine.create('srl-1', 'la', 'A', 'Laptop', 1, 15000000, 'Dead pixels'));
+    const ret = SalesReturn.createDraft(
+      'ret-1',
+      'so-1',
+      'cust-1',
+      'Defective screen',
+    );
+    ret.addLine(
+      SalesReturnLine.create(
+        'srl-1',
+        'la',
+        'A',
+        'Laptop',
+        1,
+        15000000,
+        'Dead pixels',
+      ),
+    );
     expect(ret.totalRefundAmount).toBe(15000000);
 
     ret.approve();

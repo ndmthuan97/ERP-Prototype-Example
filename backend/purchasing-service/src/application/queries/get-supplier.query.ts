@@ -1,12 +1,12 @@
 // =============================================================================
 // GET SUPPLIER QUERY — Get a single supplier by ID
 // =============================================================================
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from "@nestjs/common";
 
 import {
   SUPPLIER_REPOSITORY,
   type ISupplierRepository,
-} from '../../domain/repositories/index.js';
+} from "../../domain/repositories/index.js";
 
 @Injectable()
 export class GetSupplierQuery {

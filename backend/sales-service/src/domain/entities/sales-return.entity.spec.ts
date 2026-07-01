@@ -8,11 +8,24 @@ import { SalesReturn } from './sales-return.entity';
 import { SalesReturnLine } from './sales-return-line.entity';
 
 function createReturnLine(id = 'srl-1', qty = 3): SalesReturnLine {
-  return SalesReturnLine.create(id, 'sol-1', 'item-1', 'Widget A', qty, 1000, 'Defective');
+  return SalesReturnLine.create(
+    id,
+    'sol-1',
+    'item-1',
+    'Widget A',
+    qty,
+    1000,
+    'Defective',
+  );
 }
 
 function createDraftReturn(): SalesReturn {
-  return SalesReturn.createDraft('ret-1', 'so-1', 'cust-1', 'Defective product');
+  return SalesReturn.createDraft(
+    'ret-1',
+    'so-1',
+    'cust-1',
+    'Defective product',
+  );
 }
 
 function createDraftWithLines(): SalesReturn {
@@ -45,8 +58,12 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
 
     it('should correctly calculate totalRefundAmount', () => {
       const ret = createDraftReturn();
-      ret.addLine(SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'A', 3, 1000));
-      ret.addLine(SalesReturnLine.create('srl-2', 'sol-2', 'item-2', 'B', 2, 500));
+      ret.addLine(
+        SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'A', 3, 1000),
+      );
+      ret.addLine(
+        SalesReturnLine.create('srl-2', 'sol-2', 'item-2', 'B', 2, 500),
+      );
 
       // 3×1000 + 2×500 = 4000
       expect(ret.totalRefundAmount).toBe(4000);
@@ -91,11 +108,15 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
     });
 
     it('should reject empty reason', () => {
-      expect(() => SalesReturn.createDraft('r1', 'so-1', 'c1', '')).toThrow(/reason/);
+      expect(() => SalesReturn.createDraft('r1', 'so-1', 'c1', '')).toThrow(
+        /reason/,
+      );
     });
 
     it('should reject whitespace-only reason', () => {
-      expect(() => SalesReturn.createDraft('r1', 'so-1', 'c1', '   ')).toThrow(/reason/);
+      expect(() => SalesReturn.createDraft('r1', 'so-1', 'c1', '   ')).toThrow(
+        /reason/,
+      );
     });
   });
 
@@ -114,7 +135,9 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
       const ret = createDraftWithLines();
       ret.approve();
 
-      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(/Cannot.*addLine/);
+      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(
+        /Cannot.*addLine/,
+      );
     });
 
     it('should reject addLine from completed', () => {
@@ -123,7 +146,9 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
       ret.receiveGoods();
       ret.complete();
 
-      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(/Cannot.*addLine/);
+      expect(() => ret.addLine(createReturnLine('srl-2'))).toThrow(
+        /Cannot.*addLine/,
+      );
     });
   });
 
@@ -169,7 +194,14 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
   // =========================================================================
   describe('SalesReturnLine.create()', () => {
     it('should create a valid line with calculated lineTotal', () => {
-      const line = SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'Widget', 3, 1500);
+      const line = SalesReturnLine.create(
+        'srl-1',
+        'sol-1',
+        'item-1',
+        'Widget',
+        3,
+        1500,
+      );
 
       expect(line.quantity).toBe(3);
       expect(line.unitPrice).toBe(1500);
@@ -177,27 +209,51 @@ describe('SalesReturn — Full Lifecycle Flow', () => {
     });
 
     it('should accept decimal quantity', () => {
-      const line = SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'Widget', 2.5, 1000);
+      const line = SalesReturnLine.create(
+        'srl-1',
+        'sol-1',
+        'item-1',
+        'Widget',
+        2.5,
+        1000,
+      );
       expect(line.lineTotal).toBe(2500);
     });
 
     it('should reject zero quantity', () => {
-      expect(() => SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'W', 0, 1000))
-        .toThrow(/positive number/);
+      expect(() =>
+        SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'W', 0, 1000),
+      ).toThrow(/positive number/);
     });
 
     it('should reject negative quantity', () => {
-      expect(() => SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'W', -1, 1000))
-        .toThrow(/positive number/);
+      expect(() =>
+        SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'W', -1, 1000),
+      ).toThrow(/positive number/);
     });
 
     it('should store optional reason', () => {
-      const line = SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'W', 1, 100, 'Broken');
+      const line = SalesReturnLine.create(
+        'srl-1',
+        'sol-1',
+        'item-1',
+        'W',
+        1,
+        100,
+        'Broken',
+      );
       expect(line.reason).toBe('Broken');
     });
 
     it('should default reason to null', () => {
-      const line = SalesReturnLine.create('srl-1', 'sol-1', 'item-1', 'W', 1, 100);
+      const line = SalesReturnLine.create(
+        'srl-1',
+        'sol-1',
+        'item-1',
+        'W',
+        1,
+        100,
+      );
       expect(line.reason).toBeNull();
     });
   });

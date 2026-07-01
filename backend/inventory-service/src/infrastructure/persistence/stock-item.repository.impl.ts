@@ -219,7 +219,7 @@ export class PrismaStockItemRepository implements IStockItemRepository {
   }
 
   async createOutboxEvent(event: OutboxEventInput): Promise<void> {
-    const orderId = (event.payload as Record<string, unknown>).orderId;
+    const orderId = event.payload.orderId;
     await this.prisma.outbox.create({
       data: {
         id: uuidv4(),
@@ -229,7 +229,7 @@ export class PrismaStockItemRepository implements IStockItemRepository {
         payload: {
           ...event.payload,
           _meta: buildEventMeta(),
-        } as Prisma.InputJsonObject,
+        },
       },
     });
   }

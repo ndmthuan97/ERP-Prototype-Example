@@ -4,10 +4,10 @@ export {
   type PaginatedResult,
   type SearchPurchaseOrdersParams,
   type OutboxEventInput,
-} from './purchase-order.repository';
+} from "./purchase-order.repository";
 
 export {
   SUPPLIER_REPOSITORY,
   type ISupplierRepository,
   type SearchSuppliersParams,
-} from './supplier.repository';
+} from "./supplier.repository";

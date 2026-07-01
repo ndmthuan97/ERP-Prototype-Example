@@ -83,7 +83,7 @@ export class HandleSalesOrderSubmittedCommand {
           });
         } catch (rollbackError) {
           this.logger.error(
-            `Rollback release thất bại cho item "${res.itemId}": ${rollbackError}`,
+            `Rollback release thất bại cho item "${res.itemId}": ${String(rollbackError)}`,
           );
         }
       }

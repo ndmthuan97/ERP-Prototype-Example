@@ -1,7 +1,12 @@
 // =============================================================================
 // UPDATE DELIVERY STATUS COMMAND — Transition DO through its lifecycle
 // =============================================================================
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 
 import {
   DELIVERY_ORDER_REPOSITORY,
@@ -13,7 +18,8 @@ type DeliveryAction = 'start_picking' | 'pack' | 'ship' | 'deliver' | 'fail';
 @Injectable()
 export class UpdateDeliveryStatusCommand {
   constructor(
-    @Inject(DELIVERY_ORDER_REPOSITORY) private readonly repo: IDeliveryOrderRepository,
+    @Inject(DELIVERY_ORDER_REPOSITORY)
+    private readonly repo: IDeliveryOrderRepository,
   ) {}
 
   async execute(deliveryId: string, action: DeliveryAction, reason?: string) {
@@ -39,7 +45,7 @@ export class UpdateDeliveryStatusCommand {
         delivery.markFailed(reason ?? 'Unknown failure');
         break;
       default:
-        throw new BadRequestException(`Invalid action "${action}"`);
+        throw new BadRequestException(`Invalid action "${String(action)}"`);
     }
 
     return this.repo.update(delivery);

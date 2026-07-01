@@ -1,13 +1,13 @@
 // =============================================================================
 // UPDATE SUPPLIER COMMAND — Update an existing supplier
 // =============================================================================
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from "@nestjs/common";
 
 import {
   SUPPLIER_REPOSITORY,
   type ISupplierRepository,
-} from '../../domain/repositories/index.js';
-import { validateUpdateSupplier } from '../dtos/index.js';
+} from "../../domain/repositories/index.js";
+import { validateUpdateSupplier } from "../dtos/index.js";
 
 @Injectable()
 export class UpdateSupplierCommand {
@@ -32,7 +32,7 @@ export class UpdateSupplierCommand {
     }
 
     // Apply other field updates
-    const { isActive, ...changes } = validated;
+    const { isActive: _isActive, ...changes } = validated;
     if (Object.keys(changes).length > 0) {
       supplier.update(changes);
     }

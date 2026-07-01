@@ -11,7 +11,8 @@ import { validateCreateOrder } from '../dtos/index.js';
 @Injectable()
 export class CreateSalesOrderCommand {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
   ) {}
 
   /**

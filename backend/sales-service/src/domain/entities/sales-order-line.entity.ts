@@ -54,10 +54,18 @@ export class SalesOrderLine {
     unitPrice: number,
     taxRate: number = 0,
   ): SalesOrderLine {
-    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0) {
+    if (
+      typeof quantity !== 'number' ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
       throw new Error('Quantity must be a positive number');
     }
-    if (typeof unitPrice !== 'number' || !Number.isFinite(unitPrice) || unitPrice < 0) {
+    if (
+      typeof unitPrice !== 'number' ||
+      !Number.isFinite(unitPrice) ||
+      unitPrice < 0
+    ) {
       throw new Error('Unit price must not be negative');
     }
     const subtotal = Math.round(quantity * unitPrice);

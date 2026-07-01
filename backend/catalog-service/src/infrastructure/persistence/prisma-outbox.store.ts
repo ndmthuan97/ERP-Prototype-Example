@@ -3,9 +3,9 @@
 // =============================================================================
 // Safe for multi-instance: fetchUnpublished uses FOR UPDATE SKIP LOCKED.
 
-import { Injectable } from '@nestjs/common';
-import type { OutboxStore, OutboxRecord } from '@erp/shared';
-import { PrismaService } from './prisma.service.js';
+import { Injectable } from "@nestjs/common";
+import type { OutboxStore, OutboxRecord } from "@erp/shared";
+import { PrismaService } from "./prisma.service.js";
 
 const LOCK_SECONDS = 30;
 

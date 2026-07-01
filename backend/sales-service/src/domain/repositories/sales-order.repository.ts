@@ -85,5 +85,8 @@ export interface ISalesOrderRepository {
    * Sum totalAmount of submitted orders for a customer, excluding a specific order.
    * Used by credit check to account for concurrent pending orders.
    */
-  sumPendingOrdersTotal(customerId: string, excludeOrderId: string): Promise<number>;
+  sumPendingOrdersTotal(
+    customerId: string,
+    excludeOrderId: string,
+  ): Promise<number>;
 }

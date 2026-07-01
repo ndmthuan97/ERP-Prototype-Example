@@ -1,10 +1,9 @@
-import {
-  SalesOrder,
-  InvalidStatusTransitionError,
-} from './sales-order.entity';
+import { SalesOrder, InvalidStatusTransitionError } from './sales-order.entity';
 import { SalesOrderLine } from './sales-order-line.entity';
 
-function createLine(overrides: Partial<{ id: string; quantity: number; unitPrice: number }> = {}): SalesOrderLine {
+function createLine(
+  overrides: Partial<{ id: string; quantity: number; unitPrice: number }> = {},
+): SalesOrderLine {
   return SalesOrderLine.create(
     overrides.id ?? 'line-1',
     'item-1',
@@ -55,13 +54,17 @@ describe('SalesOrder.recordDelivery()', () => {
 
     order.recordDelivery(true);
 
-    expect(order.updatedAt.getTime()).toBeGreaterThanOrEqual(beforeFulfil.getTime());
+    expect(order.updatedAt.getTime()).toBeGreaterThanOrEqual(
+      beforeFulfil.getTime(),
+    );
   });
 
   it('should throw InvalidStatusTransitionError when status is draft', () => {
     const order = SalesOrder.createDraft('order-1', 'customer-1');
 
-    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(
+      InvalidStatusTransitionError,
+    );
   });
 
   it('should throw InvalidStatusTransitionError when status is submitted', () => {
@@ -69,21 +72,27 @@ describe('SalesOrder.recordDelivery()', () => {
     order.addLine(createLine());
     order.submit();
 
-    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(
+      InvalidStatusTransitionError,
+    );
   });
 
   it('should throw InvalidStatusTransitionError when status is cancelled', () => {
     const order = SalesOrder.createDraft('order-1', 'customer-1');
     order.cancel('test reason');
 
-    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(
+      InvalidStatusTransitionError,
+    );
   });
 
   it('should throw InvalidStatusTransitionError when already fully_delivered', () => {
     const order = createConfirmedOrder();
     order.recordDelivery(true);
 
-    expect(() => order.recordDelivery(true)).toThrow(InvalidStatusTransitionError);
+    expect(() => order.recordDelivery(true)).toThrow(
+      InvalidStatusTransitionError,
+    );
   });
 
   it('should allow cancel from partially_delivered status', () => {

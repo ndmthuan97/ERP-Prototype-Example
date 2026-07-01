@@ -2,7 +2,7 @@
 // APP MODULE — Root module of Catalog Service
 // =============================================================================
 
-import { Module } from '@nestjs/common';
+import { Module } from "@nestjs/common";
 
 import {
   RedisCacheService,
@@ -14,29 +14,25 @@ import {
   HealthController,
   HEALTH_INDICATORS,
   type HealthIndicator,
-} from '@erp/shared';
+} from "@erp/shared";
 
-import { PrismaService } from './infrastructure/persistence/prisma.service';
-import { PrismaProductRepository } from './infrastructure/persistence/product.repository.impl';
-import { PrismaOutboxStore } from './infrastructure/persistence/prisma-outbox.store';
+import { PrismaService } from "./infrastructure/persistence/prisma.service";
+import { PrismaProductRepository } from "./infrastructure/persistence/product.repository.impl";
+import { PrismaOutboxStore } from "./infrastructure/persistence/prisma-outbox.store";
 
-import { PRODUCT_REPOSITORY } from './domain/repositories/product.repository';
+import { PRODUCT_REPOSITORY } from "./domain/repositories/product.repository";
 
-import { CreateProductCommand } from './application/commands/create-product.command';
-import { UpdateProductCommand } from './application/commands/update-product.command';
-import { DeactivateProductCommand } from './application/commands/deactivate-product.command';
-import { ActivateProductCommand } from './application/commands/activate-product.command';
-import { GetProductQuery } from './application/queries/get-product.query';
-import { SearchProductsQuery } from './application/queries/search-products.query';
+import { CreateProductCommand } from "./application/commands/create-product.command";
+import { UpdateProductCommand } from "./application/commands/update-product.command";
+import { DeactivateProductCommand } from "./application/commands/deactivate-product.command";
+import { ActivateProductCommand } from "./application/commands/activate-product.command";
+import { GetProductQuery } from "./application/queries/get-product.query";
+import { SearchProductsQuery } from "./application/queries/search-products.query";
 
-import { CatalogController } from './presentation/catalog.controller';
+import { CatalogController } from "./presentation/catalog.controller";
 
 @Module({
-  controllers: [
-    CatalogController,
-    HealthController,
-    MetricsController,
-  ],
+  controllers: [CatalogController, HealthController, MetricsController],
   providers: [
     // === Infrastructure ===
     PrismaService,
@@ -68,14 +64,14 @@ import { CatalogController } from './presentation/catalog.controller';
         cache: RedisCacheService,
       ): HealthIndicator[] => [
         {
-          name: 'postgres',
+          name: "postgres",
           check: async () => {
             await prisma.$queryRaw`SELECT 1`;
             return true;
           },
         },
         {
-          name: 'redis',
+          name: "redis",
           check: () => cache.ping(),
         },
       ],

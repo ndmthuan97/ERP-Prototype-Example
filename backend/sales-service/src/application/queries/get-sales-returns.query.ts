@@ -11,7 +11,8 @@ import {
 @Injectable()
 export class GetSalesReturnsQuery {
   constructor(
-    @Inject(SALES_RETURN_REPOSITORY) private readonly repo: ISalesReturnRepository,
+    @Inject(SALES_RETURN_REPOSITORY)
+    private readonly repo: ISalesReturnRepository,
   ) {}
 
   async execute(salesOrderId: string) {

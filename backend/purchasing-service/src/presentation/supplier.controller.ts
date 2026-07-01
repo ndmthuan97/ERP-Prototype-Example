@@ -11,17 +11,23 @@ import {
   Query,
   HttpCode,
   HttpStatus,
-} from '@nestjs/common';
-import { ApiBody } from '@nestjs/swagger';
+} from "@nestjs/common";
+import { ApiBody } from "@nestjs/swagger";
 
 import {
   CreateSupplierDtoSwagger,
   UpdateSupplierDtoSwagger,
-} from './swagger.dto.js';
-import { CreateSupplierCommand, UpdateSupplierCommand } from '../application/commands/index.js';
-import { GetSupplierQuery, SearchSuppliersQuery } from '../application/queries/index.js';
+} from "./swagger.dto.js";
+import {
+  CreateSupplierCommand,
+  UpdateSupplierCommand,
+} from "../application/commands/index.js";
+import {
+  GetSupplierQuery,
+  SearchSuppliersQuery,
+} from "../application/queries/index.js";
 
-@Controller('suppliers')
+@Controller("suppliers")
 export class SupplierController {
   constructor(
     private readonly createSupplierCommand: CreateSupplierCommand,
@@ -41,14 +47,15 @@ export class SupplierController {
   /** GET /suppliers — List suppliers with search + pagination */
   @Get()
   async search(
-    @Query('q') query?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('isActive') isActive?: string,
+    @Query("q") query?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+    @Query("isActive") isActive?: string,
   ) {
-    const pageNumber = Number.parseInt(page ?? '', 10);
-    const limitNumber = Number.parseInt(limit ?? '', 10);
-    const activeFilter = isActive === 'true' ? true : isActive === 'false' ? false : undefined;
+    const pageNumber = Number.parseInt(page ?? "", 10);
+    const limitNumber = Number.parseInt(limit ?? "", 10);
+    const activeFilter =
+      isActive === "true" ? true : isActive === "false" ? false : undefined;
 
     return this.searchSuppliersQuery.execute(
       query,
@@ -59,15 +66,15 @@ export class SupplierController {
   }
 
   /** GET /suppliers/:id — Get supplier detail */
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
     return this.getSupplierQuery.execute(id);
   }
 
   /** PATCH /suppliers/:id — Update a supplier */
-  @Patch(':id')
+  @Patch(":id")
   @ApiBody({ type: UpdateSupplierDtoSwagger })
-  async update(@Param('id') id: string, @Body() body: unknown) {
+  async update(@Param("id") id: string, @Body() body: unknown) {
     return this.updateSupplierCommand.execute(id, body);
   }
 }

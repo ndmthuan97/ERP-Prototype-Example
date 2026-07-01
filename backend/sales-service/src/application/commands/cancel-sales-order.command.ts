@@ -4,7 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { EVENT, type SalesOrderCancelledPayload } from '@erp/shared';
+import { EVENT } from '@erp/shared';
 
 import { InvalidStatusTransitionError } from '../../domain/entities/index.js';
 import {
@@ -16,7 +16,8 @@ import { validateCancelOrder } from '../dtos/index.js';
 @Injectable()
 export class CancelSalesOrderCommand {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
   ) {}
 
   /**
@@ -45,14 +46,19 @@ export class CancelSalesOrderCommand {
 
     // Nếu đơn đã confirmed → cần compensation: release inventory
     const events = wasConfirmed
-      ? [{
-          eventType: EVENT.SALES_ORDER_CANCELLED,
-          payload: {
-            orderId: order.id,
-            reason,
-            lines: order.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity })),
-          } as unknown as Record<string, unknown>,
-        }]
+      ? [
+          {
+            eventType: EVENT.SALES_ORDER_CANCELLED,
+            payload: {
+              orderId: order.id,
+              reason,
+              lines: order.lines.map((l) => ({
+                itemId: l.itemId,
+                quantity: l.quantity,
+              })),
+            } as unknown as Record<string, unknown>,
+          },
+        ]
       : [];
 
     await this.repo.update(

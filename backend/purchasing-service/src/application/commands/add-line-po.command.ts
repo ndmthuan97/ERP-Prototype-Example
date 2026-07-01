@@ -1,15 +1,15 @@
 // =============================================================================
 // ADD LINE PO COMMAND — Add a line to an existing draft PO
 // =============================================================================
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
+import { Injectable, Inject, NotFoundException } from "@nestjs/common";
+import { v4 as uuidv4 } from "uuid";
 
-import { PurchaseOrderLine } from '../../domain/entities/index.js';
+import { PurchaseOrderLine } from "../../domain/entities/index.js";
 import {
   PURCHASE_ORDER_REPOSITORY,
   type IPurchaseOrderRepository,
-} from '../../domain/repositories/index.js';
-import { validateAddLinePO } from '../dtos/index.js';
+} from "../../domain/repositories/index.js";
+import { validateAddLinePO } from "../dtos/index.js";
 
 @Injectable()
 export class AddLinePOCommand {
@@ -23,9 +23,7 @@ export class AddLinePOCommand {
 
     const order = await this.repo.findById(headerId);
     if (!order) {
-      throw new NotFoundException(
-        `Purchase order "${headerId}" not found`,
-      );
+      throw new NotFoundException(`Purchase order "${headerId}" not found`);
     }
 
     const line = PurchaseOrderLine.create(

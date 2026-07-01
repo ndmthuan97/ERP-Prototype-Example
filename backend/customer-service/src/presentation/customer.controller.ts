@@ -95,10 +95,7 @@ export class CustomerController {
    */
   @Patch(':id')
   @ApiBody({ type: UpdateCustomerBodyDto })
-  async update(
-    @Param('id') id: string,
-    @Body() body: UpdateCustomerBodyDto,
-  ) {
+  async update(@Param('id') id: string, @Body() body: UpdateCustomerBodyDto) {
     // Merge id từ URL param vào body — UpdateCommand validate { id, ...fields }.
     // ZodError → ZodExceptionFilter → 400 (không cần try/catch).
     return this.updateCustomerCommand.execute({ id, ...body });

@@ -9,15 +9,12 @@ import { validateSearchOrders } from '../dtos/index.js';
 @Injectable()
 export class SearchSalesOrdersQuery {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
   ) {}
 
   /** Tìm kiếm đơn hàng với phân trang + filter status */
-  async execute(params: {
-    page?: string;
-    limit?: string;
-    status?: string;
-  }) {
+  async execute(params: { page?: string; limit?: string; status?: string }) {
     const parsed = validateSearchOrders({
       page: params.page ? parseInt(params.page, 10) : undefined,
       limit: params.limit ? parseInt(params.limit, 10) : undefined,

@@ -5,9 +5,9 @@
 // Extends AggregateRoot from @erp/shared to support domain events.
 // SKU is immutable after creation (enforced by readonly modifier).
 
-import { AggregateRoot } from '@erp/shared';
-import { SKU } from '@erp/shared';
-import { EVENT } from '@erp/shared';
+import { AggregateRoot } from "@erp/shared";
+import { SKU } from "@erp/shared";
+import { EVENT } from "@erp/shared";
 
 export interface ProductProps {
   id: string;
@@ -58,21 +58,21 @@ export class Product extends AggregateRoot {
     name: string,
     unit: string,
     price: number,
-    taxRate: number = 0.10,
+    taxRate: number = 0.1,
   ): Product {
     // Validate SKU format via Value Object (throws if invalid)
     SKU.create(sku);
 
     if (!name || name.trim().length === 0) {
-      throw new Error('Product name must not be empty');
+      throw new Error("Product name must not be empty");
     }
     if (price < 0) {
-      throw new Error('Product price must be >= 0');
+      throw new Error("Product price must be >= 0");
     }
 
-    const validRates = [0, 0.05, 0.08, 0.10];
+    const validRates = [0, 0.05, 0.08, 0.1];
     if (!validRates.includes(taxRate)) {
-      throw new Error('Tax rate must be one of: 0%, 5%, 8%, 10%');
+      throw new Error("Tax rate must be one of: 0%, 5%, 8%, 10%");
     }
 
     const now = new Date();
@@ -80,7 +80,7 @@ export class Product extends AggregateRoot {
       id,
       sku: sku.trim().toUpperCase(),
       name: name.trim(),
-      unit: unit || 'PCS',
+      unit: unit || "PCS",
       defaultSalePrice: price,
       taxRate,
       isActive: true,
@@ -93,7 +93,7 @@ export class Product extends AggregateRoot {
   /** Rename the product. Name must not be empty. */
   rename(name: string): void {
     if (!name || name.trim().length === 0) {
-      throw new Error('Product name must not be empty');
+      throw new Error("Product name must not be empty");
     }
     this.name = name.trim();
     this.touch();
@@ -102,7 +102,7 @@ export class Product extends AggregateRoot {
   /** Change the default sale price. Price must be >= 0. */
   changePrice(price: number): void {
     if (price < 0) {
-      throw new Error('Product price must be >= 0');
+      throw new Error("Product price must be >= 0");
     }
     this.defaultSalePrice = price;
     this.touch();
@@ -110,9 +110,9 @@ export class Product extends AggregateRoot {
 
   /** Change the tax rate. Must be one of: 0%, 5%, 8%, 10%. */
   changeTaxRate(rate: number): void {
-    const validRates = [0, 0.05, 0.08, 0.10];
+    const validRates = [0, 0.05, 0.08, 0.1];
     if (!validRates.includes(rate)) {
-      throw new Error('Tax rate must be one of: 0%, 5%, 8%, 10%');
+      throw new Error("Tax rate must be one of: 0%, 5%, 8%, 10%");
     }
     this.taxRate = rate;
     this.touch();
@@ -121,7 +121,7 @@ export class Product extends AggregateRoot {
   /** Change the unit of measure. */
   changeUnit(unit: string): void {
     if (!unit || unit.trim().length === 0) {
-      throw new Error('Product unit must not be empty');
+      throw new Error("Product unit must not be empty");
     }
     this.unit = unit.trim();
     this.touch();

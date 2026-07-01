@@ -1,7 +1,12 @@
 // =============================================================================
 // UPDATE SALES RETURN STATUS COMMAND — Approve, reject, receive goods, complete
 // =============================================================================
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 
 import {
   SALES_RETURN_REPOSITORY,
@@ -13,7 +18,8 @@ type ReturnAction = 'approve' | 'reject' | 'receive_goods' | 'complete';
 @Injectable()
 export class UpdateSalesReturnStatusCommand {
   constructor(
-    @Inject(SALES_RETURN_REPOSITORY) private readonly repo: ISalesReturnRepository,
+    @Inject(SALES_RETURN_REPOSITORY)
+    private readonly repo: ISalesReturnRepository,
   ) {}
 
   async execute(returnId: string, action: ReturnAction) {
@@ -36,7 +42,7 @@ export class UpdateSalesReturnStatusCommand {
         salesReturn.complete();
         break;
       default:
-        throw new BadRequestException(`Invalid action "${action}"`);
+        throw new BadRequestException(`Invalid action "${String(action)}"`);
     }
 
     return this.repo.update(salesReturn);

@@ -1,9 +1,9 @@
 // =============================================================================
 // SUPPLIER REPOSITORY — Port (DDD/Hexagonal)
 // =============================================================================
-import { Supplier } from '../entities/supplier.entity.js';
+import { Supplier } from "../entities/supplier.entity.js";
 
-export const SUPPLIER_REPOSITORY = 'SUPPLIER_REPOSITORY';
+export const SUPPLIER_REPOSITORY = "SUPPLIER_REPOSITORY";
 
 export interface PaginatedResult<T> {
   data: T[];

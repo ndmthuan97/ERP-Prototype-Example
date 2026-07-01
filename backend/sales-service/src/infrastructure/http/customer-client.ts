@@ -42,16 +42,20 @@ export class CustomerClient implements OnModuleInit {
       },
     );
 
-    this.breaker.fallback((_customerId: string, _orderAmount: number, _pending: number) => ({
-      creditLimit: 0,
-      creditUsed: 0,
-      pendingAmount: 0,
-      available: 0,
-      sufficient: false,
-    }));
+    this.breaker.fallback(
+      (_customerId: string, _orderAmount: number, _pending: number) => ({
+        creditLimit: 0,
+        creditUsed: 0,
+        pendingAmount: 0,
+        available: 0,
+        sufficient: false,
+      }),
+    );
 
     this.breaker.on('open', () =>
-      this.logger.warn('Circuit OPEN — credit-check calls will be short-circuited'),
+      this.logger.warn(
+        'Circuit OPEN — credit-check calls will be short-circuited',
+      ),
     );
     this.breaker.on('halfOpen', () =>
       this.logger.log('Circuit HALF-OPEN — probing credit-check service'),

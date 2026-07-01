@@ -80,4 +80,6 @@ export const updateCustomerBodySchema = updateCustomerSchema.omit({ id: true });
  * cho @Body(); validation runtime vẫn do command gọi `updateCustomerSchema.parse()`
  * trên `{ id, ...body }` như cũ (không đổi hành vi).
  */
-export class UpdateCustomerBodyDto extends createZodDto(updateCustomerBodySchema) {}
+export class UpdateCustomerBodyDto extends createZodDto(
+  updateCustomerBodySchema,
+) {}

@@ -93,7 +93,9 @@ export class PrismaSalesReturnRepository implements ISalesReturnRepository {
       include: { lines: true },
     });
 
-    this.logger.log(`Sales return created: id="${record.id}", SO="${record.salesOrderId}"`);
+    this.logger.log(
+      `Sales return created: id="${record.id}", SO="${record.salesOrderId}"`,
+    );
     return this.toDomain(record);
   }
 

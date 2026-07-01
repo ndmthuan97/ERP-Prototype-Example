@@ -8,16 +8,16 @@
  * Port: 3006
  * Architecture: DDD 4 layers (domain → application → infrastructure → presentation)
  */
-import { NestFactory } from '@nestjs/core';
-import { Logger } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { cleanupOpenApiDoc } from 'nestjs-zod';
-import type { Request, Response } from 'express';
-import helmet from 'helmet';
-import { StructuredLogger, CorrelationMiddleware } from '@erp/shared';
-import { AppModule } from './app.module';
-import { ZodExceptionFilter } from './common/zod-exception.filter';
-import { DomainExceptionFilter } from './common/domain-exception.filter';
+import { NestFactory } from "@nestjs/core";
+import { Logger } from "@nestjs/common";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { cleanupOpenApiDoc } from "nestjs-zod";
+import type { Request, Response } from "express";
+import helmet from "helmet";
+import { StructuredLogger, CorrelationMiddleware } from "@erp/shared";
+import { AppModule } from "./app.module";
+import { ZodExceptionFilter } from "./common/zod-exception.filter";
+import { DomainExceptionFilter } from "./common/domain-exception.filter";
 
 const DEFAULT_PORT = 3006;
 
@@ -25,7 +25,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLogger(),
   });
-  const logger = new Logger('Bootstrap');
+  const logger = new Logger("Bootstrap");
 
   // Security headers
   app.use(helmet());
@@ -37,29 +37,28 @@ async function bootstrap() {
   );
 
   // API versioning: all business routes under /v1, observability at root
-  app.setGlobalPrefix('v1', {
-    exclude: ['health', 'health/live', 'metrics'],
+  app.setGlobalPrefix("v1", {
+    exclude: ["health", "health/live", "metrics"],
   });
 
   // Global exception filters
-  app.useGlobalFilters(
-    new ZodExceptionFilter(),
-    new DomainExceptionFilter(),
-  );
+  app.useGlobalFilters(new ZodExceptionFilter(), new DomainExceptionFilter());
 
   // CORS
   const corsOrigins = process.env.CORS_ORIGINS?.trim();
   app.enableCors({
-    origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
+    origin: corsOrigins ? corsOrigins.split(",").map((o) => o.trim()) : true,
     credentials: true,
   });
 
   // OpenAPI / Swagger — served at /docs (UI) and /docs-json (spec).
   // Placed outside the global 'v1' prefix so the docs live at the root path.
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Purchasing Service API')
-    .setDescription('Purchasing bounded context (DDD) — Purchase Order management.')
-    .setVersion('1.0')
+    .setTitle("Purchasing Service API")
+    .setDescription(
+      "Purchasing bounded context (DDD) — Purchase Order management.",
+    )
+    .setVersion("1.0")
     .addBearerAuth()
     .build();
   // nestjs-zod v5: DTOs built with createZodDto are picked up by the swagger
@@ -68,10 +67,10 @@ async function bootstrap() {
   const document = cleanupOpenApiDoc(
     SwaggerModule.createDocument(app, swaggerConfig),
   );
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup("docs", app, document);
 
   const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, "0.0.0.0");
 
   logger.log(`🚀 Purchasing Service running at http://localhost:${port}`);
   logger.log(`📦 Bounded Context: Purchasing (DDD 4 layers)`);

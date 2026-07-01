@@ -16,7 +16,12 @@ import {
   InactiveUserError,
 } from '../domain/errors.js';
 
-@Catch(InvalidCredentialsError, UserNotFoundError, DuplicateEmailError, InactiveUserError)
+@Catch(
+  InvalidCredentialsError,
+  UserNotFoundError,
+  DuplicateEmailError,
+  InactiveUserError,
+)
 export class DomainExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(DomainExceptionFilter.name);
 

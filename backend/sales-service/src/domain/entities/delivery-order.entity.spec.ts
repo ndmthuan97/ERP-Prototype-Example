@@ -94,11 +94,18 @@ describe('DeliveryOrder — Full Lifecycle Flow', () => {
       'should reject addLine when status is %s',
       (status) => {
         const delivery = new DeliveryOrder({
-          id: 'do-1', salesOrderId: 'so-1', status: status as any,
-          failReason: null, version: 0, lines: [createLine()],
-          createdAt: new Date(), updatedAt: new Date(),
+          id: 'do-1',
+          salesOrderId: 'so-1',
+          status: status as any,
+          failReason: null,
+          version: 0,
+          lines: [createLine()],
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
-        expect(() => delivery.addLine(createLine('dl-2'))).toThrow(/Cannot.*addLine/);
+        expect(() => delivery.addLine(createLine('dl-2'))).toThrow(
+          /Cannot.*addLine/,
+        );
       },
     );
   });
@@ -138,7 +145,9 @@ describe('DeliveryOrder — Full Lifecycle Flow', () => {
       const delivery = createDraftWithLines();
       delivery.startPicking();
       delivery.pack();
-      expect(() => delivery.confirmDelivery()).toThrow(/Cannot.*confirmDelivery/);
+      expect(() => delivery.confirmDelivery()).toThrow(
+        /Cannot.*confirmDelivery/,
+      );
     });
 
     it('markFailed() should reject from packed (not yet shipped)', () => {
@@ -171,19 +180,27 @@ describe('DeliveryOrder — Full Lifecycle Flow', () => {
   // =========================================================================
   describe('DeliveryLine.create()', () => {
     it('should create a valid delivery line', () => {
-      const line = DeliveryLine.create('dl-1', 'sol-1', 'item-1', 'Widget', 5.5);
+      const line = DeliveryLine.create(
+        'dl-1',
+        'sol-1',
+        'item-1',
+        'Widget',
+        5.5,
+      );
       expect(line.quantity).toBe(5.5);
       expect(line.itemName).toBe('Widget');
     });
 
     it('should reject zero quantity', () => {
-      expect(() => DeliveryLine.create('dl-1', 'sol-1', 'item-1', 'Widget', 0))
-        .toThrow(/positive number/);
+      expect(() =>
+        DeliveryLine.create('dl-1', 'sol-1', 'item-1', 'Widget', 0),
+      ).toThrow(/positive number/);
     });
 
     it('should reject negative quantity', () => {
-      expect(() => DeliveryLine.create('dl-1', 'sol-1', 'item-1', 'Widget', -1))
-        .toThrow(/positive number/);
+      expect(() =>
+        DeliveryLine.create('dl-1', 'sol-1', 'item-1', 'Widget', -1),
+      ).toThrow(/positive number/);
     });
   });
 });

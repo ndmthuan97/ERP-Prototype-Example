@@ -7,7 +7,9 @@ describe('CreateSalesOrderCommand', () => {
 
   beforeEach(() => {
     mockRepo = {
-      create: jest.fn().mockImplementation((order: SalesOrder) => Promise.resolve(order)),
+      create: jest
+        .fn()
+        .mockImplementation((order: SalesOrder) => Promise.resolve(order)),
     };
     command = new CreateSalesOrderCommand(mockRepo as any);
   });

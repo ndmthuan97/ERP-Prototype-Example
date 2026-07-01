@@ -38,9 +38,15 @@ export class StockItem {
   readonly createdAt: Date;
   updatedAt: Date;
 
-  get name(): string { return this._name; }
-  get quantityAvailable(): number { return this._quantityAvailable; }
-  get quantityReserved(): number { return this._quantityReserved; }
+  get name(): string {
+    return this._name;
+  }
+  get quantityAvailable(): number {
+    return this._quantityAvailable;
+  }
+  get quantityReserved(): number {
+    return this._quantityReserved;
+  }
 
   constructor(props: StockItemProps) {
     this.id = props.id;
@@ -102,7 +108,7 @@ export class StockItem {
    * If reserved stock is being fulfilled, also reduce reserved accordingly.
    * @throws InsufficientStockError if not enough available stock
    */
-  issue(quantity: number, reference?: string): void {
+  issue(quantity: number, _reference?: string): void {
     this.assertPositive(quantity);
     if (this._quantityAvailable < quantity) {
       throw new InsufficientStockError(
@@ -126,7 +132,11 @@ export class StockItem {
   }
 
   private assertPositive(quantity: number): void {
-    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0) {
+    if (
+      typeof quantity !== 'number' ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
       throw new Error('Quantity must be a positive number');
     }
   }

@@ -11,7 +11,8 @@ import {
 @Injectable()
 export class GetDeliveryOrdersQuery {
   constructor(
-    @Inject(DELIVERY_ORDER_REPOSITORY) private readonly repo: IDeliveryOrderRepository,
+    @Inject(DELIVERY_ORDER_REPOSITORY)
+    private readonly repo: IDeliveryOrderRepository,
   ) {}
 
   async execute(salesOrderId: string) {

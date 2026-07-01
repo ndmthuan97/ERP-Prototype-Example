@@ -70,12 +70,17 @@ async function bootstrap() {
   );
   SwaggerModule.setup('docs', app, document);
 
-  const port = parseInt(process.env.PORT || process.env.AUTH_SERVICE_PORT || String(DEFAULT_PORT), 10);
+  const port = parseInt(
+    process.env.PORT || process.env.AUTH_SERVICE_PORT || String(DEFAULT_PORT),
+    10,
+  );
   await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 Auth Service running at http://localhost:${port}`);
   logger.log(`🔐 Bounded Context: Auth (DDD 4 layers)`);
-  logger.log(`❤️  Health: /health (readiness) · /health/live (liveness)  |  📊 Metrics: /metrics`);
+  logger.log(
+    `❤️  Health: /health (readiness) · /health/live (liveness)  |  📊 Metrics: /metrics`,
+  );
 }
 
 void bootstrap();

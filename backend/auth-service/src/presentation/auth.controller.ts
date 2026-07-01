@@ -89,7 +89,10 @@ export class AuthController {
     @Query('limit') limit?: string,
   ) {
     if (role !== 'admin') {
-      throw new HttpException('Forbidden: admin access required', HttpStatus.FORBIDDEN);
+      throw new HttpException(
+        'Forbidden: admin access required',
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     const pageNum = Number.parseInt(page ?? '', 10);

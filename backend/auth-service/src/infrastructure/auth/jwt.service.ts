@@ -28,12 +28,16 @@ export class JwtTokenService {
 
   /** Sign an access token with user claims */
   signAccessToken(payload: JwtPayload): string {
-    return jwt.sign(payload, this.accessSecret, { expiresIn: this.accessTtl } as jwt.SignOptions);
+    return jwt.sign(payload, this.accessSecret, {
+      expiresIn: this.accessTtl,
+    } as jwt.SignOptions);
   }
 
   /** Sign a refresh token with minimal claims */
   signRefreshToken(payload: { sub: string }): string {
-    return jwt.sign(payload, this.refreshSecret, { expiresIn: this.refreshTtl } as jwt.SignOptions);
+    return jwt.sign(payload, this.refreshSecret, {
+      expiresIn: this.refreshTtl,
+    } as jwt.SignOptions);
   }
 
   /** Verify and decode an access token */

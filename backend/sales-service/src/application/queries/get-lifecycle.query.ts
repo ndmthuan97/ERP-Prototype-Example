@@ -8,7 +8,8 @@ import {
 @Injectable()
 export class GetLifecycleQuery {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
   ) {}
 
   /** CQRS Read: lấy timeline chuyển trạng thái */

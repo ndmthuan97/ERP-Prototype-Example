@@ -1,13 +1,13 @@
 // =============================================================================
 // GET PO QUERY — Fetch a single purchase order with its lines
 // =============================================================================
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from "@nestjs/common";
 
-import { PurchaseOrder } from '../../domain/entities/index.js';
+import { PurchaseOrder } from "../../domain/entities/index.js";
 import {
   PURCHASE_ORDER_REPOSITORY,
   type IPurchaseOrderRepository,
-} from '../../domain/repositories/index.js';
+} from "../../domain/repositories/index.js";
 
 @Injectable()
 export class GetPOQuery {

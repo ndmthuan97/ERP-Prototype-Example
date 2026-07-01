@@ -63,9 +63,7 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
 
   const port = parseInt(
-    process.env.PORT ||
-      process.env.ORDER_SERVICE_PORT ||
-      String(DEFAULT_PORT),
+    process.env.PORT || process.env.ORDER_SERVICE_PORT || String(DEFAULT_PORT),
     10,
   );
   await app.listen(port, '0.0.0.0');

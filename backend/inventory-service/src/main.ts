@@ -48,7 +48,9 @@ async function bootstrap() {
   // Placed outside the global 'v1' prefix so the docs live at the root path.
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Inventory Service API')
-    .setDescription('Inventory bounded context (DDD) — stock & optimistic locking.')
+    .setDescription(
+      'Inventory bounded context (DDD) — stock & optimistic locking.',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();

@@ -11,7 +11,8 @@ import { validateAddLine } from '../dtos/index.js';
 @Injectable()
 export class AddLineCommand {
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
   ) {}
 
   /**
@@ -27,7 +28,13 @@ export class AddLineCommand {
       throw new NotFoundException(`Đơn hàng "${orderId}" không tồn tại`);
     }
 
-    const line = SalesOrderLine.create(uuidv4(), itemId, itemName, quantity, unitPrice);
+    const line = SalesOrderLine.create(
+      uuidv4(),
+      itemId,
+      itemName,
+      quantity,
+      unitPrice,
+    );
     order.addLine(line); // validate draft + recalculate
 
     const updated = await this.repo.addLine(order, {

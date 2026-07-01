@@ -8,7 +8,7 @@ export class InvalidPOStatusError extends Error {
     super(
       `Cannot "${action}" when purchase order is in status "${currentStatus}"`,
     );
-    this.name = 'InvalidPOStatusError';
+    this.name = "InvalidPOStatusError";
   }
 }
 
@@ -16,7 +16,7 @@ export class InvalidPOStatusError extends Error {
 export class LineNotFoundError extends Error {
   constructor(lineId: string) {
     super(`Purchase order line "${lineId}" not found`);
-    this.name = 'LineNotFoundError';
+    this.name = "LineNotFoundError";
   }
 }
 
@@ -27,14 +27,14 @@ export class OverReceiveError extends Error {
       `Line "${lineId}": receiving would result in ${wouldBeReceived} units, ` +
         `but only ${orderedQty} were ordered`,
     );
-    this.name = 'OverReceiveError';
+    this.name = "OverReceiveError";
   }
 }
 
 /** Thrown when trying to place a PO with no lines */
 export class EmptyPurchaseOrderError extends Error {
   constructor() {
-    super('Cannot place a purchase order with no lines');
-    this.name = 'EmptyPurchaseOrderError';
+    super("Cannot place a purchase order with no lines");
+    this.name = "EmptyPurchaseOrderError";
   }
 }

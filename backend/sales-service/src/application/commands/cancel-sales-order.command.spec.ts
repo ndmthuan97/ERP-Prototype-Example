@@ -111,8 +111,6 @@ describe('CancelSalesOrderCommand', () => {
       }),
     );
 
-    await expect(
-      command.execute('o1', { reason: 'ab' }),
-    ).rejects.toThrow();
+    await expect(command.execute('o1', { reason: 'ab' })).rejects.toThrow();
   });
 });

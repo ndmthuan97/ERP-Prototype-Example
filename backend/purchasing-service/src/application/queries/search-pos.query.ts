@@ -1,14 +1,12 @@
 // =============================================================================
 // SEARCH POs QUERY — Paginated search with optional status filter
 // =============================================================================
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject } from "@nestjs/common";
 
-import { PurchaseOrder } from '../../domain/entities/index.js';
 import {
   PURCHASE_ORDER_REPOSITORY,
   type IPurchaseOrderRepository,
-  type PaginatedResult,
-} from '../../domain/repositories/index.js';
+} from "../../domain/repositories/index.js";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -39,7 +37,7 @@ export class SearchPOsQuery {
         id: po.id,
         supplierId: po.supplierId,
         status: po.status,
-        totalCost: po.totalCost,
+        totalCost: po.totalCost(),
         lineCount: po.lines.length,
         createdAt: po.createdAt,
         updatedAt: po.updatedAt,

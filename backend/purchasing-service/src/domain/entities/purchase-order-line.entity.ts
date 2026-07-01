@@ -4,7 +4,7 @@
 // Must be created/modified via PurchaseOrder aggregate methods.
 // Snapshot pattern: productName copied at creation time.
 
-import { OverReceiveError } from './errors.js';
+import { OverReceiveError } from "./errors.js";
 
 export interface PurchaseOrderLineProps {
   id: string;
@@ -65,11 +65,15 @@ export class PurchaseOrderLine {
     orderedQty: number,
     unitCost: number,
   ): PurchaseOrderLine {
-    if (typeof orderedQty !== 'number' || !Number.isFinite(orderedQty) || orderedQty <= 0) {
-      throw new Error('orderedQty must be a positive number');
+    if (
+      typeof orderedQty !== "number" ||
+      !Number.isFinite(orderedQty) ||
+      orderedQty <= 0
+    ) {
+      throw new Error("orderedQty must be a positive number");
     }
     if (unitCost <= 0) {
-      throw new Error('unitCost must be a positive number');
+      throw new Error("unitCost must be a positive number");
     }
     return new PurchaseOrderLine({
       id,

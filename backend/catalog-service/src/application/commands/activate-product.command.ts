@@ -2,14 +2,14 @@
 // ACTIVATE PRODUCT COMMAND — Use case for activating a product
 // =============================================================================
 
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from "@nestjs/common";
 
-import { Product } from '../../domain/entities/index.js';
+import { Product } from "../../domain/entities/index.js";
 import {
   PRODUCT_REPOSITORY,
   type IProductRepository,
-} from '../../domain/repositories/index.js';
-import { EVENT } from '@erp/shared';
+} from "../../domain/repositories/index.js";
+import { EVENT } from "@erp/shared";
 
 @Injectable()
 export class ActivateProductCommand {

@@ -7,9 +7,9 @@ import {
   ExceptionFilter,
   HttpStatus,
   Logger,
-} from '@nestjs/common';
-import type { Response } from 'express';
-import { ZodError } from 'zod';
+} from "@nestjs/common";
+import type { Response } from "express";
+import { ZodError } from "zod";
 
 @Catch(ZodError)
 export class ZodExceptionFilter implements ExceptionFilter {
@@ -19,7 +19,7 @@ export class ZodExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
 
     const issues = exception.issues.map((issue) => ({
-      path: issue.path.join('.'),
+      path: issue.path.join("."),
       message: issue.message,
     }));
 
@@ -27,8 +27,8 @@ export class ZodExceptionFilter implements ExceptionFilter {
 
     response.status(HttpStatus.BAD_REQUEST).json({
       statusCode: HttpStatus.BAD_REQUEST,
-      error: 'Bad Request',
-      message: 'Validation failed',
+      error: "Bad Request",
+      message: "Validation failed",
       issues,
     });
   }

@@ -40,7 +40,8 @@ export class SubmitSalesOrderCommand {
   private readonly logger = new Logger(SubmitSalesOrderCommand.name);
 
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly repo: ISalesOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly repo: ISalesOrderRepository,
     private readonly inventoryClient: InventoryClient,
     private readonly customerClient: CustomerClient,
   ) {}
@@ -77,7 +78,12 @@ export class SubmitSalesOrderCommand {
 
     await this.repo.update(
       order,
-      [{ eventType: EVENT.SALES_ORDER_SUBMITTED, payload: submittedPayload as unknown as Record<string, unknown> }],
+      [
+        {
+          eventType: EVENT.SALES_ORDER_SUBMITTED,
+          payload: submittedPayload as unknown as Record<string, unknown>,
+        },
+      ],
       {
         fromStatus: previousStatus,
         toStatus: 'submitted',
@@ -99,7 +105,10 @@ export class SubmitSalesOrderCommand {
       quantity: l.quantity,
     }));
 
-    const reserveResult = await this.inventoryClient.reserveBatch(order.id, lines);
+    const reserveResult = await this.inventoryClient.reserveBatch(
+      order.id,
+      lines,
+    );
 
     if (!reserveResult.reserved) {
       // Insufficient stock or inventory service down → cancel
@@ -167,7 +176,12 @@ export class SubmitSalesOrderCommand {
       };
       await this.repo.update(
         order,
-        [{ eventType: EVENT.SALES_ORDER_CANCELLED, payload: cancelPayload as unknown as Record<string, unknown> }],
+        [
+          {
+            eventType: EVENT.SALES_ORDER_CANCELLED,
+            payload: cancelPayload as unknown as Record<string, unknown>,
+          },
+        ],
         {
           fromStatus: 'submitted',
           toStatus: 'cancelled',
@@ -199,7 +213,12 @@ export class SubmitSalesOrderCommand {
     };
     await this.repo.update(
       order,
-      [{ eventType: EVENT.SALES_ORDER_CONFIRMED, payload: confirmPayload as unknown as Record<string, unknown> }],
+      [
+        {
+          eventType: EVENT.SALES_ORDER_CONFIRMED,
+          payload: confirmPayload as unknown as Record<string, unknown>,
+        },
+      ],
       {
         fromStatus: 'submitted',
         toStatus: 'confirmed',
@@ -215,7 +234,9 @@ export class SubmitSalesOrderCommand {
       },
     );
 
-    this.logger.log(`Order "${orderId}" confirmed — saga completed synchronously`);
+    this.logger.log(
+      `Order "${orderId}" confirmed — saga completed synchronously`,
+    );
     return {
       id: order.id,
       status: order.status,

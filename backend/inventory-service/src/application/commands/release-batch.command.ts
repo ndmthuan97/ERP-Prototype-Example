@@ -4,11 +4,7 @@
 // Compensation endpoint: releases reserved stock for ALL items in a single call.
 // Used by Sales Service when credit-check fails after successful reserve.
 
-import {
-  Injectable,
-  Inject,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 
 import {
   STOCK_ITEM_REPOSITORY,
@@ -60,7 +56,7 @@ export class ReleaseBatchCommand {
         releasedCount++;
       } catch (error) {
         this.logger.error(
-          `Failed to release item "${line.itemId}": ${error instanceof Error ? error.message : error}`,
+          `Failed to release item "${line.itemId}": ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }

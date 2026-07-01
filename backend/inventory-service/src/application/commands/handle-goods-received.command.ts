@@ -5,10 +5,7 @@
 // Uses optimistic retry per receipt to handle concurrent updates.
 
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import {
-  type EventEnvelope,
-  type GoodsReceivedPayload,
-} from '@erp/shared';
+import { type EventEnvelope, type GoodsReceivedPayload } from '@erp/shared';
 
 import {
   STOCK_ITEM_REPOSITORY,

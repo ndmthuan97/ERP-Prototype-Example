@@ -3,7 +3,10 @@
 // =============================================================================
 import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
-import { InvalidCredentialsError, InactiveUserError } from '../../domain/errors.js';
+import {
+  InvalidCredentialsError,
+  InactiveUserError,
+} from '../../domain/errors.js';
 import { JwtTokenService } from '../../infrastructure/auth/jwt.service.js';
 import { PrismaService } from '../../infrastructure/persistence/prisma.service.js';
 import { refreshSchema } from '../dtos/auth.dto.js';
@@ -14,11 +17,16 @@ function parseDurationToMs(duration: string): number {
   const value = parseInt(match[1], 10);
   const unit = match[2];
   switch (unit) {
-    case 's': return value * 1000;
-    case 'm': return value * 60 * 1000;
-    case 'h': return value * 60 * 60 * 1000;
-    case 'd': return value * 24 * 60 * 60 * 1000;
-    default: return 7 * 24 * 60 * 60 * 1000;
+    case 's':
+      return value * 1000;
+    case 'm':
+      return value * 60 * 1000;
+    case 'h':
+      return value * 60 * 60 * 1000;
+    case 'd':
+      return value * 24 * 60 * 60 * 1000;
+    default:
+      return 7 * 24 * 60 * 60 * 1000;
   }
 }
 
@@ -29,7 +37,9 @@ export class RefreshTokenCommand {
     private readonly prisma: PrismaService,
   ) {}
 
-  async execute(input: unknown): Promise<{ accessToken: string; refreshToken: string }> {
+  async execute(
+    input: unknown,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const dto = refreshSchema.parse(input);
 
     // Verify JWT signature of the refresh token
@@ -74,7 +84,9 @@ export class RefreshTokenCommand {
       fullName: tokenRecord.user.fullName,
     });
 
-    const newRefreshToken = this.jwtService.signRefreshToken({ sub: payload.sub });
+    const newRefreshToken = this.jwtService.signRefreshToken({
+      sub: payload.sub,
+    });
 
     // Store new refresh token
     const refreshTtl = process.env.JWT_REFRESH_EXPIRES_IN || '7d';

@@ -45,7 +45,11 @@ export class SalesReturnLine {
     unitPrice: number,
     reason?: string,
   ): SalesReturnLine {
-    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0) {
+    if (
+      typeof quantity !== 'number' ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
       throw new Error('Return quantity must be a positive number');
     }
     return new SalesReturnLine({

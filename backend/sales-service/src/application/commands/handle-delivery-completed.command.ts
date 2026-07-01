@@ -25,8 +25,10 @@ export class HandleDeliveryCompletedCommand {
   private readonly logger = new Logger(HandleDeliveryCompletedCommand.name);
 
   constructor(
-    @Inject(SALES_ORDER_REPOSITORY) private readonly soRepo: ISalesOrderRepository,
-    @Inject(DELIVERY_ORDER_REPOSITORY) private readonly deliveryRepo: IDeliveryOrderRepository,
+    @Inject(SALES_ORDER_REPOSITORY)
+    private readonly soRepo: ISalesOrderRepository,
+    @Inject(DELIVERY_ORDER_REPOSITORY)
+    private readonly deliveryRepo: IDeliveryOrderRepository,
   ) {}
 
   /**

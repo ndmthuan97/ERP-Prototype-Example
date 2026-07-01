@@ -4,8 +4,11 @@
 import { Injectable, Inject } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { v4 } from 'uuid';
-import { USER_REPOSITORY, type IUserRepository } from '../../domain/repositories/user.repository.js';
-import { User, type UserRole } from '../../domain/entities/user.entity.js';
+import {
+  USER_REPOSITORY,
+  type IUserRepository,
+} from '../../domain/repositories/user.repository.js';
+import { User } from '../../domain/entities/user.entity.js';
 import { DuplicateEmailError } from '../../domain/errors.js';
 import { registerSchema } from '../dtos/auth.dto.js';
 
@@ -15,7 +18,9 @@ export class RegisterCommand {
     @Inject(USER_REPOSITORY) private readonly userRepo: IUserRepository,
   ) {}
 
-  async execute(input: unknown): Promise<{ id: string; email: string; fullName: string; role: string }> {
+  async execute(
+    input: unknown,
+  ): Promise<{ id: string; email: string; fullName: string; role: string }> {
     const dto = registerSchema.parse(input);
 
     // Check for duplicate email
@@ -33,7 +38,7 @@ export class RegisterCommand {
       email: dto.email,
       passwordHash,
       fullName: dto.fullName,
-      role: dto.role as UserRole,
+      role: dto.role,
       isActive: true,
       createdAt: now,
       updatedAt: now,

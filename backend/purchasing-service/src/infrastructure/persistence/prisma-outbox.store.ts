@@ -7,9 +7,9 @@
 // Multi-instance safe: fetchUnpublished CLAIMs via FOR UPDATE SKIP LOCKED +
 // locked_until. markFailed increments attempts and dead-letters when exceeded.
 
-import { Injectable } from '@nestjs/common';
-import type { OutboxStore, OutboxRecord } from '@erp/shared';
-import { PrismaService } from './prisma.service.js';
+import { Injectable } from "@nestjs/common";
+import type { OutboxStore, OutboxRecord } from "@erp/shared";
+import { PrismaService } from "./prisma.service.js";
 
 const LOCK_SECONDS = 30;
 

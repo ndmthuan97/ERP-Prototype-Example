@@ -29,7 +29,14 @@ export interface UserProps {
 
 // RBAC permission matrix
 const ROLE_PERMISSIONS: Record<UserRole, Set<string>> = {
-  admin: new Set(['read', 'create', 'update', 'delete', 'approve', 'manage_users']),
+  admin: new Set([
+    'read',
+    'create',
+    'update',
+    'delete',
+    'approve',
+    'manage_users',
+  ]),
   manager: new Set(['read', 'create', 'update', 'approve']),
   staff: new Set(['read', 'create']),
 };

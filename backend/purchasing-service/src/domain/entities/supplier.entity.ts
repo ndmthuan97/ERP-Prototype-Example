@@ -62,17 +62,20 @@ export class Supplier {
   }): void {
     if (changes.name !== undefined) {
       if (!changes.name || changes.name.trim().length === 0) {
-        throw new Error('Supplier name must not be empty');
+        throw new Error("Supplier name must not be empty");
       }
       this.name = changes.name.trim();
     }
     if (changes.taxCode !== undefined) this.taxCode = changes.taxCode;
-    if (changes.contactName !== undefined) this.contactName = changes.contactName;
-    if (changes.contactPhone !== undefined) this.contactPhone = changes.contactPhone;
-    if (changes.contactEmail !== undefined) this.contactEmail = changes.contactEmail;
+    if (changes.contactName !== undefined)
+      this.contactName = changes.contactName;
+    if (changes.contactPhone !== undefined)
+      this.contactPhone = changes.contactPhone;
+    if (changes.contactEmail !== undefined)
+      this.contactEmail = changes.contactEmail;
     if (changes.paymentTermDays !== undefined) {
       if (changes.paymentTermDays < 0) {
-        throw new Error('Payment term days must be >= 0');
+        throw new Error("Payment term days must be >= 0");
       }
       this.paymentTermDays = changes.paymentTermDays;
     }
@@ -95,7 +98,7 @@ export class Supplier {
     },
   ): Supplier {
     if (!name || name.trim().length === 0) {
-      throw new Error('Supplier name must not be empty');
+      throw new Error("Supplier name must not be empty");
     }
 
     const now = new Date();

@@ -22,10 +22,7 @@ import {
   CUSTOMER_REPOSITORY,
   type ICustomerRepository,
 } from '../../domain/repositories/index.js';
-import {
-  validateUpdateCustomer,
-  type UpdateCustomerDto,
-} from '../dtos/index.js';
+import { validateUpdateCustomer } from '../dtos/index.js';
 import { RedisCacheService } from '@erp/shared';
 
 @Injectable()

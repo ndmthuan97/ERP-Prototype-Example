@@ -1,9 +1,9 @@
 // =============================================================================
 // PURCHASE ORDER REPOSITORY — Port (DDD/Hexagonal)
 // =============================================================================
-import { PurchaseOrder } from '../entities/index.js';
+import { PurchaseOrder } from "../entities/index.js";
 
-export const PURCHASE_ORDER_REPOSITORY = 'PURCHASE_ORDER_REPOSITORY';
+export const PURCHASE_ORDER_REPOSITORY = "PURCHASE_ORDER_REPOSITORY";
 
 export interface PaginatedResult<T> {
   data: T[];

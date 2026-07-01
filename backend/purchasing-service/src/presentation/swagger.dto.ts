@@ -5,7 +5,7 @@
 // schemas in /docs. They wrap the SAME Zod schemas already used for runtime
 // validation (single source of truth). Runtime validation is unchanged — the
 // application commands still call the existing `validateXxx()` helpers.
-import { createZodDto } from 'nestjs-zod';
+import { createZodDto } from "nestjs-zod";
 
 import {
   createPOSchema,
@@ -14,7 +14,7 @@ import {
   cancelPOSchema,
   createSupplierSchema,
   updateSupplierSchema,
-} from '../application/dtos/purchasing.dto.js';
+} from "../application/dtos/purchasing.dto.js";
 
 // --- Purchase Order endpoints ---
 export class CreatePODtoSwagger extends createZodDto(createPOSchema) {}

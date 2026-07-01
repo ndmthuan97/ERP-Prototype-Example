@@ -7,10 +7,10 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   Global,
-} from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { resolveConnectionString } from '@erp/shared';
+} from "@nestjs/common";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { resolveConnectionString } from "@erp/shared";
 
 @Global()
 @Injectable()
