@@ -104,12 +104,19 @@ jobs:
 
       # @erp/shared là dependency 'file:../shared' + jest resolve tới
       # shared/src, nên phải cài (và verify) shared trước.
-      - name: Install & verify shared
+      # Build shared → dist so downstream services can resolve @erp/shared. The
+      # services' ESLint is type-aware (recommendedTypeChecked + projectService)
+      # and @erp/shared's `types` point at dist/index.d.ts, so WITHOUT this build
+      # every @erp/shared import resolves to `any` and the Lint step drowns in
+      # no-unsafe-* errors (api-gateway is the only service that doesn't import
+      # @erp/shared, which is why it was the only one whose Lint passed).
+      - name: Install, build & verify shared
         if: steps.check.outputs.should_verify == 'true'
         working-directory: backend/shared
         run: |
           npm ci
           npm run typecheck
+          npm run build
           npm test
 
       - name: Install service dependencies
