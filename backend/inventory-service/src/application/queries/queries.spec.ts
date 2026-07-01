@@ -15,6 +15,7 @@ function makeRepoMock(): jest.Mocked<IStockItemRepository> {
       .mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 }),
     create: jest.fn(),
     updateWithLock: jest.fn(),
+    saveWithMovement: jest.fn(),
     createOutboxEvent: jest.fn(),
   };
 }

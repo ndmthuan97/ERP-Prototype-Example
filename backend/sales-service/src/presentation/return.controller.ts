@@ -10,8 +10,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
-import { CreateSalesReturnCommand } from '../application/commands/create-sales-return.command.js';
+import {
+  CreateSalesReturnCommand,
+  CreateReturnBodyDto,
+} from '../application/commands/create-sales-return.command.js';
 import { UpdateSalesReturnStatusCommand } from '../application/commands/update-sales-return-status.command.js';
 import { GetSalesReturnsQuery } from '../application/queries/get-sales-returns.query.js';
 
@@ -26,9 +30,10 @@ export class ReturnController {
   /** POST /orders/:orderId/returns — Create a return for a fulfilled order */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: CreateReturnBodyDto })
   async create(
     @Param('orderId') orderId: string,
-    @Body() body: unknown,
+    @Body() body: CreateReturnBodyDto,
   ) {
     return this.createReturnCommand.execute(orderId, body);
   }

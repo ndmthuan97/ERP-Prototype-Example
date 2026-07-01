@@ -14,6 +14,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
 import { CreateSalesOrderCommand } from '../application/commands/create-sales-order.command.js';
 import { AddLineCommand } from '../application/commands/add-line.command.js';
@@ -23,6 +24,11 @@ import { FulfilSalesOrderCommand } from '../application/commands/fulfil-sales-or
 import { GetSalesOrderQuery } from '../application/queries/get-sales-order.query.js';
 import { SearchSalesOrdersQuery } from '../application/queries/search-sales-orders.query.js';
 import { GetLifecycleQuery } from '../application/queries/get-lifecycle.query.js';
+import {
+  CreateOrderBodyDto,
+  AddLineBodyDto,
+  CancelOrderBodyDto,
+} from '../application/dtos/index.js';
 
 @Controller('orders')
 export class SalesOrderController {
@@ -40,14 +46,16 @@ export class SalesOrderController {
   /** POST /orders — tạo order (draft) */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() body: unknown) {
+  @ApiBody({ type: CreateOrderBodyDto })
+  async create(@Body() body: CreateOrderBodyDto) {
     return this.createOrderCommand.execute(body);
   }
 
   /** POST /orders/:id/lines — thêm dòng hàng */
   @Post(':id/lines')
   @HttpCode(HttpStatus.CREATED)
-  async addLine(@Param('id') id: string, @Body() body: unknown) {
+  @ApiBody({ type: AddLineBodyDto })
+  async addLine(@Param('id') id: string, @Body() body: AddLineBodyDto) {
     return this.addLineCommand.execute(id, body);
   }
 
@@ -61,7 +69,8 @@ export class SalesOrderController {
   /** POST /orders/:id/cancel — hủy order */
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  async cancel(@Param('id') id: string, @Body() body: unknown) {
+  @ApiBody({ type: CancelOrderBodyDto })
+  async cancel(@Param('id') id: string, @Body() body: CancelOrderBodyDto) {
     return this.cancelOrderCommand.execute(id, body);
   }
 

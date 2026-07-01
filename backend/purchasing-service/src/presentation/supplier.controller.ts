@@ -12,7 +12,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
+import {
+  CreateSupplierDtoSwagger,
+  UpdateSupplierDtoSwagger,
+} from './swagger.dto.js';
 import { CreateSupplierCommand, UpdateSupplierCommand } from '../application/commands/index.js';
 import { GetSupplierQuery, SearchSuppliersQuery } from '../application/queries/index.js';
 
@@ -28,6 +33,7 @@ export class SupplierController {
   /** POST /suppliers — Create a new supplier */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: CreateSupplierDtoSwagger })
   async create(@Body() body: unknown) {
     return this.createSupplierCommand.execute(body);
   }
@@ -60,6 +66,7 @@ export class SupplierController {
 
   /** PATCH /suppliers/:id — Update a supplier */
   @Patch(':id')
+  @ApiBody({ type: UpdateSupplierDtoSwagger })
   async update(@Param('id') id: string, @Body() body: unknown) {
     return this.updateSupplierCommand.execute(id, body);
   }

@@ -1,21 +1,25 @@
-name: CD — Deploy via Cloud Build
+name: CD — Manual Full Deploy / Rollback
+
+# Auto-deploy khi merge vào main giờ do CI — Backend / CI — Frontend đảm nhiệm
+# (mỗi CI deploy chọn lọc service của mình theo commit SHA). Workflow này chỉ
+# dùng khi cần deploy TẤT CẢ service một lượt: provision lần đầu, disaster
+# recovery, hoặc rollback đồng loạt về một tag đã biết.
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["CI — Backend", "CI — Frontend"]
-    types: [completed]
-    branches: [main]
+    inputs:
+      tag:
+        description: "Image tag để deploy (commit SHA để rollback, hoặc 'latest')"
+        default: latest
+        required: true
 
-# Tránh race khi 1 push đụng cả frontend/** và backend/** → 2 CI cùng success
-# và cùng trigger deploy, cùng ghi tag :latest. Xếp hàng, không hủy nửa chừng.
+# Không cho 2 lần full-deploy chồng nhau (mỗi bên cùng ghi tag lên cùng service).
 concurrency:
   group: deploy-dev
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -37,5 +41,5 @@ jobs:
         run: |
           gcloud builds submit \
             --config=cloudbuild.yaml \
-            --substitutions=_TAG=latest \
+            --substitutions=_TAG=${{ inputs.tag }} \
             --project=${{ vars.GCP_PROJECT }}

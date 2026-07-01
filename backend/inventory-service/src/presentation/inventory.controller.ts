@@ -14,7 +14,17 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
+import {
+  CreateItemDtoSwagger,
+  ReceiveStockDtoSwagger,
+  ReserveStockDtoSwagger,
+  ReleaseStockDtoSwagger,
+  IssueStockDtoSwagger,
+  ReserveBatchDtoSwagger,
+  ReleaseBatchDtoSwagger,
+} from './swagger.dto.js';
 import { CreateItemCommand } from '../application/commands/create-item.command';
 import { ReceiveStockCommand } from '../application/commands/receive-stock.command';
 import { ReserveStockCommand } from '../application/commands/reserve-stock.command';
@@ -44,6 +54,7 @@ export class InventoryController {
   /** POST /inventory/items — tạo mặt hàng */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: CreateItemDtoSwagger })
   async create(@Body() body: unknown) {
     return this.createItemCommand.execute(body);
   }
@@ -85,36 +96,42 @@ export class InventoryController {
 
   /** POST /inventory/items/:sku/receive — nhập kho */
   @Post(':sku/receive')
+  @ApiBody({ type: ReceiveStockDtoSwagger })
   async receive(@Param('sku') sku: string, @Body() body: unknown) {
     return this.receiveStockCommand.execute(sku, body);
   }
 
   /** POST /inventory/items/:sku/reserve — giữ chỗ (saga) */
   @Post(':sku/reserve')
+  @ApiBody({ type: ReserveStockDtoSwagger })
   async reserve(@Param('sku') sku: string, @Body() body: unknown) {
     return this.reserveStockCommand.execute(sku, body);
   }
 
   /** POST /inventory/items/:sku/release — nhả giữ chỗ (saga compensation) */
   @Post(':sku/release')
+  @ApiBody({ type: ReleaseStockDtoSwagger })
   async release(@Param('sku') sku: string, @Body() body: unknown) {
     return this.releaseStockCommand.execute(sku, body);
   }
 
   /** POST /inventory/items/:sku/issue — issue stock (outbound shipment) */
   @Post(':sku/issue')
+  @ApiBody({ type: IssueStockDtoSwagger })
   async issue(@Param('sku') sku: string, @Body() body: unknown) {
     return this.issueStockCommand.execute(sku, body);
   }
 
   /** POST /inventory/items/batch/reserve — reserve ALL items for an order atomically */
   @Post('batch/reserve')
+  @ApiBody({ type: ReserveBatchDtoSwagger })
   async reserveBatch(@Body() body: unknown) {
     return this.reserveBatchCommand.execute(body);
   }
 
   /** POST /inventory/items/batch/release — release ALL reserved items for an order */
   @Post('batch/release')
+  @ApiBody({ type: ReleaseBatchDtoSwagger })
   async releaseBatch(@Body() body: unknown) {
     return this.releaseBatchCommand.execute(body);
   }

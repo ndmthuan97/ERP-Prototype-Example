@@ -6,6 +6,8 @@
 
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import { StructuredLogger, CorrelationMiddleware } from '@erp/shared';
@@ -39,6 +41,22 @@ async function bootstrap() {
     origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
     credentials: true,
   });
+
+  // OpenAPI / Swagger — served at /docs (UI) and /docs-json (spec).
+  // Placed outside the global 'v1' prefix so the docs live at the root path.
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Catalog Service API')
+    .setDescription('Catalog bounded context (DDD 4 layers).')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  // nestjs-zod v5: DTOs built with createZodDto are picked up by the swagger
+  // CLI plugin; cleanupOpenApiDoc() post-processes the Zod-generated schemas
+  // (fills components.schemas with real body shapes) after createDocument.
+  const document = cleanupOpenApiDoc(
+    SwaggerModule.createDocument(app, swaggerConfig),
+  );
+  SwaggerModule.setup('docs', app, document);
 
   const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
   await app.listen(port, '0.0.0.0');

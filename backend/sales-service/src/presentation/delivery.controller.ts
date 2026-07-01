@@ -10,8 +10,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
-import { CreateDeliveryOrderCommand } from '../application/commands/create-delivery-order.command.js';
+import {
+  CreateDeliveryOrderCommand,
+  CreateDeliveryBodyDto,
+} from '../application/commands/create-delivery-order.command.js';
 import { UpdateDeliveryStatusCommand } from '../application/commands/update-delivery-status.command.js';
 import { HandleDeliveryCompletedCommand } from '../application/commands/handle-delivery-completed.command.js';
 import { GetDeliveryOrdersQuery } from '../application/queries/get-delivery-orders.query.js';
@@ -28,9 +32,10 @@ export class DeliveryController {
   /** POST /orders/:orderId/deliveries — Create a delivery order */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: CreateDeliveryBodyDto })
   async create(
     @Param('orderId') orderId: string,
-    @Body() body: unknown,
+    @Body() body: CreateDeliveryBodyDto,
   ) {
     return this.createDeliveryCommand.execute(orderId, body);
   }

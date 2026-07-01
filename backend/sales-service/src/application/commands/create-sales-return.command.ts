@@ -4,6 +4,7 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
+import { createZodDto } from 'nestjs-zod';
 
 import { SalesReturn, SalesReturnLine } from '../../domain/entities/index.js';
 import {
@@ -13,7 +14,7 @@ import {
   type ISalesReturnRepository,
 } from '../../domain/repositories/index.js';
 
-const createReturnSchema = z.object({
+export const createReturnSchema = z.object({
   reason: z.string().min(1, 'Return reason is required'),
   lines: z
     .array(
@@ -25,6 +26,13 @@ const createReturnSchema = z.object({
     )
     .min(1, 'At least one return line is required'),
 });
+
+/**
+ * Swagger DTO — bắc cầu createReturnSchema sang OpenAPI. CHỈ dùng làm kiểu tham số
+ * @Body(); validation runtime vẫn do command gọi `createReturnSchema.parse()`
+ * (single source of truth — cùng schema).
+ */
+export class CreateReturnBodyDto extends createZodDto(createReturnSchema) {}
 
 @Injectable()
 export class CreateSalesReturnCommand {

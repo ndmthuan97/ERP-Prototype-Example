@@ -14,6 +14,7 @@ import {
   HttpStatus,
   HttpException,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
 import { RegisterCommand } from '../application/commands/register.command.js';
 import { LoginCommand } from '../application/commands/login.command.js';
@@ -21,6 +22,12 @@ import { RefreshTokenCommand } from '../application/commands/refresh-token.comma
 import { LogoutCommand } from '../application/commands/logout.command.js';
 import { GetMeQuery } from '../application/queries/get-me.query.js';
 import { ListUsersQuery } from '../application/queries/list-users.query.js';
+import {
+  RegisterBodyDto,
+  LoginBodyDto,
+  RefreshBodyDto,
+  LogoutBodyDto,
+} from '../application/dtos/auth.dto.js';
 
 @Controller('auth')
 export class AuthController {
@@ -36,28 +43,32 @@ export class AuthController {
   /** POST /auth/register — Admin creates a new user */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() body: unknown) {
+  @ApiBody({ type: RegisterBodyDto })
+  async register(@Body() body: RegisterBodyDto) {
     return this.registerCommand.execute(body);
   }
 
   /** POST /auth/login — Authenticate and receive tokens */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() body: unknown) {
+  @ApiBody({ type: LoginBodyDto })
+  async login(@Body() body: LoginBodyDto) {
     return this.loginCommand.execute(body);
   }
 
   /** POST /auth/refresh — Rotate refresh token and get new access token */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() body: unknown) {
+  @ApiBody({ type: RefreshBodyDto })
+  async refresh(@Body() body: RefreshBodyDto) {
     return this.refreshTokenCommand.execute(body);
   }
 
   /** POST /auth/logout — Invalidate refresh token */
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Body() body: { refreshToken: string }) {
+  @ApiBody({ type: LogoutBodyDto })
+  async logout(@Body() body: LogoutBodyDto) {
     await this.logoutCommand.execute(body.refreshToken);
   }
 

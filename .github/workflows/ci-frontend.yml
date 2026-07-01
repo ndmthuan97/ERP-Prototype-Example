@@ -9,10 +9,46 @@ on:
     paths: ['frontend/**']
 
 jobs:
+  # ============================================================
+  # Step 1: Verify chất lượng code (chạy trên cả PR và push).
+  # Chặn build+deploy nếu typecheck/lint fail → bắt lỗi sớm.
+  # ============================================================
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+
+  # ============================================================
+  # Step 2: Build & push (chỉ chạy trên push, sau khi verify pass).
+  # ============================================================
   build-and-push:
+    needs: verify
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: dev
+    # Serialize deploy frontend qua các run liên tiếp (tránh race trên revision).
+    concurrency:
+      group: deploy-frontend-dev
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -43,3 +79,13 @@ jobs:
         run: |
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:${{ github.sha }}
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:latest
+
+      # Deploy frontend pin theo commit SHA (immutable → rollback được).
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy frontend-dev \
+            --image=us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:${{ github.sha }} \
+            --region=us-central1 \
+            --platform=managed \
+            --allow-unauthenticated \
+            --quiet

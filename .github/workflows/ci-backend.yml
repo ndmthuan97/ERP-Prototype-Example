@@ -42,13 +42,113 @@ jobs:
             gateway: 'backend/api-gateway/**'
 
   # ============================================================
-  # Step 2: Build & push changed services
+  # Step 2: Verify chất lượng code cho service thay đổi
+  # (chạy trên cả PR và push → bắt lỗi sớm, chặn build+deploy nếu fail).
+  #
+  # Backend KHÔNG dùng npm workspaces: mỗi service có node_modules +
+  # Prisma Client riêng, và jest map '@erp/shared' → '../shared/src'.
+  # Vì vậy verify chạy theo matrix từng service: cài @erp/shared trước
+  # rồi cài service, sau đó chạy các script THỰC SỰ TỒN TẠI:
+  #   - shared:   typecheck (tsc --noEmit) + test (jest)
+  #   - service:  lint:check (eslint, KHÔNG --fix) nếu có + test (jest)
+  # Lưu ý: api-gateway hiện chỉ có 'lint' (eslint --fix, mutate file) →
+  # thiếu 'lint:check' nên bước Lint của nó bị bỏ qua (xem run_lint).
+  # Chỉ verify service có thay đổi (hoặc khi shared đổi → verify hết).
+  # ============================================================
+  verify:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth-service
+            changed: ${{ needs.detect-changes.outputs.auth }}
+            run_lint: true
+          - service: customer-service
+            changed: ${{ needs.detect-changes.outputs.customer }}
+            run_lint: true
+          - service: sales-service
+            changed: ${{ needs.detect-changes.outputs.sales }}
+            run_lint: true
+          - service: inventory-service
+            changed: ${{ needs.detect-changes.outputs.inventory }}
+            run_lint: true
+          - service: catalog-service
+            changed: ${{ needs.detect-changes.outputs.catalog }}
+            run_lint: true
+          - service: purchasing-service
+            changed: ${{ needs.detect-changes.outputs.purchasing }}
+            run_lint: true
+          # api-gateway thiếu script 'lint:check' → tạm bỏ qua bước Lint.
+          - service: api-gateway
+            changed: ${{ needs.detect-changes.outputs.gateway }}
+            run_lint: false
+    steps:
+      - name: Check if verify needed
+        id: check
+        run: |
+          if [[ "${{ matrix.changed }}" == "true" || "${{ needs.detect-changes.outputs.shared }}" == "true" ]]; then
+            echo "should_verify=true" >> $GITHUB_OUTPUT
+          else
+            echo "Skipping ${{ matrix.service }} — no changes"
+            echo "should_verify=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.should_verify == 'true'
+
+      - name: Setup Node
+        if: steps.check.outputs.should_verify == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # @erp/shared là dependency 'file:../shared' + jest resolve tới
+      # shared/src, nên phải cài (và verify) shared trước.
+      - name: Install & verify shared
+        if: steps.check.outputs.should_verify == 'true'
+        working-directory: backend/shared
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Install service dependencies
+        if: steps.check.outputs.should_verify == 'true'
+        working-directory: backend/${{ matrix.service }}
+        run: npm ci
+
+      # Prisma Client cần generate trước khi typecheck/test biên dịch được.
+      - name: Generate Prisma Client
+        if: steps.check.outputs.should_verify == 'true'
+        working-directory: backend/${{ matrix.service }}
+        run: |
+          if [ -f "prisma/schema.prisma" ]; then npx prisma generate; fi
+
+      - name: Lint
+        if: steps.check.outputs.should_verify == 'true' && matrix.run_lint
+        working-directory: backend/${{ matrix.service }}
+        run: npm run lint:check
+
+      - name: Test
+        if: steps.check.outputs.should_verify == 'true'
+        working-directory: backend/${{ matrix.service }}
+        run: npm test
+
+  # ============================================================
+  # Step 3: Build & push changed services
   # ============================================================
   build-and-push:
-    needs: detect-changes
+    needs: [detect-changes, verify]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: dev
+    # Serialize deploy của cùng 1 service qua các run liên tiếp (tránh race,
+    # không hủy nửa chừng để deploy đang chạy không bị ngắt).
+    concurrency:
+      group: deploy-${{ matrix.service }}-dev
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -58,18 +158,25 @@ jobs:
         include:
           - service: auth-service
             changed: ${{ needs.detect-changes.outputs.auth }}
+            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: customer-service
             changed: ${{ needs.detect-changes.outputs.customer }}
+            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: sales-service
             changed: ${{ needs.detect-changes.outputs.sales }}
+            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: inventory-service
             changed: ${{ needs.detect-changes.outputs.inventory }}
+            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: catalog-service
             changed: ${{ needs.detect-changes.outputs.catalog }}
+            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: purchasing-service
             changed: ${{ needs.detect-changes.outputs.purchasing }}
+            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: api-gateway
             changed: ${{ needs.detect-changes.outputs.gateway }}
+            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only --allow-unauthenticated
     steps:
       - name: Check if build needed
         id: check
@@ -113,3 +220,15 @@ jobs:
         run: |
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }}
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:latest
+
+      # Deploy ngay service vừa build, pin theo commit SHA (immutable → rollback
+      # được, và service không đổi ở commit này sẽ không bị tạo revision mới).
+      - name: Deploy to Cloud Run
+        if: steps.check.outputs.should_build == 'true'
+        run: |
+          gcloud run deploy ${{ matrix.service }}-dev \
+            --image=us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }} \
+            --region=us-central1 \
+            --platform=managed \
+            ${{ matrix.run_flags }} \
+            --quiet

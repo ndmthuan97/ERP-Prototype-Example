@@ -15,7 +15,14 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
+import {
+  CreatePODtoSwagger,
+  AddLinePODtoSwagger,
+  ReceiveGoodsDtoSwagger,
+  CancelPODtoSwagger,
+} from './swagger.dto.js';
 import {
   CreatePOCommand,
   AddLinePOCommand,
@@ -42,6 +49,7 @@ export class PurchasingController {
   /** POST /purchasing/orders — Create a new draft PO */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: CreatePODtoSwagger })
   async create(@Body() body: unknown) {
     return this.createPOCommand.execute(body);
   }
@@ -72,6 +80,7 @@ export class PurchasingController {
   /** POST /purchasing/orders/:id/lines — Add a line to draft PO */
   @Post(':id/lines')
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: AddLinePODtoSwagger })
   async addLine(@Param('id') id: string, @Body() body: unknown) {
     return this.addLinePOCommand.execute(id, body);
   }
@@ -94,6 +103,7 @@ export class PurchasingController {
 
   /** POST /purchasing/orders/:id/receive — Receive goods against PO */
   @Post(':id/receive')
+  @ApiBody({ type: ReceiveGoodsDtoSwagger })
   async receive(@Param('id') id: string, @Body() body: unknown) {
     return this.receiveGoodsCommand.execute(id, body);
   }
@@ -101,6 +111,7 @@ export class PurchasingController {
   /** DELETE /purchasing/orders/:id — Cancel the PO */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: CancelPODtoSwagger, required: false })
   async cancel(@Param('id') id: string, @Body() body?: unknown) {
     return this.cancelPOCommand.execute(id, body);
   }

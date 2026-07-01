@@ -4,6 +4,7 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
+import { createZodDto } from 'nestjs-zod';
 
 import { DeliveryOrder, DeliveryLine } from '../../domain/entities/index.js';
 import {
@@ -13,7 +14,7 @@ import {
   type IDeliveryOrderRepository,
 } from '../../domain/repositories/index.js';
 
-const createDeliverySchema = z.object({
+export const createDeliverySchema = z.object({
   lines: z
     .array(
       z.object({
@@ -23,6 +24,13 @@ const createDeliverySchema = z.object({
     )
     .min(1, 'At least one delivery line is required'),
 });
+
+/**
+ * Swagger DTO — bắc cầu createDeliverySchema sang OpenAPI. CHỈ dùng làm kiểu
+ * tham số @Body(); validation runtime vẫn do command gọi
+ * `createDeliverySchema.parse()` (single source of truth — cùng schema).
+ */
+export class CreateDeliveryBodyDto extends createZodDto(createDeliverySchema) {}
 
 @Injectable()
 export class CreateDeliveryOrderCommand {

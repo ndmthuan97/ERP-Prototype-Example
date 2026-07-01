@@ -29,11 +29,13 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/swagger": "^11.4.5",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "^3.0.2",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
+    "nestjs-zod": "^5.4.0",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -70,7 +72,11 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": ".",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
@@ -84,7 +90,9 @@
     ],
     "coverageDirectory": "coverage",
     "testEnvironment": "node",
-    "setupFiles": ["reflect-metadata"],
+    "setupFiles": [
+      "reflect-metadata"
+    ],
     "moduleNameMapper": {
       "^uuid$": "<rootDir>/test/uuid-mock.js",
       "^@erp/shared$": "<rootDir>/../shared/src/index.ts",

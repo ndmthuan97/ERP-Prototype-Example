@@ -6,75 +6,86 @@ locals {
   # Service definitions for Cloud Run
   backend_services = {
     "api-gateway" = {
-      port       = 3010
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "all"
-      needs_vpc  = true
-      is_public  = true
+      port      = 3010
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "all"
+      needs_vpc = true
+      is_public = true
     }
     "auth-service" = {
-      port       = 3004
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "internal"
-      needs_vpc  = true
-      is_public  = false
+      port      = 3004
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "internal"
+      needs_vpc = true
+      is_public = false
     }
     "customer-service" = {
-      port       = 3001
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "internal"
-      needs_vpc  = true
-      is_public  = false
+      port      = 3001
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "internal"
+      needs_vpc = true
+      is_public = false
     }
     "sales-service" = {
-      port       = 3002
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "internal"
-      needs_vpc  = true
-      is_public  = false
+      port      = 3002
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "internal"
+      needs_vpc = true
+      is_public = false
     }
     "inventory-service" = {
-      port       = 3003
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "internal"
-      needs_vpc  = true
-      is_public  = false
+      port      = 3003
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "internal"
+      needs_vpc = true
+      is_public = false
     }
     "catalog-service" = {
-      port       = 3005
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "internal"
-      needs_vpc  = true
-      is_public  = false
+      port      = 3005
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "internal"
+      needs_vpc = true
+      is_public = false
     }
     "purchasing-service" = {
-      port       = 3006
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "internal"
-      needs_vpc  = true
-      is_public  = false
+      port      = 3006
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "internal"
+      needs_vpc = true
+      is_public = false
     }
   }
 
   frontend_service = {
     "frontend" = {
-      port       = 3000
-      memory     = "512Mi"
-      cpu        = "1"
-      ingress    = "all"
-      needs_vpc  = false
-      is_public  = true
+      port      = 3000
+      memory    = "512Mi"
+      cpu       = "1"
+      ingress   = "all"
+      needs_vpc = false
+      is_public = true
     }
   }
 
   all_services = merge(local.backend_services, local.frontend_service)
+
+  # Private downstream services the api-gateway proxies to. The gateway mints a
+  # Google ID token per request and calls these Cloud Run services directly, so
+  # the gateway's runtime service account needs roles/run.invoker on each. These
+  # are exactly the backend services EXCEPT the gateway itself (a gateway does
+  # not invoke itself). The service NAMES here are Cloud Run resource names
+  # (already suffixed with -${environment} inside the cloud-run module).
+  gateway_invokable_services = {
+    for name, cfg in local.backend_services : name => cfg
+    if name != "api-gateway"
+  }
 }
 
 # ============================================================
@@ -98,12 +109,12 @@ module "networking" {
 module "database" {
   source = "../../modules/database"
 
-  project_id   = var.project_id
-  region       = var.region
-  environment  = var.environment
-  db_tier      = var.db_tier
-  db_password  = var.db_password
-  vpc_network  = module.networking.vpc_id
+  project_id  = var.project_id
+  region      = var.region
+  environment = var.environment
+  db_tier     = var.db_tier
+  db_password = var.db_password
+  vpc_network = module.networking.vpc_id
 
   depends_on = [module.networking]
 }
@@ -214,11 +225,11 @@ module "cloud_run" {
 
   # Secret references
   secret_env_vars = each.key == "frontend" ? {} : {
-    DATABASE_URL              = module.secrets.database_url_secret_id
-    DIRECT_URL                = module.secrets.database_direct_url_secret_id
-    JWT_SECRET                = module.secrets.jwt_secret_id
-    UPSTASH_REDIS_REST_URL    = module.secrets.upstash_redis_url_secret_id
-    UPSTASH_REDIS_REST_TOKEN  = module.secrets.upstash_redis_token_secret_id
+    DATABASE_URL             = module.secrets.database_url_secret_id
+    DIRECT_URL               = module.secrets.database_direct_url_secret_id
+    JWT_SECRET               = module.secrets.jwt_secret_id
+    UPSTASH_REDIS_REST_URL   = module.secrets.upstash_redis_url_secret_id
+    UPSTASH_REDIS_REST_TOKEN = module.secrets.upstash_redis_token_secret_id
   }
 
   # Plain env vars (no self-references to avoid cycle)
@@ -234,7 +245,32 @@ module "cloud_run" {
     module.secrets,
     module.iam,
     module.registry,
+    # Public (allUsers) invoker binding for is_public services requires the
+    # Domain Restricted Sharing override to exist first.
+    google_org_policy_policy.allow_public_member_domains,
   ]
+}
+
+# ============================================================
+# Service-to-Service Auth: Gateway → private services
+# ============================================================
+# The api-gateway proxies /api/* and /docs/*-json to the private (internal
+# ingress, no allUsers invoker) backend services. On Cloud Run it authenticates
+# with a Google ID token minted from its runtime service account (erp-backend-
+# <env>, i.e. module.iam.backend_sa_email — backend services share this SA).
+# Grant that SA roles/run.invoker on each private service so the calls are
+# authorized. Bound at the service resource level (not project-wide) so invoke
+# permission is explicit and scoped to just the six proxied services.
+resource "google_cloud_run_v2_service_iam_member" "gateway_invoker" {
+  for_each = local.gateway_invokable_services
+
+  project  = var.project_id
+  location = var.region
+  name     = module.cloud_run[each.key].service_name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${module.iam.backend_sa_email}"
+
+  depends_on = [module.cloud_run]
 }
 
 # ============================================================

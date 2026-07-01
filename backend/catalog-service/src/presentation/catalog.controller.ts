@@ -15,7 +15,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
+import {
+  CreateProductDtoSwagger,
+  UpdateProductDtoSwagger,
+} from './swagger.dto.js';
 import { CreateProductCommand } from '../application/commands/create-product.command';
 import { UpdateProductCommand } from '../application/commands/update-product.command';
 import { DeactivateProductCommand } from '../application/commands/deactivate-product.command';
@@ -37,6 +42,7 @@ export class CatalogController {
   /** POST /catalog/products — Create a new product */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBody({ type: CreateProductDtoSwagger })
   async create(@Body() body: unknown) {
     return this.createProductCommand.execute(body);
   }
@@ -73,6 +79,7 @@ export class CatalogController {
 
   /** PATCH /catalog/products/:id — Update product details */
   @Patch(':id')
+  @ApiBody({ type: UpdateProductDtoSwagger })
   async update(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.updateProductCommand.execute({ id, ...body });
   }

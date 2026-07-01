@@ -9,6 +9,7 @@
 // không bắt buộc gửi lại toàn bộ dữ liệu.
 
 import { z } from 'zod';
+import { createZodDto } from 'nestjs-zod';
 import { TaxCode } from '../../domain/value-objects/index.js';
 
 /**
@@ -66,3 +67,17 @@ export type UpdateCustomerDto = z.infer<typeof updateCustomerSchema>;
 export function validateUpdateCustomer(data: unknown): UpdateCustomerDto {
   return updateCustomerSchema.parse(data);
 }
+
+/**
+ * Schema cho phần BODY của PATCH /customers/:id — bỏ `id` vì id lấy từ URL param,
+ * controller mới merge `{ id, ...body }` rồi validate bằng updateCustomerSchema.
+ * Dùng riêng schema này cho Swagger để body hiển thị đúng field client gửi lên.
+ */
+export const updateCustomerBodySchema = updateCustomerSchema.omit({ id: true });
+
+/**
+ * Swagger DTO class — bắc cầu schema body sang OpenAPI. CHỈ dùng làm kiểu tham số
+ * cho @Body(); validation runtime vẫn do command gọi `updateCustomerSchema.parse()`
+ * trên `{ id, ...body }` như cũ (không đổi hành vi).
+ */
+export class UpdateCustomerBodyDto extends createZodDto(updateCustomerBodySchema) {}

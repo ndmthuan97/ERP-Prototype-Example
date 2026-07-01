@@ -13,6 +13,7 @@
 // - Nhẹ hơn class-validator + class-transformer combo
 
 import { z } from 'zod';
+import { createZodDto } from 'nestjs-zod';
 import { TaxCode } from '../../domain/value-objects/index.js';
 
 /**
@@ -80,3 +81,11 @@ export type CreateCustomerDto = z.infer<typeof createCustomerSchema>;
 export function validateCreateCustomer(data: unknown): CreateCustomerDto {
   return createCustomerSchema.parse(data);
 }
+
+/**
+ * Swagger DTO class — bắc cầu Zod schema ở trên sang OpenAPI để @nestjs/swagger
+ * render body schema thật. Class này CHỈ dùng làm kiểu tham số cho @Body() nhằm
+ * cung cấp metadata cho Swagger; validation runtime vẫn do command gọi
+ * `createCustomerSchema.parse()` đảm nhiệm (single source of truth — cùng schema).
+ */
+export class CreateCustomerBodyDto extends createZodDto(createCustomerSchema) {}

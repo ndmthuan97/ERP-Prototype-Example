@@ -12,6 +12,8 @@
  */
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import { StructuredLogger, CorrelationMiddleware } from '@erp/shared';
@@ -50,6 +52,23 @@ async function bootstrap() {
     origin: corsOrigins ? corsOrigins.split(',').map((o) => o.trim()) : true,
     credentials: true,
   });
+
+  // OpenAPI / Swagger — served at /docs (UI) and /docs-json (spec).
+  // Placed outside the global 'v1' prefix so the docs live at the root path.
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Auth Service API')
+    .setDescription('Authentication & Authorization bounded context (DDD).')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  // nestjs-zod v5: createZodDto DTOs expose their schema to @nestjs/swagger at
+  // createDocument time; `cleanupOpenApiDoc` post-processes the generated doc so
+  // the Zod-derived request/response schemas render correctly. (v5 replaces the
+  // old v4 `patchNestjsSwagger()` — that function no longer exists.)
+  const document = cleanupOpenApiDoc(
+    SwaggerModule.createDocument(app, swaggerConfig),
+  );
+  SwaggerModule.setup('docs', app, document);
 
   const port = parseInt(process.env.PORT || process.env.AUTH_SERVICE_PORT || String(DEFAULT_PORT), 10);
   await app.listen(port, '0.0.0.0');

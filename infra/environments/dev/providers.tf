@@ -36,17 +36,18 @@ provider "google-beta" {
 
 locals {
   required_apis = [
-    "run.googleapis.com",                  # Cloud Run
-    "sqladmin.googleapis.com",             # Cloud SQL Admin
-    "pubsub.googleapis.com",               # Cloud Pub/Sub
-    "secretmanager.googleapis.com",        # Secret Manager
-    "artifactregistry.googleapis.com",     # Artifact Registry
-    "vpcaccess.googleapis.com",            # VPC Access Connector
-    "cloudbuild.googleapis.com",           # Cloud Build
-    "compute.googleapis.com",              # Compute Engine (VPC)
-    "servicenetworking.googleapis.com",    # Private Service Access
-    "iam.googleapis.com",                  # IAM
-    "iamcredentials.googleapis.com",       # IAM Credentials (WIF)
+    "run.googleapis.com",               # Cloud Run
+    "sqladmin.googleapis.com",          # Cloud SQL Admin
+    "pubsub.googleapis.com",            # Cloud Pub/Sub
+    "secretmanager.googleapis.com",     # Secret Manager
+    "artifactregistry.googleapis.com",  # Artifact Registry
+    "vpcaccess.googleapis.com",         # VPC Access Connector
+    "cloudbuild.googleapis.com",        # Cloud Build
+    "compute.googleapis.com",           # Compute Engine (VPC)
+    "servicenetworking.googleapis.com", # Private Service Access
+    "iam.googleapis.com",               # IAM
+    "iamcredentials.googleapis.com",    # IAM Credentials (WIF)
+    "orgpolicy.googleapis.com",         # Org Policy (Domain Restricted Sharing override)
   ]
 }
 

@@ -19,6 +19,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 
 // Import từ Application layer — controller chỉ biết đến use cases, không biết infrastructure
 import { CreateCustomerCommand } from '../application/commands/create-customer.command';
@@ -27,6 +28,10 @@ import { DeleteCustomerCommand } from '../application/commands/delete-customer.c
 import { GetCustomerQuery } from '../application/queries/get-customer.query';
 import { SearchCustomersQuery } from '../application/queries/search-customers.query';
 import { CheckCreditQuery } from '../application/queries/check-credit.query';
+import {
+  CreateCustomerBodyDto,
+  UpdateCustomerBodyDto,
+} from '../application/dtos/index.js';
 
 @Controller('customers')
 export class CustomerController {
@@ -46,7 +51,8 @@ export class CustomerController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() body: unknown) {
+  @ApiBody({ type: CreateCustomerBodyDto })
+  async create(@Body() body: CreateCustomerBodyDto) {
     // Validation nằm trong Command (Zod). ZodError được ZodExceptionFilter
     // (toàn cục) dịch thành 400 → controller KHÔNG cần try/catch.
     return this.createCustomerCommand.execute(body);
@@ -88,7 +94,11 @@ export class CustomerController {
    * Chỉ cập nhật các field được gửi trong body (partial update)
    */
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+  @ApiBody({ type: UpdateCustomerBodyDto })
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateCustomerBodyDto,
+  ) {
     // Merge id từ URL param vào body — UpdateCommand validate { id, ...fields }.
     // ZodError → ZodExceptionFilter → 400 (không cần try/catch).
     return this.updateCustomerCommand.execute({ id, ...body });
