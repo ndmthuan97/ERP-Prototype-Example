@@ -7,6 +7,12 @@ on:
     types: [completed]
     branches: [main]
 
+# Tránh race khi 1 push đụng cả frontend/** và backend/** → 2 CI cùng success
+# và cùng trigger deploy, cùng ghi tag :latest. Xếp hàng, không hủy nửa chừng.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
 jobs:
   deploy:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}

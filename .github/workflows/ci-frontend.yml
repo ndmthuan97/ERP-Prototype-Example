@@ -34,6 +34,7 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
+            --build-arg NEXT_PUBLIC_API_GATEWAY=${{ vars.NEXT_PUBLIC_API_GATEWAY }} \
             -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:${{ github.sha }} \
             -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:latest \
             frontend/
