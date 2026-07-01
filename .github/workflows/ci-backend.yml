@@ -24,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       shared: ${{ steps.filter.outputs.shared }}
+      # ci_config = chỉ file workflow đổi. Dùng để ÉP verify (bắt lỗi cấu hình)
+      # nhưng KHÔNG kích hoạt build-and-push (không deploy lại prod vì sửa CI).
+      ci_config: ${{ steps.filter.outputs.ci_config }}
       auth: ${{ steps.filter.outputs.auth }}
       customer: ${{ steps.filter.outputs.customer }}
       sales: ${{ steps.filter.outputs.sales }}
@@ -32,8 +35,8 @@ jobs:
       purchasing: ${{ steps.filter.outputs.purchasing }}
       gateway: ${{ steps.filter.outputs.gateway }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -41,6 +44,7 @@ jobs:
               - 'backend/shared/**'
               - 'backend/Dockerfile'
               - 'backend/.dockerignore'
+            ci_config:
               - '.github/workflows/ci-backend.yml'
             auth: 'backend/auth-service/**'
             customer: 'backend/customer-service/**'
@@ -95,19 +99,22 @@ jobs:
       - name: Check if verify needed
         id: check
         run: |
-          if [[ "${{ matrix.changed }}" == "true" || "${{ needs.detect-changes.outputs.shared }}" == "true" ]]; then
+          # Verify chạy khi: service này đổi HOẶC shared đổi HOẶC file workflow
+          # đổi (ci_config) → sửa CI vẫn được kiểm tra thật, không skip thành
+          # "green giả". (build-and-push KHÔNG dùng ci_config → không deploy.)
+          if [[ "${{ matrix.changed }}" == "true" || "${{ needs.detect-changes.outputs.shared }}" == "true" || "${{ needs.detect-changes.outputs.ci_config }}" == "true" ]]; then
             echo "should_verify=true" >> $GITHUB_OUTPUT
           else
             echo "Skipping ${{ matrix.service }} — no changes"
             echo "should_verify=false" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.check.outputs.should_verify == 'true'
 
       - name: Setup Node
         if: steps.check.outputs.should_verify == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 
@@ -195,6 +202,9 @@ jobs:
       - name: Check if build needed
         id: check
         run: |
+          # CỐ Ý không dùng ci_config ở đây: sửa file workflow chỉ verify lại,
+          # KHÔNG build+deploy lại toàn bộ service prod. Chỉ deploy khi code
+          # service đổi (matrix.changed) hoặc shared/Dockerfile đổi (shared).
           if [[ "${{ matrix.changed }}" == "true" || "${{ needs.detect-changes.outputs.shared }}" == "true" ]]; then
             echo "should_build=true" >> $GITHUB_OUTPUT
           else
@@ -202,19 +212,19 @@ jobs:
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.check.outputs.should_build == 'true'
 
       - name: Authenticate to GCP (WIF)
         if: steps.check.outputs.should_build == 'true'
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.DEPLOYER_SA }}
 
       - name: Setup gcloud
         if: steps.check.outputs.should_build == 'true'
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker for Artifact Registry
         if: steps.check.outputs.should_build == 'true'

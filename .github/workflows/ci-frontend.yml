@@ -15,16 +15,34 @@ on:
 
 jobs:
   # ============================================================
-  # Step 1: Verify chất lượng code (chạy trên cả PR và push).
+  # Step 0: Phát hiện code frontend/** có đổi không — tách khỏi việc chỉ sửa
+  # file workflow. build-and-push (deploy) chỉ chạy khi app == 'true'.
+  # ============================================================
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'frontend/**'
+
+  # ============================================================
+  # Step 1: Verify chất lượng code (chạy trên cả PR và push, kể cả khi chỉ
+  # sửa workflow → luôn kiểm tra thật, không "green giả").
   # Chặn build+deploy nếu typecheck/lint fail → bắt lỗi sớm.
   # ============================================================
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -46,8 +64,10 @@ jobs:
   # Step 2: Build & push (chỉ chạy trên push, sau khi verify pass).
   # ============================================================
   build-and-push:
-    needs: verify
-    if: github.event_name == 'push'
+    needs: [verify, detect-changes]
+    # Deploy CHỈ khi code frontend/** đổi. Sửa riêng ci-frontend.yml → verify
+    # vẫn chạy để kiểm tra, nhưng KHÔNG build+deploy lại frontend.
+    if: github.event_name == 'push' && needs.detect-changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     environment: dev
     # Serialize deploy frontend qua các run liên tiếp (tránh race trên revision).
@@ -58,16 +78,16 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Authenticate to GCP (WIF)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.DEPLOYER_SA }}
 
       - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker us-central1-docker.pkg.dev
