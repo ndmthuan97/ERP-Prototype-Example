@@ -3,7 +3,7 @@
 // PHASE 1 — KHÁCH HÀNG: list + search + pagination + create/edit/delete
 // =============================================================================
 
-import { useMemo, useState } from 'react';
+import { useState, type Key } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Table,
@@ -17,10 +17,8 @@ import {
   Popconfirm,
   App,
   Card,
-  Row,
-  Col,
-  Select,
   Tooltip,
+  Dropdown,
 } from 'antd';
 import type { FormInstance } from 'antd';
 import {
@@ -29,10 +27,10 @@ import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
-  TeamOutlined,
-  UserAddOutlined,
-  CrownOutlined,
-  SyncOutlined,
+  DownOutlined,
+  MoreOutlined,
+  FileExcelOutlined,
+  TableOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -42,17 +40,10 @@ import type { Customer, CreateCustomerInput } from '@/lib/api/types';
 import { ApiError, toMessage } from '@/lib/api/errors';
 import { formatVnd, formatDateTime } from '@/lib/format';
 import { CustomerForm } from '@/components/customers/CustomerForm';
-import { StatCard } from '@/components/StatCard';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { CAN } from '@/lib/auth/permissions';
 import { CUSTOMER_STATUS, statusLabel } from '@/lib/constants/status';
-
-const STATUS_COLOR: Record<Customer['status'], string> = {
-  prospect: 'default',
-  active: 'green',
-  suspended: 'orange',
-  archived: 'red',
-};
+import { CommandBar } from '@/components/d365/CommandBar';
 
 export default function CustomersPage() {
   const { message } = App.useApp();
@@ -65,6 +56,18 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [statusFilter, setStatusFilter] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+
+  // D365 view-picker: the customer status filter presented as named views,
+  // matching the Power Apps view selector.
+  const VIEWS: { key: string; label: string; value: string }[] = [
+    { key: 'all', label: 'All Customers', value: '' },
+    { key: 'prospect', label: 'Prospect', value: 'prospect' },
+    { key: 'active', label: 'Active', value: 'active' },
+    { key: 'suspended', label: 'Suspended', value: 'suspended' },
+    { key: 'archived', label: 'Archived', value: 'archived' },
+  ];
+  const currentView = VIEWS.find((v) => v.value === statusFilter) ?? VIEWS[0];
 
   // Create modal
   const [openCreate, setOpenCreate] = useState(false);
@@ -79,48 +82,6 @@ export default function CustomersPage() {
     queryKey: ['customers', { q, page, limit, status: statusFilter }],
     queryFn: () => customerApi.list({ q, page, limit, status: statusFilter || undefined }),
   });
-
-  // Fetch a large page for stat calculations (runs once, cached)
-  const statsQuery = useQuery({
-    queryKey: ['customers', 'stats-all'],
-    queryFn: () => customerApi.list({ page: 1, limit: 1000 }),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // ---- Derived stat values ----
-  const stats = useMemo(() => {
-    const total = statsQuery.data?.total ?? listQuery.data?.total;
-    const customers = statsQuery.data?.data ?? listQuery.data?.data ?? [];
-
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const newThisMonth = customers.filter((c) => {
-      const d = new Date(c.createdAt);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    }).length;
-
-    // VIP threshold: credit limit >= 500M VND
-    const vipCount = customers.filter(
-      (c) =>
-        c.creditLimitAmount !== null && c.creditLimitAmount >= 500_000_000,
-    ).length;
-
-    // Return rate: active customers / total on current page
-    const activeCount = customers.filter((c) => c.status === 'active').length;
-    const returnRate =
-      customers.length > 0
-        ? Math.round((activeCount / customers.length) * 100)
-        : 0;
-
-    return {
-      total: total ?? '—',
-      newThisMonth: String(newThisMonth),
-      vipCount: String(vipCount),
-      returnRate: `${returnRate}%`,
-    };
-  }, [statsQuery.data, listQuery.data]);
 
   // Fetch single customer for edit modal
   const editQuery = useQuery({
@@ -197,8 +158,15 @@ export default function CustomersPage() {
       key: 'businessName',
       width: 200,
       ellipsis: true,
-      render: (text: string) => (
-        <Typography.Link style={{ color: '#1677ff', fontWeight: 500 }}>
+      sorter: (a, b) => a.businessName.localeCompare(b.businessName),
+      render: (text: string, record) => (
+        <Typography.Link
+          strong
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/customers/${record.id}`);
+          }}
+        >
           {text}
         </Typography.Link>
       ),
@@ -221,6 +189,7 @@ export default function CustomersPage() {
       key: 'creditLimitAmount',
       width: 140,
       align: 'right',
+      sorter: (a, b) => (a.creditLimitAmount ?? 0) - (b.creditLimitAmount ?? 0),
       render: (v: number | null) => formatVnd(v),
     },
     {
@@ -229,6 +198,7 @@ export default function CustomersPage() {
       key: 'creditUsedAmount',
       width: 120,
       align: 'right',
+      sorter: (a, b) => a.creditUsedAmount - b.creditUsedAmount,
       render: (v: number) => formatVnd(v),
     },
     {
@@ -254,13 +224,13 @@ export default function CustomersPage() {
         <Space size={4}>
           <Tooltip title="Details">
             <Link href={`/customers/${record.id}`}>
-              <Button type="link" size="small" icon={<EyeOutlined />} />
+              <Button type="text" size="small" icon={<EyeOutlined />} />
             </Link>
           </Tooltip>
           {CAN.update(role) && (
             <Tooltip title="Edit">
               <Button
-                type="link"
+                type="text"
                 size="small"
                 icon={<EditOutlined />}
                 onClick={(e) => { e.stopPropagation(); handleOpenEdit(record); }}
@@ -278,7 +248,7 @@ export default function CustomersPage() {
             >
               <Tooltip title="Archive">
                 <Button
-                  type="link"
+                  type="text"
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
@@ -294,110 +264,104 @@ export default function CustomersPage() {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Page header */}
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          Customers
-        </Typography.Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setOpenCreate(true)}
-        >
-          Create Customer
-        </Button>
-      </Space>
-
-      {/* Stats row */}
-      <Row gutter={16}>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<TeamOutlined />}
-            iconBgColor="rgba(22, 119, 255, 0.1)"
-            iconColor="#1677ff"
-            label="Total Customers"
-            value={stats.total}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<UserAddOutlined />}
-            iconBgColor="rgba(82, 196, 26, 0.1)"
-            iconColor="#52c41a"
-            label="New This Month"
-            value={stats.newThisMonth}
-            trend={{ text: '~ estimated from current data', color: 'green' }}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<CrownOutlined />}
-            iconBgColor="rgba(250, 173, 20, 0.1)"
-            iconColor="#faad14"
-            label="VIP Customers"
-            value={stats.vipCount}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<SyncOutlined />}
-            iconBgColor="rgba(114, 46, 209, 0.1)"
-            iconColor="#722ed1"
-            label="Return Rate"
-            value={stats.returnRate}
-            trend={{ text: '~ active / total ratio', color: 'green' }}
-          />
-        </Col>
-      </Row>
-
-      {/* Filter bar */}
-      <Card
-        styles={{ body: { padding: 16 } }}
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
-      >
-        <Space wrap>
-          <Input.Search
-            allowClear
-            placeholder="Search by business name…"
-            style={{ width: 320 }}
-            onSearch={(value) => {
-              setQ(value);
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* D365 view-picker: selectable view name is the page header */}
+      <div>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            selectable: true,
+            selectedKeys: [currentView.key],
+            items: VIEWS.map((v) => ({ key: v.key, label: v.label })),
+            onClick: ({ key }) => {
+              const next = VIEWS.find((v) => v.key === key);
+              setStatusFilter(next?.value ?? '');
               setPage(1);
+            },
+          }}
+        >
+          <a
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.preventDefault()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                (e.currentTarget as HTMLElement).click();
+              }
             }}
-          />
-          <Select
-            defaultValue="all"
-            style={{ width: 180 }}
-            options={[
-              { value: '', label: 'All' },
-              { value: 'prospect', label: 'Prospect' },
-              { value: 'active', label: 'Active' },
-              { value: 'suspended', label: 'Suspended' },
-              { value: 'archived', label: 'Archive' },
-            ]}
-            onChange={(v) => { setStatusFilter(v); setPage(1); }}
-          />
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => listQuery.refetch()}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--surface-text)' }}
           >
-            Reload
-          </Button>
-        </Space>
-      </Card>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {currentView.label}
+            </Typography.Title>
+            <DownOutlined style={{ fontSize: 12, color: '#8A8886' }} />
+          </a>
+        </Dropdown>
+      </div>
+
+      {/* D365 command bar */}
+      <CommandBar>
+        <Button type="text" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
+          New
+        </Button>
+        <Button
+          type="text"
+          icon={<ReloadOutlined />}
+          loading={listQuery.isFetching}
+          onClick={() => listQuery.refetch()}
+        >
+          Refresh
+        </Button>
+        <Button
+          type="text"
+          icon={<DeleteOutlined />}
+          disabled={selectedRowKeys.length === 0}
+        >
+          Delete{selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ''}
+        </Button>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [
+              { key: 'excel', icon: <FileExcelOutlined />, label: 'Export to Excel', disabled: true },
+              { key: 'columns', icon: <TableOutlined />, label: 'Edit columns', disabled: true },
+            ],
+          }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label="More commands" />
+        </Dropdown>
+
+        <div style={{ flex: 1 }} />
+
+        <Input.Search
+          allowClear
+          aria-label="Filter by keyword"
+          placeholder="Filter by keyword"
+          style={{ width: 240 }}
+          onSearch={(value) => {
+            setQ(value);
+            setPage(1);
+          }}
+        />
+      </CommandBar>
 
       {/* Table */}
       <Card
         styles={{ body: { padding: 0 } }}
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
       >
         <Table<Customer>
           rowKey="id"
+          size="small"
           columns={columns}
           dataSource={listQuery.data?.data ?? []}
           loading={listQuery.isFetching}
           scroll={{ x: 1100 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
           onRow={(record) => ({
             onClick: () => router.push(`/customers/${record.id}`),
             style: { cursor: 'pointer' },
@@ -408,7 +372,7 @@ export default function CustomersPage() {
             pageSize: limit,
             total: listQuery.data?.total ?? 0,
             showSizeChanger: true,
-            showTotal: (total) => `${total} customers`,
+            showTotal: (total) => `Rows: ${total}`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);

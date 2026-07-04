@@ -40,7 +40,7 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#f5f7fa',
+        background: 'var(--surface-ground)',
         padding: 16,
       }}
     >
@@ -61,7 +61,7 @@ export default function LoginPage() {
         <div
           style={{
             width: '50%',
-            background: 'linear-gradient(135deg, #f0f5ff 0%, #e6ecf5 100%)',
+            background: 'var(--surface-ground)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -74,19 +74,19 @@ export default function LoginPage() {
               style={{
                 width: 48,
                 height: 48,
-                background: '#1677ff',
+                background: 'var(--brand)',
                 borderRadius: 12,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: 24,
-                boxShadow: '0 4px 12px rgba(22,119,255,0.3)',
+                boxShadow: '0 4px 12px rgba(15,23,42,0.18)',
               }}
             >
               <DeploymentUnitOutlined style={{ color: '#fff', fontSize: 24 }} />
             </div>
             <Title level={2} style={{ marginBottom: 8 }}>WeCare ERP</Title>
-            <Text style={{ color: '#8c8c8c', fontSize: 16, marginBottom: 32 }}>Enterprise Resource Planning System</Text>
+            <Text style={{ color: 'var(--surface-muted)', fontSize: 16, marginBottom: 32 }}>Enterprise Resource Planning System</Text>
 
             {/* Decorative circle */}
             <div
@@ -123,12 +123,12 @@ export default function LoginPage() {
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
-            background: '#fff',
+            background: 'var(--surface-card)',
           }}
         >
           <div style={{ marginBottom: 32 }}>
             <Title level={2} style={{ marginBottom: 8 }}>Sign In</Title>
-            <Text style={{ color: '#8c8c8c' }}>Enter your credentials to continue</Text>
+            <Text style={{ color: 'var(--surface-muted)' }}>Enter your credentials to continue</Text>
           </div>
 
           <Form
@@ -143,14 +143,14 @@ export default function LoginPage() {
                 { type: 'email', message: 'Invalid email format' }
               ]}
             >
-              <Input prefix={<MailOutlined style={{ color: '#8c8c8c' }} />} placeholder="admin@gmail.com" />
+              <Input prefix={<MailOutlined style={{ color: 'var(--surface-muted)' }} />} placeholder="admin@gmail.com" />
             </Form.Item>
 
             <Form.Item
               name="password"
               rules={[{ required: true, message: 'Please enter your password' }]}
             >
-              <Input.Password prefix={<LockOutlined style={{ color: '#8c8c8c' }} />} placeholder="Password" />
+              <Input.Password prefix={<LockOutlined style={{ color: 'var(--surface-muted)' }} />} placeholder="Password" />
             </Form.Item>
 
             <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>

@@ -36,6 +36,14 @@ export class EmptyOrderError extends Error {
   }
 }
 
+/** Domain error: line id không tồn tại trong đơn */
+export class LineNotFoundError extends Error {
+  constructor(lineId: string) {
+    super(`Line "${lineId}" không tồn tại trong đơn hàng`);
+    this.name = 'LineNotFoundError';
+  }
+}
+
 export interface SalesOrderProps {
   id: string;
   customerId: string;
@@ -110,6 +118,25 @@ export class SalesOrder {
       throw new InvalidStatusTransitionError(this._status, 'addLine');
     }
     this._lines.push(line);
+    this.recalculateTotals();
+    this.touch();
+  }
+
+  /**
+   * Xóa dòng hàng khỏi đơn — CHỈ khi status = draft.
+   * Auto recalculate totalAmount.
+   * @throws InvalidStatusTransitionError nếu không phải draft
+   * @throws LineNotFoundError nếu lineId không tồn tại trong đơn
+   */
+  removeLine(lineId: string): void {
+    if (this._status !== 'draft') {
+      throw new InvalidStatusTransitionError(this._status, 'removeLine');
+    }
+    const index = this._lines.findIndex((line) => line.id === lineId);
+    if (index === -1) {
+      throw new LineNotFoundError(lineId);
+    }
+    this._lines.splice(index, 1);
     this.recalculateTotals();
     this.touch();
   }

@@ -5,13 +5,16 @@
 // User is the Aggregate Root — the single entry point for the Auth aggregate.
 // All state changes must go through entity methods to enforce business rules.
 
+import { InvalidRoleError } from '../errors.js';
+
 /**
  * Valid user roles in the system.
  * - admin:   Full access — can manage users, approve, and perform all actions
  * - manager: Can read, create, update, and approve
  * - staff:   Can read and create only
  */
-export type UserRole = 'admin' | 'manager' | 'staff';
+export const USER_ROLES = ['admin', 'manager', 'staff'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
 
 /**
  * Properties needed to construct/reconstruct a User entity.
@@ -88,8 +91,17 @@ export class User {
     this.updatedAt = new Date();
   }
 
-  /** Change the user's role after validation */
+  /** Set the account's active status (true = active, false = inactive) */
+  setActive(isActive: boolean): void {
+    this.isActive = isActive;
+    this.updatedAt = new Date();
+  }
+
+  /** Change the user's role after validating it is an allowed value */
   changeRole(newRole: UserRole): void {
+    if (!USER_ROLES.includes(newRole)) {
+      throw new InvalidRoleError(newRole);
+    }
     this.role = newRole;
     this.updatedAt = new Date();
   }

@@ -32,6 +32,12 @@ export const customerApi = {
   /** Soft delete → 204 No Content */
   remove: (id: string) => apiClient.delete<void>(SVC, `/api/customers/${id}`),
 
-  creditCheck: (id: string) =>
-    apiClient.get<CreditCheck>(SVC, `/api/customers/${id}/credit-check`),
+  creditCheck: (
+    id: string,
+    params?: { orderAmount?: number; pendingOrdersTotal?: number },
+  ) =>
+    apiClient.get<CreditCheck>(SVC, `/api/customers/${id}/credit-check`, {
+      orderAmount: params?.orderAmount,
+      pendingOrdersTotal: params?.pendingOrdersTotal,
+    }),
 };

@@ -6,8 +6,11 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ERP Prototype',
-  description: 'ERP Prototype — Customer / Inventory / Sales',
+  title: 'WeCare ERP',
+  description: 'WeCare ERP — Customer / Inventory / Sales',
+  icons: {
+    icon: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzs5qXKTVnBQ5bm8S-plT1OPmxXnFi-KqU0EAiWYdtCV9T8nNMxjvsWnk&s=10',
+  },
 };
 
 export default function RootLayout({

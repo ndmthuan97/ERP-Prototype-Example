@@ -1,41 +1,40 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, type Key } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Table,
   Button,
-  Space,
   Typography,
   Tag,
-  Row,
-  Col,
   Card,
   Input,
   Select,
   Tooltip,
   Modal,
   Form,
+  Dropdown,
   App,
 } from 'antd';
 import {
   PlusOutlined,
   ReloadOutlined,
   EyeOutlined,
-  FileTextOutlined,
-  ClockCircleOutlined,
-  CarOutlined,
-  CheckCircleOutlined,
+  DownOutlined,
+  MoreOutlined,
+  DeleteOutlined,
+  FileExcelOutlined,
+  TableOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 
 import { purchasingApi, type PurchaseOrder } from '@/lib/api/purchasing';
 import { supplierApi } from '@/lib/api/supplier';
-import type { Supplier, CreatePurchaseOrderInput } from '@/lib/api/types';
+import type { CreatePurchaseOrderInput } from '@/lib/api/types';
 import { formatVnd, formatDateTime } from '@/lib/format';
 import { toMessage } from '@/lib/api/errors';
-import { StatCard } from '@/components/StatCard';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 const STATUS_COLOR: Record<string, string> = {
   draft: 'default',
@@ -44,15 +43,6 @@ const STATUS_COLOR: Record<string, string> = {
   received: 'success',
   cancelled: 'error',
 };
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'placed', label: 'Placed' },
-  { value: 'partially_received', label: 'Partially Received' },
-  { value: 'received', label: 'Received' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
 
 export default function PurchasingPage() {
   const router = useRouter();
@@ -63,8 +53,21 @@ export default function PurchasingPage() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [openCreate, setOpenCreate] = useState(false);
   const [form] = Form.useForm<CreatePurchaseOrderInput>();
+
+  // D365 view-picker: the "view" is just the status filter presented as named
+  // views (All / Draft / Placed / …), matching Power Apps' view selector.
+  const VIEWS: { key: string; label: string; value: string }[] = [
+    { key: 'all', label: 'All Purchase Orders', value: '' },
+    { key: 'draft', label: 'Draft', value: 'draft' },
+    { key: 'placed', label: 'Placed', value: 'placed' },
+    { key: 'partially_received', label: 'Partially Received', value: 'partially_received' },
+    { key: 'received', label: 'Received', value: 'received' },
+    { key: 'cancelled', label: 'Cancelled', value: 'cancelled' },
+  ];
+  const currentView = VIEWS.find((v) => v.value === status) ?? VIEWS[0];
 
   const listQuery = useQuery({
     queryKey: ['purchasing', 'orders', { page, limit, q, status }],
@@ -87,21 +90,6 @@ export default function PurchasingPage() {
 
   const ordersData = listQuery.data?.data ?? [];
   const totalCount = listQuery.data?.total ?? 0;
-
-  const placedCount = useMemo(
-    () => ordersData.filter((o) => o.status === 'placed').length,
-    [ordersData],
-  );
-
-  const partiallyReceivedCount = useMemo(
-    () => ordersData.filter((o) => o.status === 'partially_received').length,
-    [ordersData],
-  );
-
-  const receivedCount = useMemo(
-    () => ordersData.filter((o) => o.status === 'received').length,
-    [ordersData],
-  );
 
   const createMutation = useMutation({
     mutationFn: (input: CreatePurchaseOrderInput) => purchasingApi.create(input),
@@ -130,8 +118,15 @@ export default function PurchasingPage() {
       title: 'PO ID',
       dataIndex: 'id',
       key: 'id',
-      render: (id: string) => (
-        <Typography.Link onClick={() => router.push(`/purchasing/${id}`)} style={{ fontWeight: 500 }}>
+      sorter: (a, b) => a.id.localeCompare(b.id),
+      render: (id: string, record) => (
+        <Typography.Link
+          strong
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/purchasing/${record.id}`);
+          }}
+        >
           {id.slice(0, 8)}…
         </Typography.Link>
       ),
@@ -153,6 +148,7 @@ export default function PurchasingPage() {
       dataIndex: 'totalCost',
       key: 'totalCost',
       align: 'right',
+      sorter: (a, b) => a.totalCost - b.totalCost,
       render: (v: number) => formatVnd(v),
     },
     {
@@ -167,6 +163,7 @@ export default function PurchasingPage() {
       title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      sorter: (a, b) => a.createdAt.localeCompare(b.createdAt),
       render: (v: string) => formatDateTime(v),
     },
     {
@@ -178,6 +175,7 @@ export default function PurchasingPage() {
         <Tooltip title="Details">
           <Button
             type="text"
+            size="small"
             icon={<EyeOutlined />}
             onClick={(e) => {
               e.stopPropagation();
@@ -190,82 +188,98 @@ export default function PurchasingPage() {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Purchase Order Management
-        </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
-          Create purchase orders
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* D365 view-picker: selectable view name is the page header */}
+      <div>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            selectable: true,
+            selectedKeys: [currentView.key],
+            items: VIEWS.map((v) => ({ key: v.key, label: v.label })),
+            onClick: ({ key }) => {
+              const next = VIEWS.find((v) => v.key === key);
+              handleStatusChange(next?.value ?? '');
+            },
+          }}
+        >
+          <a
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.preventDefault()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                (e.currentTarget as HTMLElement).click();
+              }
+            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--surface-text)' }}
+          >
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {currentView.label}
+            </Typography.Title>
+            <DownOutlined style={{ fontSize: 12, color: '#8A8886' }} />
+          </a>
+        </Dropdown>
+      </div>
+
+      {/* D365 command bar */}
+      <CommandBar>
+        <Button type="text" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
+          New
         </Button>
-      </Space>
+        <Button
+          type="text"
+          icon={<ReloadOutlined />}
+          loading={listQuery.isFetching}
+          onClick={() => listQuery.refetch()}
+        >
+          Refresh
+        </Button>
+        <Button
+          type="text"
+          icon={<DeleteOutlined />}
+          disabled={selectedRowKeys.length === 0}
+        >
+          Delete{selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ''}
+        </Button>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [
+              { key: 'excel', icon: <FileExcelOutlined />, label: 'Export to Excel', disabled: true },
+              { key: 'columns', icon: <TableOutlined />, label: 'Edit columns', disabled: true },
+            ],
+          }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label="More commands" />
+        </Dropdown>
 
-      <Row gutter={16}>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<FileTextOutlined style={{ fontSize: 24 }} />}
-            iconBgColor="rgba(22,119,255,0.1)"
-            iconColor="#1677ff"
-            label="Total POs"
-            value={totalCount}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<ClockCircleOutlined style={{ fontSize: 24 }} />}
-            iconBgColor="rgba(250,173,20,0.1)"
-            iconColor="#faad14"
-            label="Pending"
-            value={placedCount}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<CarOutlined style={{ fontSize: 24 }} />}
-            iconBgColor="rgba(19,194,194,0.1)"
-            iconColor="#13c2c2"
-            label="Receiving"
-            value={partiallyReceivedCount}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<CheckCircleOutlined style={{ fontSize: 24 }} />}
-            iconBgColor="rgba(82,196,26,0.1)"
-            iconColor="#52c41a"
-            label="Completed"
-            value={receivedCount}
-          />
-        </Col>
-      </Row>
+        <div style={{ flex: 1 }} />
 
-      <Card styles={{ body: { padding: 16 } }} style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
-        <Space wrap>
-          <Input.Search
-            placeholder="Search PO..."
-            allowClear
-            onSearch={handleSearch}
-            style={{ width: 260 }}
-          />
-          <Select
-            value={status}
-            onChange={handleStatusChange}
-            options={STATUS_OPTIONS}
-            style={{ width: 180 }}
-            placeholder="Filter by status"
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => listQuery.refetch()}>
-            Reload
-          </Button>
-        </Space>
-      </Card>
+        <Input.Search
+          allowClear
+          aria-label="Filter by keyword"
+          placeholder="Filter by keyword"
+          style={{ width: 240 }}
+          onSearch={handleSearch}
+        />
+      </CommandBar>
 
-      <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+      <Card
+        styles={{ body: { padding: 0 } }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
+      >
         <Table<PurchaseOrder>
           rowKey="id"
+          size="small"
           columns={columns}
           dataSource={ordersData}
           loading={listQuery.isFetching}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys),
+          }}
           onRow={(record) => ({
             onClick: () => router.push(`/purchasing/${record.id}`),
             style: { cursor: 'pointer' },
@@ -275,7 +289,7 @@ export default function PurchasingPage() {
             pageSize: limit,
             total: totalCount,
             showSizeChanger: true,
-            showTotal: (total) => `${total} purchase orders`,
+            showTotal: (total) => `Rows: ${total}`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);

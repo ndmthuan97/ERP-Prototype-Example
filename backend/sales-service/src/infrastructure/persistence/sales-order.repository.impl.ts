@@ -111,9 +111,17 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
   async search(
     params: SearchOrdersParams,
   ): Promise<PaginatedResult<SalesOrder>> {
-    const where: Prisma.SalesOrderWhereInput = params.status
-      ? { status: params.status }
-      : {};
+    const where: Prisma.SalesOrderWhereInput = {
+      ...(params.status ? { status: params.status } : {}),
+      ...(params.createdFrom || params.createdTo
+        ? {
+            createdAt: {
+              ...(params.createdFrom ? { gte: params.createdFrom } : {}),
+              ...(params.createdTo ? { lte: params.createdTo } : {}),
+            },
+          }
+        : {}),
+    };
     const skip = (params.page - 1) * params.limit;
 
     const [total, records] = await Promise.all([
@@ -234,6 +242,64 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
           taxAmount: lastLine.taxAmount,
           lineTotal: lastLine.lineTotal,
         },
+      });
+
+      // Update header totalAmount + version (optimistic lock on version).
+      const headerResult = await tx.salesOrder.updateMany({
+        where: { id: order.id, version: order.version },
+        data: {
+          subtotalAmount: order.subtotalAmount,
+          totalTaxAmount: order.totalTaxAmount,
+          totalAmount: order.totalAmount,
+          version: { increment: 1 },
+          updatedAt: order.updatedAt,
+        },
+      });
+      if (headerResult.count === 0) {
+        throw new ConflictException(
+          `Sales order "${order.id}" was modified concurrently (optimistic lock)`,
+        );
+      }
+      const rec = await tx.salesOrder.findUniqueOrThrow({
+        where: { id: order.id },
+        include: { lines: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      // Update lifecycle_view
+      if (lifecycleData) {
+        await tx.lifecycleView.upsert({
+          where: { orderId: order.id },
+          create: {
+            orderId: order.id,
+            customerName: lifecycleData.customerName,
+            status: lifecycleData.status,
+            totalAmount: lifecycleData.totalAmount,
+            lineCount: lifecycleData.lineCount,
+            createdAt: lifecycleData.createdAt,
+            lastStatusChange: lifecycleData.lastStatusChange,
+          },
+          update: {
+            totalAmount: lifecycleData.totalAmount,
+            lineCount: lifecycleData.lineCount,
+          },
+        });
+      }
+
+      return rec;
+    });
+
+    return this.toDomain(updated);
+  }
+
+  async removeLine(
+    order: SalesOrder,
+    lineId: string,
+    lifecycleData?: LifecycleViewData,
+  ): Promise<SalesOrder> {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Xóa line khỏi header (scoped theo headerId để tránh xóa nhầm)
+      await tx.salesOrderLine.deleteMany({
+        where: { id: lineId, headerId: order.id },
       });
 
       // Update header totalAmount + version (optimistic lock on version).

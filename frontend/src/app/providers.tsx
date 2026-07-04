@@ -3,11 +3,11 @@ import '@ant-design/v5-patch-for-react-19';
 // =============================================================================
 // PROVIDERS — wraps all client providers (React Query + AntD + Auth)
 // =============================================================================
-import { ConfigProvider, App as AntdApp, message as antdMessage } from 'antd';
-import enUS from 'antd/locale/en_US';
+import { App as AntdApp, message as antdMessage } from 'antd';
 import { QueryClient, QueryClientProvider, MutationCache, QueryCache } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
+import { ThemeConfigProvider } from '@/lib/theme/ThemeConfigContext';
 import { toMessage } from '@/lib/api/errors';
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -42,39 +42,11 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ConfigProvider
-        locale={enUS}
-        theme={{
-          token: {
-            // Fluent 2 / Dynamics 365 brand blue
-            colorPrimary: '#0F6CBD',
-            colorSuccess: '#52c41a',
-            colorWarning: '#faad14',
-            colorError: '#ff4d4f',
-            colorBgLayout: '#f5f5f5',
-            borderRadius: 4,
-            fontFamily:
-              "'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif",
-          },
-          components: {
-            // Denser, flatter surfaces closer to Fluent/D365
-            Card: { borderRadiusLG: 4 },
-            Table: {
-              headerBg: '#f5f5f5',
-              headerColor: '#424242',
-              borderRadius: 4,
-              cellPaddingBlock: 10,
-            },
-            Button: { borderRadius: 4, primaryShadow: 'none' },
-            Menu: { itemBorderRadius: 4, itemHeight: 36 },
-            Layout: { bodyBg: '#f5f5f5' },
-          },
-        }}
-      >
+      <ThemeConfigProvider>
         <AntdApp>
           <AuthProvider>{children}</AuthProvider>
         </AntdApp>
-      </ConfigProvider>
+      </ThemeConfigProvider>
     </QueryClientProvider>
   );
 }

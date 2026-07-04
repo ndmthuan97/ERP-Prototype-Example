@@ -11,6 +11,12 @@ import type {
 
 const SVC = 'inventory' as const;
 
+/** Payload xuất kho (goods-out) — BE: { quantity, reason? } */
+export interface IssueStockInput {
+  quantity: number;
+  reason?: string;
+}
+
 export const inventoryApi = {
   list: (params: { q?: string; page?: number; limit?: number }) =>
     apiClient.get<Paginated<StockItem>>(SVC, '/api/inventory/items', {
@@ -31,6 +37,14 @@ export const inventoryApi = {
       SVC,
       `/api/inventory/items/${encodeURIComponent(sku)}/receive`,
       { quantity },
+    ),
+
+  /** Xuất kho (goods-out) */
+  issue: (sku: string, input: IssueStockInput) =>
+    apiClient.post<StockItem>(
+      SVC,
+      `/api/inventory/items/${encodeURIComponent(sku)}/issue`,
+      input,
     ),
 
   availability: (sku: string, quantity = 1) =>

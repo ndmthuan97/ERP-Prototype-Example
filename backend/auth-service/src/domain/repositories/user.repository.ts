@@ -28,9 +28,19 @@ export interface IUserRepository {
   /** Find user by email, returns null if not found */
   findByEmail(email: string): Promise<User | null>;
 
-  /** Get paginated list of all users */
-  findAll(page: number, limit: number): Promise<PaginatedResult<User>>;
+  /**
+   * Get paginated list of users. When `q` is provided, filters users whose
+   * email OR fullName contains `q` (case-insensitive).
+   */
+  findAll(
+    page: number,
+    limit: number,
+    q?: string,
+  ): Promise<PaginatedResult<User>>;
 
   /** Save (create or update) a user */
   save(user: User): Promise<User>;
+
+  /** Update an existing user's mutable fields (role / active status) by id */
+  update(user: User): Promise<User>;
 }

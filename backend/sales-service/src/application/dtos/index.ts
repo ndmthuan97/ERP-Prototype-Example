@@ -58,6 +58,9 @@ const searchOrdersSchema = z.object({
       message: `status phải là: ${validStatuses.join(', ')}`,
     })
     .optional(),
+  // Khoảng ngày tạo (ISO date string) — coerce sang Date; lọc createdAt gte/lte.
+  createdFrom: z.coerce.date().optional(),
+  createdTo: z.coerce.date().optional(),
 });
 export type SearchOrdersDto = z.infer<typeof searchOrdersSchema>;
 export function validateSearchOrders(data: unknown): SearchOrdersDto {

@@ -1,10 +1,9 @@
 'use client';
-// Customer detail page — Descriptions + Credit Check card + Edit/Delete actions
+// Customer detail page — tabbed form + Credit Check card + Edit/Delete actions
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Descriptions,
   Tag,
   Space,
   Button,
@@ -14,13 +13,14 @@ import {
   Card,
   Statistic,
   Badge,
-  Breadcrumb,
   Popconfirm,
   App,
   Result,
   Table,
   Empty,
   Typography,
+  Tabs,
+  InputNumber,
 } from 'antd';
 import {
   EditOutlined,
@@ -38,6 +38,8 @@ import { formatVnd, formatDateTime } from '@/lib/format';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { CustomerForm } from '@/components/customers/CustomerForm';
 import { ORDER_STATUS } from '@/lib/constants/status';
+import { FormSection, Field } from '@/components/d365/FormLayout';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 const STATUS_COLOR: Record<Customer['status'], string> = {
   prospect: 'default',
@@ -63,6 +65,14 @@ export default function CustomerDetailPage() {
   const [openEdit, setOpenEdit] = useState(false);
   const [editForm] = Form.useForm<CreateCustomerInput>();
 
+  // Credit "what-if" controls: input values + the params applied on "Check".
+  // Applied params default to undefined so the card loads with no query params.
+  const [orderAmountInput, setOrderAmountInput] = useState<number | null>(null);
+  const [pendingOrdersInput, setPendingOrdersInput] = useState<number | null>(null);
+  const [creditParams, setCreditParams] = useState<
+    { orderAmount?: number; pendingOrdersTotal?: number } | undefined
+  >(undefined);
+
   const id = params.id;
 
   const customerQuery = useQuery({
@@ -71,9 +81,12 @@ export default function CustomerDetailPage() {
   });
 
   const creditQuery = useQuery({
-    queryKey: ['customers', id, 'credit-check'],
-    queryFn: () => customerApi.creditCheck(id),
+    queryKey: ['customers', id, 'credit-check', creditParams],
+    queryFn: () => customerApi.creditCheck(id, creditParams),
     enabled: !!customerQuery.data,
+    // Keep prior result on screen while re-running a what-if check so the
+    // card (and the inputs) don't collapse into the loading state.
+    placeholderData: (prev) => prev,
   });
 
   // Order history for this customer
@@ -166,92 +179,89 @@ export default function CustomerDetailPage() {
   };
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Breadcrumb
-        items={[
-          { title: <Link href="/">Dashboard</Link> },
-          { title: <Link href="/customers">Customers</Link> },
-          { title: customer.businessName },
-        ]}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <Space align="center" size={12}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {customer.businessName}
+        </Typography.Title>
+        <Tag color={STATUS_COLOR[customer.status]}>
+          {STATUS_LABEL[customer.status]}
+        </Tag>
+      </Space>
 
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+      {/* D365 command bar */}
+      <CommandBar>
         <Button
+          type="text"
           icon={<ArrowLeftOutlined />}
           onClick={() => router.push('/customers')}
         >
           Back
         </Button>
-        <Space>
+        <Button type="text" icon={<EditOutlined />} onClick={handleOpenEdit}>
+          Edit
+        </Button>
+        <Popconfirm
+          title="Delete this customer?"
+          description="This will soft-delete the customer."
+          onConfirm={() => deleteMutation.mutate()}
+          okText="Delete"
+          cancelText="Cancel"
+          okButtonProps={{ danger: true }}
+        >
           <Button
-            type="primary"
-            icon={<EditOutlined />}
-            onClick={handleOpenEdit}
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            loading={deleteMutation.isPending}
           >
-            Edit
+            Delete
           </Button>
-          <Popconfirm
-            title="Delete this customer?"
-            description="This will soft-delete the customer."
-            onConfirm={() => deleteMutation.mutate()}
-            okText="Delete"
-            cancelText="Cancel"
-            okButtonProps={{ danger: true }}
-          >
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              loading={deleteMutation.isPending}
-            >
-              Delete
-            </Button>
-          </Popconfirm>
-        </Space>
-      </Space>
+        </Popconfirm>
+      </CommandBar>
 
-      <Descriptions
-        title="Customer Information"
-        bordered
-        column={{ xs: 1, sm: 2 }}
-      >
-        <Descriptions.Item label="Business Name">
-          {customer.businessName}
-        </Descriptions.Item>
-        <Descriptions.Item label="Tax Code">
-          {customer.taxCode ?? '—'}
-        </Descriptions.Item>
-        <Descriptions.Item label="Status">
-          <Tag color={STATUS_COLOR[customer.status]}>
-            {STATUS_LABEL[customer.status]}
-          </Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="Contact Person">
-          {customer.contactName ?? '—'}
-        </Descriptions.Item>
-        <Descriptions.Item label="Phone">
-          {customer.contactPhone ?? '—'}
-        </Descriptions.Item>
-        <Descriptions.Item label="Email">
-          {customer.contactEmail ?? '—'}
-        </Descriptions.Item>
-        <Descriptions.Item label="Credit Limit">
-          {formatVnd(customer.creditLimitAmount)}
-        </Descriptions.Item>
-        <Descriptions.Item label="Used">
-          {formatVnd(customer.creditUsedAmount)}
-        </Descriptions.Item>
-        <Descriptions.Item label="Created">
-          {formatDateTime(customer.createdAt)}
-        </Descriptions.Item>
-        <Descriptions.Item label="Last Updated">
-          {formatDateTime(customer.updatedAt)}
-        </Descriptions.Item>
-      </Descriptions>
+      {/* D365-style tabbed form: General tab with sectioned, 2-column fields */}
+      <Card style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}>
+        <Tabs
+          defaultActiveKey="general"
+          items={[
+            {
+              key: 'general',
+              label: 'General',
+              children: (
+                <Space direction="vertical" size={28} style={{ width: '100%' }}>
+                  <FormSection title="Customer details">
+                    <Field label="Business Name">{customer.businessName}</Field>
+                    <Field label="Tax Code">{customer.taxCode ?? '—'}</Field>
+                    <Field label="Status">
+                      <Tag color={STATUS_COLOR[customer.status]}>
+                        {STATUS_LABEL[customer.status]}
+                      </Tag>
+                    </Field>
+                    <Field label="Contact Person">{customer.contactName ?? '—'}</Field>
+                    <Field label="Phone">{customer.contactPhone ?? '—'}</Field>
+                    <Field label="Email">{customer.contactEmail ?? '—'}</Field>
+                    <Field label="Credit Limit">{formatVnd(customer.creditLimitAmount)}</Field>
+                    <Field label="Used">{formatVnd(customer.creditUsedAmount)}</Field>
+                  </FormSection>
+
+                  <FormSection title="System information">
+                    <Field label="Created">{formatDateTime(customer.createdAt)}</Field>
+                    <Field label="Last Updated">{formatDateTime(customer.updatedAt)}</Field>
+                  </FormSection>
+                </Space>
+              ),
+            },
+            { key: 'related', label: 'Related', disabled: true },
+          ]}
+        />
+      </Card>
 
       {/* Credit Check Card */}
       <Card
         title="Credit Check"
         loading={creditQuery.isLoading}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
         extra={
           credit && (
             <Badge
@@ -293,6 +303,82 @@ export default function CustomerDetailPage() {
             subTitle={toMessage(creditQuery.error)}
           />
         )}
+
+        {/* What-if control — re-run the credit check with a hypothetical order */}
+        <div
+          style={{
+            marginTop: 24,
+            paddingTop: 16,
+            borderTop: '1px solid var(--surface-border)',
+          }}
+        >
+          <Typography.Text
+            type="secondary"
+            style={{ display: 'block', marginBottom: 8 }}
+          >
+            What-if check
+          </Typography.Text>
+          <Space wrap align="end" size={12}>
+            <div>
+              <Typography.Text
+                style={{ display: 'block', fontSize: 12, color: '#8A8886', marginBottom: 4 }}
+              >
+                Order Amount (VND)
+              </Typography.Text>
+              <InputNumber
+                style={{ width: 200 }}
+                min={0}
+                value={orderAmountInput}
+                onChange={(v) => setOrderAmountInput(v)}
+                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(value) => Number((value ?? '').replace(/,/g, '')) as 0}
+                addonAfter="VNĐ"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Typography.Text
+                style={{ display: 'block', fontSize: 12, color: '#8A8886', marginBottom: 4 }}
+              >
+                Pending Orders Total (VND)
+              </Typography.Text>
+              <InputNumber
+                style={{ width: 200 }}
+                min={0}
+                value={pendingOrdersInput}
+                onChange={(v) => setPendingOrdersInput(v)}
+                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(value) => Number((value ?? '').replace(/,/g, '')) as 0}
+                addonAfter="VNĐ"
+                placeholder="0"
+              />
+            </div>
+            <Button
+              type="primary"
+              loading={creditQuery.isFetching}
+              onClick={() =>
+                setCreditParams({
+                  orderAmount: orderAmountInput ?? undefined,
+                  pendingOrdersTotal: pendingOrdersInput ?? undefined,
+                })
+              }
+            >
+              Check
+            </Button>
+            {creditParams && (
+              <Button
+                type="text"
+                onClick={() => {
+                  setCreditParams(undefined);
+                  setOrderAmountInput(null);
+                  setPendingOrdersInput(null);
+                }}
+              >
+                Reset
+              </Button>
+            )}
+          </Space>
+        </div>
       </Card>
 
       {/* Order History */}
@@ -304,6 +390,7 @@ export default function CustomerDetailPage() {
           </Space>
         }
         loading={ordersQuery.isLoading}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
       >
         {ordersQuery.data?.data && ordersQuery.data.data.length > 0 ? (
           <Table
@@ -377,6 +464,6 @@ export default function CustomerDetailPage() {
           loading={updateMutation.isPending}
         />
       </Modal>
-    </Space>
+    </div>
   );
 }

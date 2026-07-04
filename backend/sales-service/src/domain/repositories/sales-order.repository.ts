@@ -16,6 +16,10 @@ export interface SearchOrdersParams {
   status?: string;
   page: number;
   limit: number;
+  /** Lọc createdAt >= createdFrom (nếu có) */
+  createdFrom?: Date;
+  /** Lọc createdAt <= createdTo (nếu có) */
+  createdTo?: Date;
 }
 
 /** Event ghi vào outbox CÙNG transaction với thay đổi business (Outbox Pattern) */
@@ -75,6 +79,13 @@ export interface ISalesOrderRepository {
   /** Thêm SalesOrderLine vào header + outbox (nếu có) trong 1 transaction */
   addLine(
     order: SalesOrder,
+    lifecycleData?: LifecycleViewData,
+  ): Promise<SalesOrder>;
+
+  /** Xóa SalesOrderLine khỏi header + cập nhật totals trong 1 transaction */
+  removeLine(
+    order: SalesOrder,
+    lineId: string,
     lifecycleData?: LifecycleViewData,
   ): Promise<SalesOrder>;
 

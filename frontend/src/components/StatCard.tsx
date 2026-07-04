@@ -15,10 +15,11 @@ interface StatCardProps {
   };
 }
 
-const TREND_STYLES: Record<string, { bg: string; color: string }> = {
-  green: { bg: 'rgba(82, 196, 26, 0.1)', color: '#52c41a' },
-  red: { bg: 'rgba(255, 77, 79, 0.1)', color: '#ff4d4f' },
-  orange: { bg: 'rgba(250, 173, 20, 0.1)', color: '#faad14' },
+// Sakai deltas are plain colored text under the value (no pill)
+const TREND_COLOR: Record<string, string> = {
+  green: '#10b981',
+  red: '#ef4444',
+  orange: '#f97316',
 };
 
 export function StatCard({
@@ -33,45 +34,27 @@ export function StatCard({
     <Card
       className="card-hover"
       styles={{
-        body: { padding: 20, minHeight: 120 },
+        body: { padding: 20, minHeight: 118 },
       }}
       style={{
         borderRadius: 12,
-        border: '1px solid #f0f0f0',
+        border: '1px solid var(--surface-border)',
+        boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
         height: '100%',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
           <Typography.Text
-            style={{ fontSize: 14, color: '#8c8c8c', display: 'block', marginBottom: 8 }}
+            style={{ fontSize: 14, fontWeight: 500, color: 'var(--surface-muted)', display: 'block', marginBottom: 8 }}
           >
             {label}
           </Typography.Text>
           <Typography.Text
-            style={{ fontSize: 24, fontWeight: 700, color: '#262626', lineHeight: 1.2, whiteSpace: 'nowrap' }}
+            style={{ fontSize: 26, fontWeight: 700, color: 'var(--surface-text)', lineHeight: 1.2, whiteSpace: 'nowrap' }}
           >
             {value}
           </Typography.Text>
-          {trend && (
-            <div
-              style={{
-                marginTop: 8,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '2px 8px',
-                borderRadius: 12,
-                background: TREND_STYLES[trend.color]?.bg,
-                color: TREND_STYLES[trend.color]?.color,
-                fontSize: 12,
-                fontWeight: 500,
-              }}
-            >
-              {trend.color === 'green' ? '↑' : trend.color === 'red' ? '↓' : ''}
-              {trend.text}
-            </div>
-          )}
         </div>
         <div
           className="stat-icon"
@@ -83,6 +66,11 @@ export function StatCard({
           {icon}
         </div>
       </div>
+      {trend && (
+        <div style={{ marginTop: 14, fontSize: 13 }}>
+          <span style={{ color: TREND_COLOR[trend.color], fontWeight: 600 }}>{trend.text}</span>
+        </div>
+      )}
     </Card>
   );
 }

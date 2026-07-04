@@ -6,8 +6,6 @@
 import { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Breadcrumb,
-  Descriptions,
   Tag,
   Table,
   Button,
@@ -23,8 +21,6 @@ import {
   Alert,
   Spin,
   Card,
-  Row,
-  Col,
   Steps,
   Tabs,
 } from 'antd';
@@ -35,13 +31,11 @@ import {
   CloseCircleOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  MinusCircleOutlined,
   ExclamationCircleOutlined,
-  UserOutlined,
-  ShoppingCartOutlined,
   FileTextOutlined,
   CarryOutOutlined,
   DeleteOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -50,7 +44,6 @@ import { customerApi } from '@/lib/api/customer';
 import { inventoryApi } from '@/lib/api/inventory';
 import { catalogApi, type Product } from '@/lib/api/catalog';
 import type {
-  SalesOrder,
   SalesOrderLine,
   OrderStatus,
   AddLineInput,
@@ -63,15 +56,8 @@ import { ReturnTab } from '@/components/orders/ReturnTab';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { CAN } from '@/lib/auth/permissions';
 import { ORDER_STATUS, statusLabel } from '@/lib/constants/status';
-
-const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
-  draft: 'default',
-  submitted: 'processing',
-  confirmed: 'success',
-  partially_delivered: 'warning',
-  fully_delivered: 'cyan',
-  cancelled: 'error',
-};
+import { FormSection, Field } from '@/components/d365/FormLayout';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 // Timeline dot colors per status
 const TIMELINE_DOT_COLOR: Record<string, string> = {
@@ -184,6 +170,18 @@ export default function OrderDetailPage({ params }: PageProps) {
       message.success('Order cancelled');
       setCancelReason('');
       queryClient.invalidateQueries({ queryKey: ['orders', id] });
+    },
+    onError: (err) => {
+      message.error(toMessage(err));
+    },
+  });
+
+  const fulfilMutation = useMutation({
+    mutationFn: () => salesApi.fulfil(id),
+    onSuccess: () => {
+      message.success('Order fulfilled');
+      queryClient.invalidateQueries({ queryKey: ['orders', id] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
     onError: (err) => {
       message.error(toMessage(err));
@@ -327,6 +325,8 @@ export default function OrderDetailPage({ params }: PageProps) {
 
   const isDraft = order.status === 'draft';
   const isCancelled = order.status === 'cancelled';
+  // Fulfil is only valid on a confirmed order (see order lifecycle status flow).
+  const canFulfil = order.status === 'confirmed';
   const customerName =
     customerQuery.data?.businessName ?? order.customerId.slice(0, 8) + '…';
 
@@ -384,117 +384,202 @@ export default function OrderDetailPage({ params }: PageProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* ---- Breadcrumb ---- */}
-      <Breadcrumb
-        items={[
-          { title: 'Dashboard', href: '/' },
-          { title: 'Orders', href: '/orders' },
-          { title: `#${id.slice(0, 8)}` },
-        ]}
-      />
+      {/* ---- Header ---- */}
+      <Space align="center" size={12}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          Order #{id.slice(0, 8)}
+        </Typography.Title>
+        <Tag color={ORDER_STATUS.color[order.status]}>
+          {statusLabel(ORDER_STATUS.label, order.status)}
+        </Tag>
+      </Space>
 
-      {/* ---- Order Header Card ---- */}
-      <Card
-        styles={{ body: { padding: 24 } }}
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 20,
-          }}
+      {/* ---- D365 command bar ---- */}
+      <CommandBar>
+        <Button
+          type="text"
+          icon={<ArrowLeftOutlined />}
+          onClick={() => router.push('/orders')}
         >
-          <Space size="middle" align="center">
-            <Button
-              icon={<ArrowLeftOutlined />}
-              onClick={() => router.push('/orders')}
-            >
-              Back
-            </Button>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              Order #{id.slice(0, 8)}
-            </Typography.Title>
-            <Tag
-              color={ORDER_STATUS.color[order.status]}
-              style={{ fontSize: 14, padding: '2px 12px' }}
-            >
-              {statusLabel(ORDER_STATUS.label, order.status)}
-            </Tag>
-          </Space>
+          Back
+        </Button>
+        <Button
+          type="text"
+          icon={<SendOutlined />}
+          disabled={!isDraft}
+          loading={submitMutation.isPending}
+          onClick={() => submitMutation.mutate()}
+        >
+          Submit
+        </Button>
+        <Button
+          type="text"
+          icon={<RocketOutlined />}
+          disabled={!canFulfil}
+          loading={fulfilMutation.isPending}
+          onClick={() => fulfilMutation.mutate()}
+        >
+          Fulfil
+        </Button>
+        <Button
+          type="text"
+          danger
+          icon={<CloseCircleOutlined />}
+          disabled={order.status === 'cancelled'}
+          loading={cancelMutation.isPending}
+          onClick={() => cancelMutation.mutate(cancelReason)}
+        >
+          Cancel
+        </Button>
+      </CommandBar>
 
-          <Space>
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              disabled={!isDraft}
-              loading={submitMutation.isPending}
-              onClick={() => submitMutation.mutate()}
-            >
-              Submit
-            </Button>
+      {/* ---- D365-style tabbed form ---- */}
+      <Card style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}>
+        <Tabs
+          defaultActiveKey="general"
+          items={[
+            {
+              key: 'general',
+              label: 'General',
+              children: (
+                <Space direction="vertical" size={28} style={{ width: '100%' }}>
+                  <FormSection title="Customer">
+                    <Field label="Name">
+                      {customerQuery.isLoading ? (
+                        <Spin size="small" />
+                      ) : (
+                        <Typography.Text strong>{customerName}</Typography.Text>
+                      )}
+                    </Field>
+                    {customerQuery.data?.contactPhone && (
+                      <Field label="Phone">{customerQuery.data.contactPhone}</Field>
+                    )}
+                    <Field label="Customer ID">
+                      <Typography.Text copyable type="secondary">
+                        {order.customerId}
+                      </Typography.Text>
+                    </Field>
+                  </FormSection>
 
-            <Button
-              danger
-              icon={<CloseCircleOutlined />}
-              disabled={order.status === 'cancelled'}
-              loading={cancelMutation.isPending}
-              onClick={() => cancelMutation.mutate(cancelReason)}
-            >
-              Cancel
-            </Button>
-          </Space>
-        </div>
+                  <FormSection title="Order information">
+                    <Field label="Order ID">
+                      <Typography.Text copyable>{order.id}</Typography.Text>
+                    </Field>
+                    <Field label="Status">
+                      <Tag color={ORDER_STATUS.color[order.status]}>
+                        {statusLabel(ORDER_STATUS.label, order.status)}
+                      </Tag>
+                    </Field>
+                    <Field label="Created">{formatDateTime(order.createdAt)}</Field>
+                    <Field label="Updated">{formatDateTime(order.updatedAt)}</Field>
+                    <Field label="Subtotal">{formatVnd(order.subtotalAmount)}</Field>
+                    <Field label="Tax">{formatVnd(order.totalTaxAmount)}</Field>
+                    <Field label="Grand Total">
+                      <Typography.Text strong style={{ color: 'var(--brand)' }}>
+                        {formatVnd(order.totalAmount)}
+                      </Typography.Text>
+                    </Field>
+                    {order.cancelReason && (
+                      <Field label="Cancel Reason">
+                        <Typography.Text type="danger">
+                          {order.cancelReason}
+                        </Typography.Text>
+                      </Field>
+                    )}
+                  </FormSection>
 
-        {/* Key-value info row */}
-        <Row gutter={24}>
-          <Col span={6}>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Customer
-            </Typography.Text>
-            <div style={{ fontWeight: 500, fontSize: 15, marginTop: 4 }}>
-              {customerQuery.isLoading ? <Spin size="small" /> : customerName}
-            </div>
-          </Col>
-          <Col span={6}>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Created
-            </Typography.Text>
-            <div style={{ fontWeight: 500, fontSize: 15, marginTop: 4 }}>
-              {formatDateTime(order.createdAt)}
-            </div>
-          </Col>
-          <Col span={6}>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Updated
-            </Typography.Text>
-            <div style={{ fontWeight: 500, fontSize: 15, marginTop: 4 }}>
-              {formatDateTime(order.updatedAt)}
-            </div>
-          </Col>
-          <Col span={6}>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Total
-            </Typography.Text>
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: 18,
-                marginTop: 4,
-                color: '#1677ff',
-              }}
-            >
-              {formatVnd(order.totalAmount)}
-            </div>
-          </Col>
-        </Row>
+                  <FormSection title="Line items">
+                    <div>
+                      {isDraft && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            marginBottom: 12,
+                          }}
+                        >
+                          <Button
+                            type="text"
+                            icon={<PlusOutlined />}
+                            size="small"
+                            onClick={() => setOpenAddLine(true)}
+                          >
+                            Add Line
+                          </Button>
+                        </div>
+                      )}
+                      <Table<SalesOrderLine>
+                        rowKey="id"
+                        columns={lineColumns}
+                        dataSource={order.lines}
+                        pagination={false}
+                        size="small"
+                        locale={{ emptyText: 'No line items yet' }}
+                      />
+
+                      {/* Summary footer */}
+                      <div
+                        style={{
+                          marginTop: 16,
+                          borderTop: '1px solid var(--surface-border)',
+                          paddingTop: 16,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 48,
+                            paddingRight: 16,
+                          }}
+                        >
+                          <div style={{ textAlign: 'right' }}>
+                            <Typography.Text type="secondary" style={{ fontSize: 14 }}>
+                              Subtotal
+                            </Typography.Text>
+                            <div style={{ fontSize: 15, fontWeight: 500, marginTop: 4 }}>
+                              {formatVnd(order.subtotalAmount)}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <Typography.Text type="secondary" style={{ fontSize: 14 }}>
+                              Tax
+                            </Typography.Text>
+                            <div style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--surface-muted)' }}>
+                              {formatVnd(order.totalTaxAmount)}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <Typography.Text type="secondary" style={{ fontSize: 14 }}>
+                              Grand Total
+                            </Typography.Text>
+                            <div
+                              style={{
+                                fontSize: 22,
+                                fontWeight: 700,
+                                color: 'var(--brand)',
+                                marginTop: 4,
+                              }}
+                            >
+                              {formatVnd(order.totalAmount)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </FormSection>
+                </Space>
+              ),
+            },
+            { key: 'related', label: 'Related', disabled: true },
+          ]}
+        />
       </Card>
 
       {/* ---- Steps Progress ---- */}
       <Card
         title="Order Progress"
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
         styles={{ body: { padding: '24px 32px' } }}
       >
         <Steps
@@ -513,157 +598,10 @@ export default function OrderDetailPage({ params }: PageProps) {
         )}
       </Card>
 
-      {/* ---- Two-column Info Section ---- */}
-      <Row gutter={24}>
-        <Col span={12}>
-          <Card
-            title={
-              <Space>
-                <UserOutlined style={{ color: '#1677ff' }} />
-                <span>Customer Info</span>
-              </Space>
-            }
-            style={{ borderRadius: 12, border: '1px solid #f0f0f0', height: '100%' }}
-          >
-            <Descriptions column={1} colon={false} size="small">
-              <Descriptions.Item label="Name">
-                {customerQuery.isLoading ? (
-                  <Spin size="small" />
-                ) : (
-                  <Typography.Text strong>{customerName}</Typography.Text>
-                )}
-              </Descriptions.Item>
-              {customerQuery.data?.contactPhone && (
-                <Descriptions.Item label="Phone">
-                  {customerQuery.data.contactPhone}
-                </Descriptions.Item>
-              )}
-              <Descriptions.Item label="Customer ID">
-                <Typography.Text copyable type="secondary">
-                  {order.customerId}
-                </Typography.Text>
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </Col>
-        <Col span={12}>
-          <Card
-            title={
-              <Space>
-                <ShoppingCartOutlined style={{ color: '#1677ff' }} />
-                <span>Order Info</span>
-              </Space>
-            }
-            style={{ borderRadius: 12, border: '1px solid #f0f0f0', height: '100%' }}
-          >
-            <Descriptions column={1} colon={false} size="small">
-              <Descriptions.Item label="Order ID">
-                <Typography.Text copyable>{order.id}</Typography.Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag color={ORDER_STATUS_COLOR[order.status]}>
-                  {order.status}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Created">
-                {formatDateTime(order.createdAt)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Updated">
-                {formatDateTime(order.updatedAt)}
-              </Descriptions.Item>
-              {order.cancelReason && (
-                <Descriptions.Item label="Cancel Reason">
-                  <Typography.Text type="danger">
-                    {order.cancelReason}
-                  </Typography.Text>
-                </Descriptions.Item>
-              )}
-            </Descriptions>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* ---- Order Lines ---- */}
-      <Card
-        title="Line Items"
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
-        extra={
-          isDraft && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              size="small"
-              onClick={() => setOpenAddLine(true)}
-            >
-              Add Line
-            </Button>
-          )
-        }
-      >
-        <Table<SalesOrderLine>
-          rowKey="id"
-          columns={lineColumns}
-          dataSource={order.lines}
-          pagination={false}
-          size="small"
-          locale={{ emptyText: 'No line items yet' }}
-        />
-
-        {/* Summary footer */}
-        <div
-          style={{
-            marginTop: 16,
-            borderTop: '1px solid #f0f0f0',
-            paddingTop: 16,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: 48,
-              paddingRight: 16,
-            }}
-          >
-            <div style={{ textAlign: 'right' }}>
-              <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                Subtotal
-              </Typography.Text>
-              <div style={{ fontSize: 15, fontWeight: 500, marginTop: 4 }}>
-                {formatVnd(order.subtotalAmount)}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                Tax
-              </Typography.Text>
-              <div style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: '#8c8c8c' }}>
-                {formatVnd(order.totalTaxAmount)}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                Grand Total
-              </Typography.Text>
-              <div
-                style={{
-                  fontSize: 22,
-                  fontWeight: 700,
-                  color: '#1677ff',
-                  marginTop: 4,
-                }}
-              >
-                {formatVnd(order.totalAmount)}
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
       {/* ---- Lifecycle Timeline ---- */}
       <Card
         title="Order History"
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
       >
         {lifecycleQuery.isLoading ? (
           <Spin />
@@ -829,7 +767,7 @@ export default function OrderDetailPage({ params }: PageProps) {
       </Modal>
 
       {/* ---- Delivery & Return Tabs ---- */}
-      <Card style={{ borderRadius: 12 }}>
+      <Card style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}>
         <Tabs
           items={[
             {

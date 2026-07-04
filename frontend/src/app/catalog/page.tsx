@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState, type Key } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Table,
@@ -12,29 +12,31 @@ import {
   Modal,
   Form,
   Card,
-  Row,
-  Col,
   Select,
   Tooltip,
   App,
-  InputNumber
+  InputNumber,
+  Dropdown
 } from 'antd';
 import {
   PlusOutlined,
   ReloadOutlined,
   EditOutlined,
   EyeOutlined,
-  AppstoreOutlined,
   CheckCircleOutlined,
   StopOutlined,
-  DollarOutlined
+  DownOutlined,
+  MoreOutlined,
+  DeleteOutlined,
+  FileExcelOutlined,
+  TableOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { catalogApi, type Product, type CreateProductInput, type UpdateProductInput } from '@/lib/api/catalog';
 import { formatVnd } from '@/lib/format';
-import { StatCard } from '@/components/StatCard';
 import { toMessage } from '@/lib/api/errors';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 export default function CatalogPage() {
   const { message } = App.useApp();
@@ -45,6 +47,17 @@ export default function CatalogPage() {
   const [isActive, setIsActive] = useState<boolean | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+
+  // D365 view-picker: the "view" is just the active-status filter presented as
+  // named views (All / Active / Inactive), matching Power Apps' view selector.
+  const VIEWS: { key: string; label: string; value: boolean | undefined }[] = [
+    { key: 'all', label: 'All Products', value: undefined },
+    { key: 'active', label: 'Active Products', value: true },
+    { key: 'inactive', label: 'Inactive Products', value: false },
+  ];
+  const currentView =
+    VIEWS.find((v) => v.value === isActive) ?? VIEWS[0];
 
   // Create modal
   const [openCreate, setOpenCreate] = useState(false);
@@ -59,31 +72,6 @@ export default function CatalogPage() {
     queryKey: ['catalog', { q, page, limit, isActive }],
     queryFn: () => catalogApi.list({ q, page, limit, isActive }),
   });
-
-  const statsQuery = useQuery({
-    queryKey: ['catalog', 'stats-all'],
-    queryFn: () => catalogApi.list({ page: 1, limit: 1000 }),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Derived stat values
-  const stats = useMemo(() => {
-    const total = statsQuery.data?.total ?? listQuery.data?.total ?? 0;
-    const products = statsQuery.data?.data ?? listQuery.data?.data ?? [];
-
-    const activeCount = products.filter((p) => p.isActive).length;
-    const inactiveCount = products.filter((p) => !p.isActive).length;
-
-    const totalPrices = products.reduce((sum, p) => sum + p.defaultSalePrice, 0);
-    const averagePrice = products.length > 0 ? totalPrices / products.length : 0;
-
-    return {
-      total: String(total),
-      activeCount: String(activeCount),
-      inactiveCount: String(inactiveCount),
-      averagePrice: formatVnd(averagePrice)
-    };
-  }, [statsQuery.data, listQuery.data]);
 
   const editQuery = useQuery({
     queryKey: ['catalog', editingId],
@@ -148,6 +136,7 @@ export default function CatalogPage() {
       dataIndex: 'sku',
       key: 'sku',
       width: 120,
+      sorter: (a, b) => a.sku.localeCompare(b.sku),
       render: (v) => <Typography.Text keyboard>{v}</Typography.Text>,
     },
     {
@@ -155,7 +144,18 @@ export default function CatalogPage() {
       dataIndex: 'name',
       key: 'name',
       width: 250,
-      render: (text) => <Typography.Text strong>{text}</Typography.Text>,
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (text, record) => (
+        <Typography.Link
+          strong
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/catalog/${record.id}`);
+          }}
+        >
+          {text}
+        </Typography.Link>
+      ),
     },
     {
       title: 'Unit',
@@ -169,6 +169,7 @@ export default function CatalogPage() {
       key: 'defaultSalePrice',
       width: 150,
       align: 'right',
+      sorter: (a, b) => a.defaultSalePrice - b.defaultSalePrice,
       render: (v: number) => formatVnd(v),
     },
     {
@@ -292,22 +293,43 @@ export default function CatalogPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Typography.Title level={4} style={{ margin: 0 }}>
-        Product Catalog
-      </Typography.Title>
+      {/* D365 view-picker: selectable view name is the page header */}
+      <div>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            selectable: true,
+            selectedKeys: [currentView.key],
+            items: VIEWS.map((v) => ({ key: v.key, label: v.label })),
+            onClick: ({ key }) => {
+              const next = VIEWS.find((v) => v.key === key);
+              setIsActive(next?.value);
+              setPage(1);
+            },
+          }}
+        >
+          <a
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.preventDefault()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                (e.currentTarget as HTMLElement).click();
+              }
+            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--surface-text)' }}
+          >
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {currentView.label}
+            </Typography.Title>
+            <DownOutlined style={{ fontSize: 12, color: '#8A8886' }} />
+          </a>
+        </Dropdown>
+      </div>
 
-      {/* Fluent / D365 command bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '4px 8px',
-          background: '#fff',
-          border: '1px solid #f0f0f0',
-          borderRadius: 4,
-        }}
-      >
+      {/* D365 command bar */}
+      <CommandBar>
         <Button type="text" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
           New
         </Button>
@@ -319,80 +341,42 @@ export default function CatalogPage() {
         >
           Refresh
         </Button>
-      </div>
+        <Button
+          type="text"
+          icon={<DeleteOutlined />}
+          disabled={selectedRowKeys.length === 0}
+        >
+          Delete{selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ''}
+        </Button>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [
+              { key: 'excel', icon: <FileExcelOutlined />, label: 'Export to Excel', disabled: true },
+              { key: 'columns', icon: <TableOutlined />, label: 'Edit columns', disabled: true },
+            ],
+          }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label="More commands" />
+        </Dropdown>
 
-      <Row gutter={16}>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<AppstoreOutlined />}
-            iconBgColor="rgba(22, 119, 255, 0.1)"
-            iconColor="#1677ff"
-            label="Total Products"
-            value={stats.total}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<CheckCircleOutlined />}
-            iconBgColor="rgba(82, 196, 26, 0.1)"
-            iconColor="#52c41a"
-            label="Active"
-            value={stats.activeCount}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<StopOutlined />}
-            iconBgColor="rgba(245, 34, 45, 0.1)"
-            iconColor="#f5222d"
-            label="Inactive"
-            value={stats.inactiveCount}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<DollarOutlined />}
-            iconBgColor="rgba(250, 173, 20, 0.1)"
-            iconColor="#faad14"
-            label="Avg Price"
-            value={stats.averagePrice}
-          />
-        </Col>
-      </Row>
+        <div style={{ flex: 1 }} />
 
-      <Card
-        styles={{ body: { padding: 16 } }}
-        style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}
-      >
-        <Space wrap>
-          <Input.Search
-            allowClear
-            placeholder="Search by SKU, name..."
-            style={{ width: 320 }}
-            onSearch={(value) => {
-              setQ(value);
-              setPage(1);
-            }}
-          />
-          <Select
-            allowClear
-            placeholder="Status"
-            style={{ width: 180 }}
-            onChange={(val) => {
-              setIsActive(val);
-              setPage(1);
-            }}
-            options={[
-              { value: true, label: 'Active' },
-              { value: false, label: 'Inactive' },
-            ]}
-          />
-        </Space>
-      </Card>
+        <Input.Search
+          allowClear
+          aria-label="Filter by keyword"
+          placeholder="Filter by keyword"
+          style={{ width: 240 }}
+          onSearch={(value) => {
+            setQ(value);
+            setPage(1);
+          }}
+        />
+      </CommandBar>
 
       <Card
         styles={{ body: { padding: 0 } }}
-        style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
       >
         <Table<Product>
           rowKey="id"
@@ -401,6 +385,10 @@ export default function CatalogPage() {
           dataSource={listQuery.data?.data ?? []}
           loading={listQuery.isFetching}
           scroll={{ x: 1000 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys),
+          }}
           onRow={(record) => ({
             onClick: () => router.push(`/catalog/${record.id}`),
             style: { cursor: 'pointer' },
@@ -410,7 +398,7 @@ export default function CatalogPage() {
             pageSize: limit,
             total: listQuery.data?.total ?? 0,
             showSizeChanger: true,
-            showTotal: (total) => `${total} products`,
+            showTotal: (total) => `Rows: ${total}`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);

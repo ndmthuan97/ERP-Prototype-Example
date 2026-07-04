@@ -45,13 +45,11 @@ export const salesApi = {
   addLine: (id: string, input: AddLineInput) =>
     apiClient.post<SalesOrderLine>(SVC, `/api/orders/${id}/lines`, input),
 
-  updateLine: (id: string, lineId: string, input: Partial<AddLineInput>) =>
-    apiClient.patch<SalesOrderLine>(SVC, `/api/orders/${id}/lines/${lineId}`, input),
-
   removeLine: (id: string, lineId: string) =>
     apiClient.delete<void>(SVC, `/api/orders/${id}/lines/${lineId}`),
 
   submit: (id: string) => apiClient.post<SubmitResult>(SVC, `/api/orders/${id}/submit`),
+  fulfil: (id: string) => apiClient.post<SalesOrder>(SVC, `/api/orders/${id}/fulfil`),
   cancel: (id: string, reason: string) =>
     apiClient.post<CancelResult>(SVC, `/api/orders/${id}/cancel`, { reason }),
 };

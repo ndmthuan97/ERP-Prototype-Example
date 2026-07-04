@@ -18,6 +18,7 @@ import { JwtTokenService } from './infrastructure/auth/jwt.service.js';
 import { USER_REPOSITORY } from './domain/repositories/user.repository.js';
 
 import { RegisterCommand } from './application/commands/register.command.js';
+import { UpdateUserCommand } from './application/commands/update-user.command.js';
 import { LoginCommand } from './application/commands/login.command.js';
 import { RefreshTokenCommand } from './application/commands/refresh-token.command.js';
 import { LogoutCommand } from './application/commands/logout.command.js';
@@ -54,6 +55,7 @@ import { AuthController } from './presentation/auth.controller.js';
 
     // Application — Use Cases
     RegisterCommand,
+    UpdateUserCommand,
     LoginCommand,
     RefreshTokenCommand,
     LogoutCommand,

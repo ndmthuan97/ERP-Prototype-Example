@@ -13,18 +13,28 @@ export class SearchSalesOrdersQuery {
     private readonly repo: ISalesOrderRepository,
   ) {}
 
-  /** Tìm kiếm đơn hàng với phân trang + filter status */
-  async execute(params: { page?: string; limit?: string; status?: string }) {
+  /** Tìm kiếm đơn hàng với phân trang + filter status + khoảng ngày tạo */
+  async execute(params: {
+    page?: string;
+    limit?: string;
+    status?: string;
+    createdFrom?: string;
+    createdTo?: string;
+  }) {
     const parsed = validateSearchOrders({
       page: params.page ? parseInt(params.page, 10) : undefined,
       limit: params.limit ? parseInt(params.limit, 10) : undefined,
       status: params.status || undefined,
+      createdFrom: params.createdFrom || undefined,
+      createdTo: params.createdTo || undefined,
     });
 
     const result = await this.repo.search({
       status: parsed.status,
       page: parsed.page,
       limit: parsed.limit,
+      createdFrom: parsed.createdFrom,
+      createdTo: parsed.createdTo,
     });
 
     return {

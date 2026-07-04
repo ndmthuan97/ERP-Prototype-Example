@@ -21,24 +21,23 @@ import { formatVnd, formatDateTime } from '@/lib/format';
 import { PO_STATUS } from '@/lib/constants/status';
 
 // ---------------------------------------------------------------------------
-// Static demo data — no aggregate/time-series API exists for these yet
+// Weekday labels for the revenue chart (JS getDay(): 0=Sun … 6=Sat)
 // ---------------------------------------------------------------------------
-const BAR_DATA = [
-  { label: 'T2', value: 320, pct: 64 },
-  { label: 'T3', value: 450, pct: 90 },
-  { label: 'T4', value: 380, pct: 76 },
-  { label: 'T5', value: 500, pct: 100 },
-  { label: 'T6', value: 420, pct: 84 },
-  { label: 'T7', value: 350, pct: 70 },
-  { label: 'CN', value: 280, pct: 56 },
-];
+const WEEKDAY_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+// Compact VND → "triệu" label for bar tops (blank for 0 to keep the axis clean)
+function formatTrieu(v: number): string {
+  if (!v) return '';
+  const tr = v / 1_000_000;
+  return tr >= 100 ? `${Math.round(tr)}tr` : `${tr.toFixed(1)}tr`;
+}
 
 // Fallback donut segments when no real order data available
 const FALLBACK_DONUT_SEGMENTS = [
-  { label: 'Completed', pct: 45, color: '#52c41a' },
-  { label: 'Processing', pct: 30, color: '#1677ff' },
-  { label: 'In Transit', pct: 15, color: '#faad14' },
-  { label: 'Cancelled', pct: 10, color: '#ff4d4f' },
+  { label: 'Completed', pct: 45, color: '#10b981' },
+  { label: 'Processing', pct: 30, color: '#3b82f6' },
+  { label: 'In Transit', pct: 15, color: '#f97316' },
+  { label: 'Cancelled', pct: 10, color: '#ef4444' },
 ];
 
 const ORDER_STATUS_COLOR: Record<string, string> = {
@@ -61,12 +60,12 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 
 // Color mapping for donut chart segments by order status
 const STATUS_DONUT_CONFIG: Record<string, { label: string; color: string }> = {
-  confirmed: { label: 'Confirm', color: '#52c41a' },
-  submitted: { label: 'Processing', color: '#1677ff' },
-  draft: { label: 'Draft', color: '#8c8c8c' },
-  partially_delivered: { label: 'Partially Delivered', color: '#faad14' },
-  fully_delivered: { label: 'Fully Delivered', color: '#13c2c2' },
-  cancelled: { label: 'Cancelled', color: '#ff4d4f' },
+  confirmed: { label: 'Confirm', color: '#10b981' },
+  submitted: { label: 'Processing', color: '#3b82f6' },
+  draft: { label: 'Draft', color: '#94a3b8' },
+  partially_delivered: { label: 'Partially Delivered', color: '#f97316' },
+  fully_delivered: { label: 'Fully Delivered', color: '#06b6d4' },
+  cancelled: { label: 'Cancelled', color: '#ef4444' },
 };
 
 const LOW_STOCK_THRESHOLD = 50;
@@ -101,10 +100,11 @@ export default function DashboardPage() {
     staleTime: 30_000,
   });
 
-  // Larger fetch for donut chart status breakdown
+  // Larger fetch feeding the donut breakdown, the 7-day revenue bars, and the
+  // revenue KPI — all derived from real orders. Capped at the API max (100).
   const { data: allOrdersData } = useQuery({
     queryKey: ['dashboard', 'orders-all'],
-    queryFn: () => salesApi.list({ limit: 20 }),
+    queryFn: () => salesApi.list({ limit: 100 }),
     staleTime: 60_000,
   });
 
@@ -147,11 +147,40 @@ export default function DashboardPage() {
     ).length;
   }, [inventoryData]);
 
-  // Revenue sum from the fetched orders list (visible page, not all-time)
+  // Revenue = sum of all fetched orders' totals (excludes cancelled).
   const revenueSum = useMemo(() => {
-    if (!ordersData?.data) return 0;
-    return ordersData.data.reduce((sum, o) => sum + o.totalAmount, 0);
-  }, [ordersData]);
+    return (allOrdersData?.data ?? [])
+      .filter((o) => o.status !== 'cancelled')
+      .reduce((sum, o) => sum + o.totalAmount, 0);
+  }, [allOrdersData]);
+
+  // Real revenue per day for the last 7 days, bucketed from order createdAt.
+  const revenueSeries = useMemo(() => {
+    const days: { date: Date; total: number }[] = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      days.push({ date: d, total: 0 });
+    }
+    for (const o of allOrdersData?.data ?? []) {
+      if (o.status === 'cancelled') continue;
+      const created = new Date(o.createdAt);
+      const bucket = days.find((b) => {
+        const next = new Date(b.date);
+        next.setDate(b.date.getDate() + 1);
+        return created >= b.date && created < next;
+      });
+      if (bucket) bucket.total += o.totalAmount;
+    }
+    const max = Math.max(1, ...days.map((d) => d.total));
+    return days.map((d) => ({
+      label: WEEKDAY_VN[d.date.getDay()],
+      value: d.total,
+      pct: Math.round((d.total / max) * 100),
+    }));
+  }, [allOrdersData]);
 
   // Recent orders mapped for the table
   const recentOrders = useMemo(() => {
@@ -233,8 +262,8 @@ export default function DashboardPage() {
           <Col xs={24} sm={12} xl={6}>
             <StatCard
               icon={<TeamOutlined />}
-              iconBgColor="rgba(22,119,255,0.1)"
-              iconColor="#1677ff"
+              iconBgColor="rgba(6,182,212,0.14)"
+              iconColor="#06b6d4"
               label="Total Customers"
               value={customerData?.total ?? loadingPlaceholder}
             />
@@ -242,8 +271,8 @@ export default function DashboardPage() {
           <Col xs={24} sm={12} xl={6}>
             <StatCard
               icon={<ShoppingCartOutlined />}
-              iconBgColor="rgba(82,196,26,0.1)"
-              iconColor="#52c41a"
+              iconBgColor="rgba(59,130,246,0.14)"
+              iconColor="#3b82f6"
               label="Orders"
               value={ordersData?.meta?.total ?? loadingPlaceholder}
             />
@@ -251,17 +280,17 @@ export default function DashboardPage() {
           <Col xs={24} sm={12} xl={6}>
             <StatCard
               icon={<DollarOutlined />}
-              iconBgColor="rgba(250,173,20,0.1)"
-              iconColor="#faad14"
-              label="Revenue (current page)"
-              value={ordersData ? formatVnd(revenueSum) : loadingPlaceholder}
+              iconBgColor="rgba(249,115,22,0.14)"
+              iconColor="#f97316"
+              label="Revenue"
+              value={allOrdersData ? formatVnd(revenueSum) : loadingPlaceholder}
             />
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <StatCard
               icon={<WarningOutlined />}
-              iconBgColor="rgba(255,77,79,0.1)"
-              iconColor="#ff4d4f"
+              iconBgColor="rgba(239,68,68,0.14)"
+              iconColor="#ef4444"
               label="Inventory warnings"
               value={inventoryData ? lowStockCount : loadingPlaceholder}
               trend={
@@ -274,8 +303,8 @@ export default function DashboardPage() {
           <Col xs={24} sm={12} xl={6}>
             <StatCard
               icon={<FileTextOutlined />}
-              iconBgColor="rgba(114,46,209,0.1)"
-              iconColor="#722ed1"
+              iconBgColor="rgba(168,85,247,0.14)"
+              iconColor="#a855f7"
               label="Purchase Orders"
               value={poData?.total ?? loadingPlaceholder}
             />
@@ -285,7 +314,7 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <Row gutter={24} style={{ alignItems: 'stretch' }}>
-        {/* Bar Chart — Revenue 7 days (static demo data, no time-series API) */}
+        {/* Bar Chart — Revenue last 7 days, computed from real orders by day */}
         <Col xs={24} lg={16}>
           <Card
             title={
@@ -297,21 +326,21 @@ export default function DashboardPage() {
             styles={{ body: { padding: '20px 24px' } }}
           >
             <div className="bar-chart">
-              {BAR_DATA.map((d) => (
-                <div key={d.label} style={{ flex: 1, textAlign: 'center' }}>
+              {revenueSeries.map((d, i) => (
+                <div key={`${d.label}-${i}`} style={{ flex: 1, textAlign: 'center' }}>
                   <div style={{ height: 200, display: 'flex', alignItems: 'flex-end' }}>
                     <div
                       className="bar"
                       style={{
                         width: '100%',
                         height: `${d.pct}%`,
-                        background: '#1677ff',
-                        borderRadius: '4px 4px 0 0',
+                        background: 'var(--brand)',
+                        borderRadius: '6px 6px 0 0',
                         position: 'relative',
                         transition: 'all 0.3s ease',
                       }}
                     >
-                      <div className="bar-value">{d.value}tr</div>
+                      <div className="bar-value">{formatTrieu(d.value)}</div>
                     </div>
                   </div>
                   <div className="bar-label">{d.label}</div>
@@ -392,7 +421,7 @@ export default function DashboardPage() {
                   dataIndex: 'id',
                   key: 'id',
                   render: (v: string) => (
-                    <Typography.Text style={{ color: '#1677ff', fontWeight: 500 }}>
+                    <Typography.Text style={{ color: 'var(--brand)', fontWeight: 600 }}>
                       {v}
                     </Typography.Text>
                   ),

@@ -11,6 +11,7 @@ import {
   Tag,
   Modal,
   Form,
+  Input,
   InputNumber,
   Steps,
   App,
@@ -68,6 +69,8 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
   const queryClient = useQueryClient();
   const [openCreate, setOpenCreate] = useState(false);
   const [expandedDO, setExpandedDO] = useState<string | null>(null);
+  const [failTarget, setFailTarget] = useState<string | null>(null);
+  const [failReason, setFailReason] = useState('');
 
   const deliveriesQuery = useQuery({
     queryKey: ['orders', orderId, 'deliveries'],
@@ -102,6 +105,19 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
     },
     onSuccess: () => {
       message.success('Updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['orders', orderId, 'deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['orders', orderId] });
+    },
+    onError: (err) => message.error(toMessage(err)),
+  });
+
+  const failMutation = useMutation({
+    mutationFn: ({ doId, reason }: { doId: string; reason: string }) =>
+      deliveryApi.fail(orderId, doId, reason),
+    onSuccess: () => {
+      message.success('Delivery marked as failed');
+      setFailTarget(null);
+      setFailReason('');
       queryClient.invalidateQueries({ queryKey: ['orders', orderId, 'deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['orders', orderId] });
     },
@@ -156,16 +172,31 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
       align: 'center',
       render: (_, record) => {
         const next = getNextAction(record.status);
-        if (!next) return null;
+        const canFail = record.status === 'shipped';
+        if (!next && !canFail) return null;
         return (
-          <Button
-            size="small"
-            type="primary"
-            loading={actionMutation.isPending}
-            onClick={() => actionMutation.mutate({ doId: record.id, action: next.action })}
-          >
-            {next.label}
-          </Button>
+          <Space>
+            {next && (
+              <Button
+                size="small"
+                type="primary"
+                loading={actionMutation.isPending}
+                onClick={() => actionMutation.mutate({ doId: record.id, action: next.action })}
+              >
+                {next.label}
+              </Button>
+            )}
+            {canFail && (
+              <Button
+                size="small"
+                danger
+                loading={failMutation.isPending && failMutation.variables?.doId === record.id}
+                onClick={() => setFailTarget(record.id)}
+              >
+                Report failed
+              </Button>
+            )}
+          </Space>
         );
       },
     },
@@ -338,6 +369,40 @@ export function DeliveryTab({ orderId, orderLines, orderStatus }: Props) {
             ]}
           />
         </form>
+      </Modal>
+
+      {/* Report Failed Delivery Modal */}
+      <Modal
+        title="Report failed delivery"
+        open={!!failTarget}
+        onCancel={() => {
+          setFailTarget(null);
+          setFailReason('');
+        }}
+        onOk={() => {
+          if (!failReason.trim()) {
+            message.warning('Please enter a failure reason');
+            return;
+          }
+          if (failTarget) {
+            failMutation.mutate({ doId: failTarget, reason: failReason.trim() });
+          }
+        }}
+        confirmLoading={failMutation.isPending}
+        okText="Report failed"
+        okButtonProps={{ danger: true }}
+        cancelText="Cancel"
+        destroyOnHidden
+      >
+        <Typography.Paragraph type="secondary">
+          Mark this delivery as failed. Enter a reason for the failure.
+        </Typography.Paragraph>
+        <Input.TextArea
+          rows={3}
+          value={failReason}
+          onChange={(e) => setFailReason(e.target.value)}
+          placeholder="e.g. Customer refused delivery, address not found…"
+        />
       </Modal>
     </div>
   );

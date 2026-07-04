@@ -12,6 +12,8 @@ Tài liệu kỹ thuật cho dự án ERP Prototype — microservices architectu
 | [System Flows](./flows.md) | Reference | 9 luồng nghiệp vụ chính (sequence diagrams) |
 | [Frontend Improvement Plan](./frontend-improvement-plan.md) | Technical Review | Đánh giá FE — 38 tasks chia 4 phase: bug fixes, features, UX, architecture |
 | [Frontend Fix & UI Revamp Plan](./frontend-fix-and-ui-revamp-plan.md) | Runbook | Plan: sửa FE gọi sai URL + Swagger gateway `/docs`, setup Database (Cloud SQL migrate + seed users), re-theme UI (Tailwind+AntD theo Fluent 2/D365, pilot Catalog) |
+| [UI D365 Rollout & BE↔FE Backlog](./ui-d365-rollout-and-backlog.md) | Runbook | Trạng thái rollout UI D365 toàn app, fix từ review (remove-line/filter/a11y), feature mới (User Mgmt, fulfil, issue…) + backlog & deploy còn lại |
+| [Run Backend with Prod Config](./run-backend-with-prod-config.md) | Runbook | Chạy 6 service + gateway ở local trỏ tài nguyên PROD (Cloud SQL Auth Proxy + `dev:prod`) |
 
 ## Subdirectories
 

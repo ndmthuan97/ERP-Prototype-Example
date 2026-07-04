@@ -2,6 +2,13 @@
 
 Nhật ký thay đổi của knowledge bundle này.
 
+## 2026-07-02
+
+- Updated: [UI D365 Rollout & BE↔FE Backlog](./ui-d365-rollout-and-backlog.md) — thêm trang **RBAC Roles & Permissions** (read-only `/roles`): ma trận role × quyền render từ `lib/auth/permissions.ts` (một nguồn sự thật, `CAN` derive từ đây); backlog thêm item RBAC động (optional). Kèm fix bypass loop: cờ `AUTH_BYPASS` tách ra `lib/auth/bypass.ts`, interceptor 401 không hard-redirect khi bypass, banner "DEV BYPASS" trên header
+- Added: [UI D365 Rollout & BE↔FE Backlog](./ui-d365-rollout-and-backlog.md) — Runbook: trạng thái rollout UI Power Apps/D365 toàn app (top bar brand + site-map sidebar, primitive `CommandBar`/`FormSection`/`Field`, view-picker + grid + tabbed form), fix từ review (remove-line 404, honor filter customer/order, a11y keyboard), feature BE→FE mới (User Management + search server-side, `/me`, order fulfil, delivery fail, inventory issue, credit-check what-if), + backlog & deploy còn lại; verify FE build 12/12 route + 3 BE service `tsc` sạch
+- Added: [Run Backend with Prod Config](./run-backend-with-prod-config.md) — Runbook: chạy 6 service + gateway local trỏ prod (Cloud SQL Auth Proxy, script `dev:prod`) — bổ sung vào index (trước đó chưa liệt kê)
+- Updated: [docs/index.md](./index.md) — thêm 2 entry: UI D365 Rollout & Backlog, Run Backend with Prod Config
+
 ## 2026-07-01
 
 - Added: [Frontend Fix & UI Revamp Plan](./frontend-fix-and-ui-revamp-plan.md) — Runbook: plan sửa 2 bug tích hợp (1B FE gọi sai URL do `NEXT_PUBLIC_API_GATEWAY` build-time; 1C Swagger Try-it-out ở gateway `/docs` gọi `/v1/*` thay vì `/api/*`) + Part 2 re-theme UI giữ Tailwind+AntD theo Fluent 2/Dynamics 365, pilot Catalog

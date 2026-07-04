@@ -13,4 +13,5 @@ Tài liệu học tập và nghiên cứu — ghi chú kiến thức, so sánh c
 | Directory | Mô tả |
 |-----------|-------|
 | [terraform/](./terraform/index.md) | Terraform (IaC) — Pareto 80/20 knowledge bundle |
+| [vpc/](./vpc/index.md) | VPC & Cloud Networking — Pareto 80/20 knowledge bundle |
 

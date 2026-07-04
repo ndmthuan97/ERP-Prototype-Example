@@ -12,7 +12,7 @@
 // Token CUSTOMER_REPOSITORY dùng cho NestJS DI container.
 // Khi inject, ta dùng @Inject(CUSTOMER_REPOSITORY) thay vì inject class cụ thể.
 
-import { Customer } from '../entities/index.js';
+import { Customer, CustomerStatus } from '../entities/index.js';
 
 /**
  * Token constant dùng cho NestJS Dependency Injection.
@@ -65,15 +65,17 @@ export interface ICustomerRepository {
    * Tìm kiếm khách hàng theo từ khóa với phân trang.
    * Từ khóa sẽ được tìm trong businessName (ILIKE / contains).
    *
-   * @param query - Từ khóa tìm kiếm (tên doanh nghiệp)
-   * @param page  - Trang cần lấy (1-indexed)
-   * @param limit - Số bản ghi mỗi trang
+   * @param query  - Từ khóa tìm kiếm (tên doanh nghiệp)
+   * @param page   - Trang cần lấy (1-indexed)
+   * @param limit  - Số bản ghi mỗi trang
+   * @param status - Lọc theo trạng thái khách hàng (nếu có)
    * @returns Kết quả phân trang gồm data, total, page, limit
    */
   search(
     query: string,
     page: number,
     limit: number,
+    status?: CustomerStatus,
   ): Promise<PaginatedResult<Customer>>;
 
   /**

@@ -6,15 +6,12 @@
 import { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Descriptions,
   Tag,
   Button,
   Space,
   Typography,
   Spin,
-  Alert,
   Card,
-  Breadcrumb,
   Modal,
   Form,
   Input,
@@ -22,6 +19,7 @@ import {
   Select,
   App,
   Result,
+  Tabs,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -34,6 +32,8 @@ import Link from 'next/link';
 import { catalogApi, type Product, type UpdateProductInput } from '@/lib/api/catalog';
 import { ApiError, toMessage } from '@/lib/api/errors';
 import { formatVnd, formatDateTime } from '@/lib/format';
+import { FormSection, Field } from '@/components/d365/FormLayout';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -121,14 +121,6 @@ export default function CatalogDetailPage({ params }: PageProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Breadcrumb
-        items={[
-          { title: <Link href="/">Home</Link> },
-          { title: <Link href="/catalog">Product Catalog</Link> },
-          { title: product.name },
-        ]}
-      />
-
       <Space align="center" size={12}>
         <Typography.Title level={4} style={{ margin: 0 }}>
           {product.name}
@@ -138,18 +130,8 @@ export default function CatalogDetailPage({ params }: PageProps) {
         </Tag>
       </Space>
 
-      {/* Fluent / D365 command bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '4px 8px',
-          background: '#fff',
-          border: '1px solid #f0f0f0',
-          borderRadius: 4,
-        }}
-      >
+      {/* D365 command bar */}
+      <CommandBar>
         <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/catalog')}>
           Back
         </Button>
@@ -177,40 +159,46 @@ export default function CatalogDetailPage({ params }: PageProps) {
             Activate
           </Button>
         )}
-      </div>
+      </CommandBar>
 
-      <Card style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}>
-        <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
-          <Descriptions.Item label="SKU">
-            <Typography.Text keyboard>{product.sku}</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="Product Name">
-            {product.name}
-          </Descriptions.Item>
-          <Descriptions.Item label="Unit">
-            {product.unit}
-          </Descriptions.Item>
-          <Descriptions.Item label="Default Sale Price">
-            <Typography.Text strong>{formatVnd(product.defaultSalePrice)}</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="Tax Rate">
-            {`${(product.taxRate * 100).toFixed(0)}%`}
-          </Descriptions.Item>
-          <Descriptions.Item label="Status">
-            <Tag color={product.isActive ? 'green' : 'red'}>
-              {product.isActive ? 'Active' : 'Inactive'}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="Version">
-            {product.version}
-          </Descriptions.Item>
-          <Descriptions.Item label="Created">
-            {formatDateTime(product.createdAt)}
-          </Descriptions.Item>
-          <Descriptions.Item label="Last Updated">
-            {formatDateTime(product.updatedAt)}
-          </Descriptions.Item>
-        </Descriptions>
+      {/* D365-style tabbed form: General tab with sectioned, 2-column fields */}
+      <Card style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}>
+        <Tabs
+          defaultActiveKey="general"
+          items={[
+            {
+              key: 'general',
+              label: 'General',
+              children: (
+                <Space direction="vertical" size={28} style={{ width: '100%' }}>
+                  <FormSection title="Product details">
+                    <Field label="SKU">
+                      <Typography.Text keyboard>{product.sku}</Typography.Text>
+                    </Field>
+                    <Field label="Product Name">{product.name}</Field>
+                    <Field label="Unit">{product.unit}</Field>
+                    <Field label="Default Sale Price">
+                      <Typography.Text strong>{formatVnd(product.defaultSalePrice)}</Typography.Text>
+                    </Field>
+                    <Field label="Tax Rate">{`${(product.taxRate * 100).toFixed(0)}%`}</Field>
+                    <Field label="Status">
+                      <Tag color={product.isActive ? 'green' : 'red'}>
+                        {product.isActive ? 'Active' : 'Inactive'}
+                      </Tag>
+                    </Field>
+                  </FormSection>
+
+                  <FormSection title="System information">
+                    <Field label="Version">{product.version}</Field>
+                    <Field label="Created">{formatDateTime(product.createdAt)}</Field>
+                    <Field label="Last Updated">{formatDateTime(product.updatedAt)}</Field>
+                  </FormSection>
+                </Space>
+              ),
+            },
+            { key: 'related', label: 'Related', disabled: true },
+          ]}
+        />
       </Card>
 
       {/* Edit Modal */}

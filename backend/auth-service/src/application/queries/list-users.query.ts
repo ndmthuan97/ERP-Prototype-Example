@@ -26,11 +26,12 @@ export class ListUsersQuery {
   async execute(
     page?: number,
     limit?: number,
+    q?: string,
   ): Promise<PaginatedResult<UserListItem>> {
     const p = Math.max(1, page ?? 1);
     const l = Math.min(100, Math.max(1, limit ?? 20));
 
-    const result = await this.userRepo.findAll(p, l);
+    const result = await this.userRepo.findAll(p, l, q);
 
     return {
       data: result.data.map((user) => ({

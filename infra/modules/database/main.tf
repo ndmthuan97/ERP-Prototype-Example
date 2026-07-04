@@ -18,7 +18,18 @@ resource "google_sql_database_instance" "main" {
     disk_type         = "PD_SSD"
 
     ip_configuration {
-      ipv4_enabled    = false
+      # Private IP is always on (Cloud Run reaches the DB over the VPC connector).
+      # Public IP is opt-in via var.enable_public_ip so the Cloud SQL Auth Proxy
+      # can connect from a local dev machine. authorized_networks is intentionally
+      # NOT set → no direct IP access; only the IAM-authenticated Auth Proxy.
+      #
+      # NOTE: ssl_mode is intentionally left at the default
+      # (ALLOW_UNENCRYPTED_AND_ENCRYPTED). Forcing ENCRYPTED_ONLY would reject the
+      # deployed Cloud Run services, whose connection strings (module output
+      # connection_url/direct_url) do not carry `sslmode=require`. Enforcing TLS
+      # is a separate change: add sslmode=require to those outputs first, then
+      # redeploy all services, THEN flip ssl_mode — otherwise running revisions break.
+      ipv4_enabled    = var.enable_public_ip
       private_network = var.vpc_network
     }
 

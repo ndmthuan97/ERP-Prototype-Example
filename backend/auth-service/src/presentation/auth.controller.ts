@@ -7,7 +7,9 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
+  Param,
   Headers,
   Query,
   HttpCode,
@@ -17,6 +19,7 @@ import {
 import { ApiBody } from '@nestjs/swagger';
 
 import { RegisterCommand } from '../application/commands/register.command.js';
+import { UpdateUserCommand } from '../application/commands/update-user.command.js';
 import { LoginCommand } from '../application/commands/login.command.js';
 import { RefreshTokenCommand } from '../application/commands/refresh-token.command.js';
 import { LogoutCommand } from '../application/commands/logout.command.js';
@@ -24,6 +27,7 @@ import { GetMeQuery } from '../application/queries/get-me.query.js';
 import { ListUsersQuery } from '../application/queries/list-users.query.js';
 import {
   RegisterBodyDto,
+  UpdateUserBodyDto,
   LoginBodyDto,
   RefreshBodyDto,
   LogoutBodyDto,
@@ -33,6 +37,7 @@ import {
 export class AuthController {
   constructor(
     private readonly registerCommand: RegisterCommand,
+    private readonly updateUserCommand: UpdateUserCommand,
     private readonly loginCommand: LoginCommand,
     private readonly refreshTokenCommand: RefreshTokenCommand,
     private readonly logoutCommand: LogoutCommand,
@@ -58,6 +63,38 @@ export class AuthController {
       );
     }
     return this.registerCommand.execute(body);
+  }
+
+  /** PATCH /auth/users/:id — Admin updates a user's role / active status (RBAC) */
+  @Patch('users/:id')
+  @ApiBody({ type: UpdateUserBodyDto })
+  async updateUser(
+    @Param('id') id: string,
+    @Body() body: UpdateUserBodyDto,
+    @Headers('x-user-role') role?: string,
+    @Headers('x-user-id') actorId?: string,
+  ) {
+    // Admin-only (mirrors listUsers): only admins may change roles / status.
+    if (role !== 'admin') {
+      throw new HttpException(
+        'Forbidden: admin access required',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // Self-lockout guard: an admin must not demote themselves out of `admin`
+    // or deactivate their own account (would lock the last admin out).
+    if (
+      id === actorId &&
+      (body.role !== undefined || body.isActive === false)
+    ) {
+      throw new HttpException(
+        'Cannot change your own role / deactivate yourself',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    return this.updateUserCommand.execute(id, body);
   }
 
   /** POST /auth/login — Authenticate and receive tokens */
@@ -93,12 +130,13 @@ export class AuthController {
     return this.getMeQuery.execute(userId);
   }
 
-  /** GET /auth/users — Admin-only: list users with pagination */
+  /** GET /auth/users — Admin-only: list users with pagination + optional search */
   @Get('users')
   async listUsers(
     @Headers('x-user-role') role?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('q') q?: string,
   ) {
     if (role !== 'admin') {
       throw new HttpException(
@@ -113,6 +151,7 @@ export class AuthController {
     return this.listUsersQuery.execute(
       Number.isNaN(pageNum) ? undefined : pageNum,
       Number.isNaN(limitNum) ? undefined : limitNum,
+      q,
     );
   }
 }

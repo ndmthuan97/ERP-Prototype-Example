@@ -8,6 +8,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -18,6 +19,7 @@ import { ApiBody } from '@nestjs/swagger';
 
 import { CreateSalesOrderCommand } from '../application/commands/create-sales-order.command.js';
 import { AddLineCommand } from '../application/commands/add-line.command.js';
+import { RemoveLineCommand } from '../application/commands/remove-line.command.js';
 import { SubmitSalesOrderCommand } from '../application/commands/submit-sales-order.command.js';
 import { CancelSalesOrderCommand } from '../application/commands/cancel-sales-order.command.js';
 import { FulfilSalesOrderCommand } from '../application/commands/fulfil-sales-order.command.js';
@@ -35,6 +37,7 @@ export class SalesOrderController {
   constructor(
     private readonly createOrderCommand: CreateSalesOrderCommand,
     private readonly addLineCommand: AddLineCommand,
+    private readonly removeLineCommand: RemoveLineCommand,
     private readonly submitOrderCommand: SubmitSalesOrderCommand,
     private readonly cancelOrderCommand: CancelSalesOrderCommand,
     private readonly fulfilOrderCommand: FulfilSalesOrderCommand,
@@ -59,6 +62,15 @@ export class SalesOrderController {
     return this.addLineCommand.execute(id, body);
   }
 
+  /** DELETE /orders/:id/lines/:lineId — xóa dòng hàng (chỉ khi draft) */
+  @Delete(':id/lines/:lineId')
+  async removeLine(
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+  ) {
+    return this.removeLineCommand.execute(id, lineId);
+  }
+
   /** POST /orders/:id/submit — submit (trigger saga) */
   @Post(':id/submit')
   @HttpCode(HttpStatus.OK)
@@ -81,14 +93,22 @@ export class SalesOrderController {
     return this.fulfilOrderCommand.execute(id);
   }
 
-  /** GET /orders — danh sách (phân trang + filter status) */
+  /** GET /orders — danh sách (phân trang + filter status + khoảng ngày tạo) */
   @Get()
   async search(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('status') status?: string,
+    @Query('createdFrom') createdFrom?: string,
+    @Query('createdTo') createdTo?: string,
   ) {
-    return this.searchOrdersQuery.execute({ page, limit, status });
+    return this.searchOrdersQuery.execute({
+      page,
+      limit,
+      status,
+      createdFrom,
+      createdTo,
+    });
   }
 
   /** GET /orders/:id — chi tiết (header + lines) */

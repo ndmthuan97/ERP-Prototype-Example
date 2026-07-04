@@ -3,7 +3,7 @@
 // SUPPLIER CRUD PAGE — List, create, edit suppliers
 // =============================================================================
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type Key } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Table,
@@ -18,13 +18,18 @@ import {
   InputNumber,
   App,
   Tooltip,
-  Switch,
+  Dropdown,
 } from 'antd';
 import {
   PlusOutlined,
   ReloadOutlined,
   EditOutlined,
   EyeOutlined,
+  DownOutlined,
+  MoreOutlined,
+  DeleteOutlined,
+  FileExcelOutlined,
+  TableOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -33,6 +38,7 @@ import { supplierApi } from '@/lib/api/supplier';
 import type { Supplier, CreateSupplierInput, UpdateSupplierInput } from '@/lib/api/types';
 import { toMessage } from '@/lib/api/errors';
 import { formatDateTime } from '@/lib/format';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 export default function SuppliersPage() {
   const { message } = App.useApp();
@@ -40,16 +46,27 @@ export default function SuppliersPage() {
   const router = useRouter();
 
   const [q, setQ] = useState('');
+  const [isActive, setIsActive] = useState<boolean | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [openCreate, setOpenCreate] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [createForm] = Form.useForm<CreateSupplierInput>();
   const [editForm] = Form.useForm<UpdateSupplierInput>();
 
+  // D365 view-picker: the "view" is just the active-status filter presented as
+  // named views (All / Active / Inactive), matching Power Apps' view selector.
+  const VIEWS: { key: string; label: string; value: boolean | undefined }[] = [
+    { key: 'all', label: 'All Suppliers', value: undefined },
+    { key: 'active', label: 'Active Suppliers', value: true },
+    { key: 'inactive', label: 'Inactive Suppliers', value: false },
+  ];
+  const currentView = VIEWS.find((v) => v.value === isActive) ?? VIEWS[0];
+
   const listQuery = useQuery({
-    queryKey: ['suppliers', { page, limit, q }],
-    queryFn: () => supplierApi.list({ page, limit, q: q || undefined }),
+    queryKey: ['suppliers', { page, limit, q, isActive }],
+    queryFn: () => supplierApi.list({ page, limit, q: q || undefined, isActive }),
   });
 
   const data = listQuery.data?.data ?? [];
@@ -100,7 +117,18 @@ export default function SuppliersPage() {
       title: 'Supplier Name',
       dataIndex: 'name',
       key: 'name',
-      render: (name: string) => <Typography.Text strong>{name}</Typography.Text>,
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (text, record) => (
+        <Typography.Link
+          strong
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/purchasing/suppliers/${record.id}`);
+          }}
+        >
+          {text}
+        </Typography.Link>
+      ),
     },
     {
       title: 'Tax Code',
@@ -128,6 +156,7 @@ export default function SuppliersPage() {
       dataIndex: 'paymentTermDays',
       key: 'paymentTermDays',
       align: 'center',
+      sorter: (a, b) => a.paymentTermDays - b.paymentTermDays,
       render: (v: number) => `${v} days`,
     },
     {
@@ -145,6 +174,7 @@ export default function SuppliersPage() {
       title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       render: (v: string) => formatDateTime(v),
     },
     {
@@ -156,6 +186,7 @@ export default function SuppliersPage() {
           <Tooltip title="Details">
             <Button
               type="text"
+              size="small"
               icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
@@ -166,6 +197,7 @@ export default function SuppliersPage() {
           <Tooltip title="Edit">
             <Button
               type="text"
+              size="small"
               icon={<EditOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
@@ -206,36 +238,99 @@ export default function SuppliersPage() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Supplier Management
-        </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
-          Add Supplier
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* D365 view-picker: selectable view name is the page header */}
+      <div>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            selectable: true,
+            selectedKeys: [currentView.key],
+            items: VIEWS.map((v) => ({ key: v.key, label: v.label })),
+            onClick: ({ key }) => {
+              const next = VIEWS.find((v) => v.key === key);
+              setIsActive(next?.value);
+              setPage(1);
+            },
+          }}
+        >
+          <a
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.preventDefault()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                (e.currentTarget as HTMLElement).click();
+              }
+            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--surface-text)' }}
+          >
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {currentView.label}
+            </Typography.Title>
+            <DownOutlined style={{ fontSize: 12, color: '#8A8886' }} />
+          </a>
+        </Dropdown>
+      </div>
+
+      {/* D365 command bar */}
+      <CommandBar>
+        <Button type="text" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
+          New
         </Button>
-      </Space>
+        <Button
+          type="text"
+          icon={<ReloadOutlined />}
+          loading={listQuery.isFetching}
+          onClick={() => listQuery.refetch()}
+        >
+          Refresh
+        </Button>
+        <Button
+          type="text"
+          icon={<DeleteOutlined />}
+          disabled={selectedRowKeys.length === 0}
+        >
+          Delete{selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ''}
+        </Button>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [
+              { key: 'excel', icon: <FileExcelOutlined />, label: 'Export to Excel', disabled: true },
+              { key: 'columns', icon: <TableOutlined />, label: 'Edit columns', disabled: true },
+            ],
+          }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label="More commands" />
+        </Dropdown>
 
-      <Card styles={{ body: { padding: 16 } }} style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
-        <Space wrap>
-          <Input.Search
-            placeholder="Search suppliers..."
-            allowClear
-            onSearch={handleSearch}
-            style={{ width: 300 }}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => listQuery.refetch()}>
-            Reload
-          </Button>
-        </Space>
-      </Card>
+        <div style={{ flex: 1 }} />
 
-      <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+        <Input.Search
+          allowClear
+          aria-label="Filter by keyword"
+          placeholder="Filter by keyword"
+          style={{ width: 240 }}
+          onSearch={handleSearch}
+        />
+      </CommandBar>
+
+      <Card
+        styles={{ body: { padding: 0 } }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
+      >
         <Table<Supplier>
           rowKey="id"
+          size="small"
           columns={columns}
           dataSource={data}
           loading={listQuery.isFetching}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys),
+          }}
           onRow={(record) => ({
             onClick: () => router.push(`/purchasing/suppliers/${record.id}`),
             style: { cursor: 'pointer' },
@@ -245,7 +340,7 @@ export default function SuppliersPage() {
             pageSize: limit,
             total,
             showSizeChanger: true,
-            showTotal: (t) => `${t} suppliers`,
+            showTotal: (t) => `Rows: ${t}`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);

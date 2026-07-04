@@ -1,5 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+/* ---------------------------------------------------------------------------
+   Sakai surface tokens — flip on the `.dark` class (set by ThemeConfigProvider).
+   Inline React styles reference these vars so light/dark just works everywhere.
+   --brand is overwritten at runtime with the configurator's primary color.
+   --------------------------------------------------------------------------- */
+:root {
+  --brand: #10b981;
+  --surface-ground: #f5f7fa;
+  --surface-card: #ffffff;
+  --surface-topbar: #ffffff;
+  --surface-border: #eef1f6;
+  --surface-border-strong: #e5e9f0;
+  --surface-text: #1e293b;
+  --surface-muted: #64748b;
+}
+.dark {
+  --surface-ground: #0f172a;
+  --surface-card: #1e293b;
+  --surface-topbar: #1e293b;
+  --surface-border: #334155;
+  --surface-border-strong: #334155;
+  --surface-text: #e2e8f0;
+  --surface-muted: #94a3b8;
+}
+.dark body {
+  background: var(--surface-ground);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -13,14 +41,14 @@ body {
     'Helvetica Neue', Arial, sans-serif;
 }
 
-/* Card hover lift effect — matching design reference */
+/* Card hover lift effect — sakai-style soft shadow */
 .card-hover {
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   cursor: pointer;
 }
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08) !important;
 }
 
 /* Table row hover-reveal actions */
@@ -55,7 +83,7 @@ body {
 .bar-chart .bar-label {
   text-align: center;
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--surface-muted);
   margin-top: 8px;
 }
 .bar-chart .bar-value {
@@ -65,7 +93,7 @@ body {
   transform: translateX(-50%);
   font-size: 11px;
   font-weight: 600;
-  color: #262626;
+  color: var(--surface-text);
   white-space: nowrap;
 }
 
@@ -85,7 +113,7 @@ body {
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface-card);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -94,11 +122,11 @@ body {
 .donut-chart .donut-hole .donut-total {
   font-size: 24px;
   font-weight: 700;
-  color: #262626;
+  color: var(--surface-text);
 }
 .donut-chart .donut-hole .donut-label {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--surface-muted);
 }
 
 /* Legend dot */

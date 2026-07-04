@@ -6,21 +6,19 @@
 import { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Descriptions,
   Tag,
   Button,
   Space,
   Typography,
   Spin,
-  Alert,
   Card,
-  Breadcrumb,
   Modal,
   Form,
   Input,
   InputNumber,
   App,
   Result,
+  Tabs,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -32,6 +30,8 @@ import { supplierApi } from '@/lib/api/supplier';
 import type { UpdateSupplierInput } from '@/lib/api/types';
 import { ApiError, toMessage } from '@/lib/api/errors';
 import { formatDateTime } from '@/lib/format';
+import { FormSection, Field } from '@/components/d365/FormLayout';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -102,62 +102,59 @@ export default function SupplierDetailPage({ params }: PageProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Breadcrumb
-        items={[
-          { title: <Link href="/">Home</Link> },
-          { title: <Link href="/purchasing">Purchasing</Link> },
-          { title: <Link href="/purchasing/suppliers">Suppliers</Link> },
-          { title: supplier.name },
-        ]}
-      />
+      <Space align="center" size={12}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {supplier.name}
+        </Typography.Title>
+        <Tag color={supplier.isActive ? 'success' : 'default'}>
+          {supplier.isActive ? 'Active' : 'Inactive'}
+        </Tag>
+      </Space>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/purchasing/suppliers')} />
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {supplier.name}
-          </Typography.Title>
-          <Tag color={supplier.isActive ? 'success' : 'default'}>
-            {supplier.isActive ? 'Active' : 'Inactive'}
-          </Tag>
-        </Space>
-        <Button type="primary" icon={<EditOutlined />} onClick={handleOpenEdit}>
+      {/* D365 command bar */}
+      <CommandBar>
+        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => router.push('/purchasing/suppliers')}>
+          Back
+        </Button>
+        <Button type="text" icon={<EditOutlined />} onClick={handleOpenEdit}>
           Edit
         </Button>
-      </div>
+      </CommandBar>
 
-      <Card style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
-        <Descriptions bordered column={{ xs: 1, sm: 2 }}>
-          <Descriptions.Item label="Supplier Name">
-            <Typography.Text strong>{supplier.name}</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="Tax Code">
-            {supplier.taxCode ?? '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Contact Person">
-            {supplier.contactName ?? '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Phone">
-            {supplier.contactPhone ?? '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Email">
-            {supplier.contactEmail ?? '—'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Payment Terms">
-            {supplier.paymentTermDays} days
-          </Descriptions.Item>
-          <Descriptions.Item label="Status">
-            <Tag color={supplier.isActive ? 'success' : 'default'}>
-              {supplier.isActive ? 'Active' : 'Inactive'}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="Created">
-            {formatDateTime(supplier.createdAt)}
-          </Descriptions.Item>
-          <Descriptions.Item label="Last Updated">
-            {formatDateTime(supplier.updatedAt)}
-          </Descriptions.Item>
-        </Descriptions>
+      {/* D365-style tabbed form: General tab with sectioned, 2-column fields */}
+      <Card style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}>
+        <Tabs
+          defaultActiveKey="general"
+          items={[
+            {
+              key: 'general',
+              label: 'General',
+              children: (
+                <Space direction="vertical" size={28} style={{ width: '100%' }}>
+                  <FormSection title="Supplier details">
+                    <Field label="Supplier Name">{supplier.name}</Field>
+                    <Field label="Tax Code">{supplier.taxCode ?? '—'}</Field>
+                    <Field label="Contact Person">{supplier.contactName ?? '—'}</Field>
+                    <Field label="Phone">{supplier.contactPhone ?? '—'}</Field>
+                    <Field label="Email">{supplier.contactEmail ?? '—'}</Field>
+                    <Field label="Payment Terms">{`${supplier.paymentTermDays} days`}</Field>
+                    <Field label="Status">
+                      <Tag color={supplier.isActive ? 'success' : 'default'}>
+                        {supplier.isActive ? 'Active' : 'Inactive'}
+                      </Tag>
+                    </Field>
+                  </FormSection>
+
+                  <FormSection title="System information">
+                    <Field label="Created">{formatDateTime(supplier.createdAt)}</Field>
+                    <Field label="Last Updated">{formatDateTime(supplier.updatedAt)}</Field>
+                  </FormSection>
+                </Space>
+              ),
+            },
+            { key: 'related', label: 'Related', disabled: true },
+          ]}
+        />
       </Card>
 
       {/* Edit Modal */}

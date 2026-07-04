@@ -173,6 +173,7 @@ export class PrismaCustomerRepository implements ICustomerRepository {
     query: string,
     page: number,
     limit: number,
+    status?: CustomerStatus,
   ): Promise<PaginatedResult<Customer>> {
     // Điều kiện where dùng chung cho cả count và findMany — DRY
     const whereCondition: Prisma.CustomerCoreWhereInput = {
@@ -184,6 +185,8 @@ export class PrismaCustomerRepository implements ICustomerRepository {
           mode: 'insensitive' as const,
         },
       }),
+      // Lọc theo trạng thái khi được cung cấp
+      ...(status && { status }),
     };
 
     // Tính offset từ page (1-indexed) sang skip (0-indexed)

@@ -19,6 +19,8 @@ import {
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
+import { authAdminApi } from '@/lib/api/authAdmin';
+import { AUTH_BYPASS } from './bypass';
 import {
   setAuthToken,
   setRefreshToken,
@@ -58,6 +60,16 @@ interface AuthContextValue {
 
 const USER_STORAGE_KEY = 'erp_user';
 
+// DEV-ONLY login bypass — flag lives in ./bypass so the API client shares it
+// (see that module for why). Set NEXT_PUBLIC_AUTH_BYPASS=1 to skip the login
+// screen and render the shell as a fake admin when running FE without a backend.
+const BYPASS_USER: AuthUser = {
+  id: 'dev-bypass',
+  name: 'Dev Admin',
+  email: 'dev@localhost',
+  role: 'admin',
+};
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -68,6 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Restore session from localStorage on mount — validate JWT expiry
   useEffect(() => {
+    if (AUTH_BYPASS) {
+      // Skip the login screen entirely — inject a fake admin.
+      setUser(BYPASS_USER);
+      setLoading(false);
+      return;
+    }
+
     const token = getAuthToken();
     const savedUser = localStorage.getItem(USER_STORAGE_KEY);
 
@@ -80,6 +99,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         try {
           setUser(JSON.parse(savedUser));
+          // Best-effort refresh of the in-memory user from /me so role/name
+          // reflect the server. Resilient: on ANY error keep the localStorage
+          // user and stay logged in — never log out here.
+          authAdminApi
+            .getMe()
+            .then((me) => {
+              const fresh: AuthUser = {
+                id: me.id,
+                name: me.fullName,
+                email: me.email,
+                role: me.role as Role,
+              };
+              setUser(fresh);
+              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(fresh));
+            })
+            .catch(() => {
+              /* ignore — keep the saved user, do not log out */
+            });
         } catch {
           clearTokens();
           localStorage.removeItem(USER_STORAGE_KEY);

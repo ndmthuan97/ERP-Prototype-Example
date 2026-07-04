@@ -37,7 +37,7 @@ export function EmptyState({
         }
       >
         {actionLabel && onAction && (
-          <Button type="primary" onClick={onAction}>
+          <Button type="primary" aria-label={actionLabel ?? 'Action'} onClick={onAction}>
             {actionLabel}
           </Button>
         )}

@@ -3,7 +3,7 @@
 // PHASE 2 — TỒN KHO: list + search + phân trang + tạo item + nhập kho + kiểm tra tồn
 // =============================================================================
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type Key } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Table,
@@ -22,6 +22,7 @@ import {
   Card,
   Tooltip,
   Tag,
+  Dropdown,
 } from 'antd';
 import {
   PlusOutlined,
@@ -29,10 +30,10 @@ import {
   ImportOutlined,
   SearchOutlined,
   EyeOutlined,
-  AppstoreOutlined,
-  DollarOutlined,
-  WarningOutlined,
-  StopOutlined,
+  DownOutlined,
+  MoreOutlined,
+  FileExcelOutlined,
+  TableOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
@@ -40,7 +41,7 @@ import { inventoryApi } from '@/lib/api/inventory';
 import type { StockItem, CreateItemInput, Availability } from '@/lib/api/types';
 import { ApiError, toMessage } from '@/lib/api/errors';
 import { formatDateTime } from '@/lib/format';
-import { StatCard } from '@/components/StatCard';
+import { CommandBar } from '@/components/d365/CommandBar';
 
 export default function InventoryPage() {
   const { message } = App.useApp();
@@ -51,6 +52,17 @@ export default function InventoryPage() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+
+  // D365 view-picker: inventory has no server status filter, so the "view" is a
+  // client-side stock-status lens (All / Low stock / Out of stock) over the page.
+  const VIEWS: { key: string; label: string; test: (i: StockItem) => boolean }[] = [
+    { key: 'all', label: 'All Items', test: () => true },
+    { key: 'low', label: 'Low Stock', test: (i) => i.quantityAvailable > 0 && i.quantityAvailable <= 20 },
+    { key: 'out', label: 'Out of Stock', test: (i) => i.quantityAvailable === 0 },
+  ];
+  const [view, setView] = useState('all');
+  const currentView = VIEWS.find((v) => v.key === view) ?? VIEWS[0];
 
   // Modal states
   const [openCreate, setOpenCreate] = useState(false);
@@ -71,23 +83,11 @@ export default function InventoryPage() {
     queryFn: () => inventoryApi.list({ q, page, limit }),
   });
 
-  // ---------------------------------------------------------------------------
-  // Derived stat values from paginated data
-  // Low stock / out of stock are approximate (current page only) unless total < limit
-  // ---------------------------------------------------------------------------
-  const stats = useMemo(() => {
+  // Client-side view filter applied to the current page of results.
+  const rows = useMemo(() => {
     const items = listQuery.data?.data ?? [];
-    const totalProducts = listQuery.data?.total ?? 0;
-    const totalStock = items.reduce((sum, i) => sum + i.quantityAvailable, 0);
-    const lowStockCount = items.filter(
-      (i) => i.quantityAvailable > 0 && i.quantityAvailable <= 20,
-    ).length;
-    const outOfStockCount = items.filter(
-      (i) => i.quantityAvailable === 0,
-    ).length;
-
-    return { totalProducts, totalStock, lowStockCount, outOfStockCount };
-  }, [listQuery.data]);
+    return items.filter(currentView.test);
+  }, [listQuery.data, currentView]);
 
   const createMutation = useMutation({
     mutationFn: (input: CreateItemInput) => inventoryApi.create(input),
@@ -159,21 +159,35 @@ export default function InventoryPage() {
       title: 'SKU',
       dataIndex: 'sku',
       key: 'sku',
-      render: (sku: string) => (
-        <a
-          onClick={() => router.push(`/inventory/${encodeURIComponent(sku)}`)}
-          style={{ fontFamily: 'monospace', fontSize: 12, color: '#8c8c8c' }}
+      width: 160,
+      sorter: (a, b) => a.sku.localeCompare(b.sku),
+      render: (v: string) => <Typography.Text keyboard>{v}</Typography.Text>,
+    },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+      width: 260,
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (text: string, record) => (
+        <Typography.Link
+          strong
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/inventory/${encodeURIComponent(record.sku)}`);
+          }}
         >
-          {sku}
-        </a>
+          {text}
+        </Typography.Link>
       ),
     },
-    { title: 'Name', dataIndex: 'name', key: 'name' },
     {
       title: 'Qty Available',
       dataIndex: 'quantityAvailable',
       key: 'quantityAvailable',
+      width: 180,
       align: 'right',
+      sorter: (a, b) => a.quantityAvailable - b.quantityAvailable,
       render: (v: number) => (
         <Space size={4}>
           <span style={{ color: getQuantityColor(v), fontWeight: 600 }}>
@@ -188,20 +202,25 @@ export default function InventoryPage() {
       title: 'SL reserved',
       dataIndex: 'quantityReserved',
       key: 'quantityReserved',
+      width: 130,
       align: 'right',
+      sorter: (a, b) => a.quantityReserved - b.quantityReserved,
       render: (v: number) => v.toLocaleString('vi-VN'),
     },
     {
       title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 170,
       render: (v: string) => formatDateTime(v),
     },
     {
       title: 'Action',
       key: 'actions',
+      width: 130,
+      fixed: 'right',
       render: (_, record) => (
-        <Space size="small">
+        <Space size={4}>
           <Tooltip title="Details">
             <Button
               type="text"
@@ -239,98 +258,96 @@ export default function InventoryPage() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          Inventory
-        </Typography.Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setOpenCreate(true)}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* D365 view-picker: selectable view name is the page header */}
+      <div>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            selectable: true,
+            selectedKeys: [currentView.key],
+            items: VIEWS.map((v) => ({ key: v.key, label: v.label })),
+            onClick: ({ key }) => {
+              setView(key);
+              setPage(1);
+            },
+          }}
         >
-          Create Product
-        </Button>
+          <a
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.preventDefault()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                (e.currentTarget as HTMLElement).click();
+              }
+            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--surface-text)' }}
+          >
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {currentView.label}
+            </Typography.Title>
+            <DownOutlined style={{ fontSize: 12, color: '#8A8886' }} />
+          </a>
+        </Dropdown>
       </div>
 
-      {/* Stats Row */}
-      <Row gutter={16}>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<AppstoreOutlined />}
-            iconBgColor="rgba(22,119,255,0.1)"
-            iconColor="#1677ff"
-            label="Total Products"
-            value={listQuery.data ? String(stats.totalProducts) : '—'}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<DollarOutlined />}
-            iconBgColor="rgba(82,196,26,0.1)"
-            iconColor="#52c41a"
-            label="Total Stock"
-            value={listQuery.data ? stats.totalStock.toLocaleString('vi-VN') : '—'}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<WarningOutlined />}
-            iconBgColor="rgba(250,173,20,0.1)"
-            iconColor="#faad14"
-            label="Low Stock Items"
-            value={listQuery.data ? String(stats.lowStockCount) : '—'}
-            trend={{
-              text: stats.lowStockCount > 0
-                ? `${stats.lowStockCount} products items need restocking`
-                : 'All stocked',
-              color: stats.lowStockCount > 0 ? 'orange' : 'green',
-            }}
-          />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <StatCard
-            icon={<StopOutlined />}
-            iconBgColor="rgba(255,77,79,0.1)"
-            iconColor="#ff4d4f"
-            label="Out of Stock"
-            value={listQuery.data ? String(stats.outOfStockCount) : '—'}
-            trend={{
-              text: stats.outOfStockCount > 0
-                ? 'Needs restocking'
-                : 'All in stock',
-              color: stats.outOfStockCount > 0 ? 'red' : 'green',
-            }}
-          />
-        </Col>
-      </Row>
+      {/* D365 command bar */}
+      <CommandBar>
+        <Button type="text" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>
+          New
+        </Button>
+        <Button
+          type="text"
+          icon={<ReloadOutlined />}
+          loading={listQuery.isFetching}
+          onClick={() => listQuery.refetch()}
+        >
+          Refresh
+        </Button>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [
+              { key: 'excel', icon: <FileExcelOutlined />, label: 'Export to Excel', disabled: true },
+              { key: 'columns', icon: <TableOutlined />, label: 'Edit columns', disabled: true },
+            ],
+          }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label="More commands" />
+        </Dropdown>
 
-      {/* Filter */}
-      <Card styles={{ body: { padding: 16 } }} style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
-        <Space>
-          <Input.Search
-            allowClear
-            placeholder="Search by SKU or name…"
-            style={{ width: 320 }}
-            onSearch={(value) => {
-              setQ(value);
-              setPage(1);
-            }}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => listQuery.refetch()}>
-            Reload
-          </Button>
-        </Space>
-      </Card>
+        <div style={{ flex: 1 }} />
+
+        <Input.Search
+          allowClear
+          aria-label="Filter by keyword"
+          placeholder="Filter by keyword"
+          style={{ width: 240 }}
+          onSearch={(value) => {
+            setQ(value);
+            setPage(1);
+          }}
+        />
+      </CommandBar>
 
       {/* Table */}
-      <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
+      <Card
+        styles={{ body: { padding: 0 } }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
+      >
         <Table<StockItem>
           rowKey="id"
+          size="small"
           columns={columns}
-          dataSource={listQuery.data?.data ?? []}
+          dataSource={rows}
           loading={listQuery.isFetching}
+          scroll={{ x: 900 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys),
+          }}
           onRow={(record) => ({
             style: { cursor: 'pointer' },
             onDoubleClick: () =>
@@ -339,9 +356,9 @@ export default function InventoryPage() {
           pagination={{
             current: page,
             pageSize: limit,
-            total: listQuery.data?.total ?? 0,
+            total: currentView.key === 'all' ? (listQuery.data?.total ?? 0) : rows.length,
             showSizeChanger: true,
-            showTotal: (total) => `${total} products`,
+            showTotal: (total) => `Rows: ${total}`,
             onChange: (nextPage, nextSize) => {
               setPage(nextPage);
               setLimit(nextSize);

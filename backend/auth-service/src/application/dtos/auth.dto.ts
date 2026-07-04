@@ -13,6 +13,17 @@ export const registerSchema = z.object({
 
 export type RegisterDto = z.infer<typeof registerSchema>;
 
+export const updateUserSchema = z
+  .object({
+    role: z.enum(['admin', 'manager', 'staff']).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((data) => data.role !== undefined || data.isActive !== undefined, {
+    message: 'At least one field (role or isActive) is required',
+  });
+
+export type UpdateUserDto = z.infer<typeof updateUserSchema>;
+
 export const loginSchema = z.object({
   email: z.email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
@@ -40,6 +51,7 @@ export type LogoutDto = z.infer<typeof logoutSchema>;
 // same Zod schema). `cleanupOpenApiDoc` in main.ts post-processes the document.
 // -----------------------------------------------------------------------------
 export class RegisterBodyDto extends createZodDto(registerSchema) {}
+export class UpdateUserBodyDto extends createZodDto(updateUserSchema) {}
 export class LoginBodyDto extends createZodDto(loginSchema) {}
 export class RefreshBodyDto extends createZodDto(refreshSchema) {}
 export class LogoutBodyDto extends createZodDto(logoutSchema) {}

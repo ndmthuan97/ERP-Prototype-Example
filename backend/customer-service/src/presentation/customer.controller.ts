@@ -32,6 +32,7 @@ import {
   CreateCustomerBodyDto,
   UpdateCustomerBodyDto,
 } from '../application/dtos/index.js';
+import type { CustomerStatus } from '../domain/entities/index.js';
 
 @Controller('customers')
 export class CustomerController {
@@ -60,13 +61,15 @@ export class CustomerController {
 
   /**
    * GET /customers — Tìm kiếm + phân trang
-   * Query params: q (search text), page (số trang), limit (số bản ghi/trang)
+   * Query params: q (search text), page (số trang), limit (số bản ghi/trang),
+   * status (lọc theo trạng thái khách hàng)
    */
   @Get()
   async search(
     @Query('q') query?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('status') status?: string,
   ) {
     // Chỉ parse string → number; việc CLAMP (min/max) + default do SearchCustomersQuery
     // đảm nhiệm (single source of truth) → tránh lặp magic number ở 2 nơi (DRY).
@@ -77,6 +80,7 @@ export class CustomerController {
       query ?? '',
       Number.isNaN(pageNumber) ? undefined : pageNumber,
       Number.isNaN(limitNumber) ? undefined : limitNumber,
+      (status || undefined) as CustomerStatus | undefined,
     );
   }
 

@@ -11,7 +11,7 @@
 
 import { Injectable, Inject } from '@nestjs/common';
 
-import { Customer } from '../../domain/entities/index.js';
+import { Customer, CustomerStatus } from '../../domain/entities/index.js';
 import {
   CUSTOMER_REPOSITORY,
   type ICustomerRepository,
@@ -34,15 +34,17 @@ export class SearchCustomersQuery {
   /**
    * Tìm kiếm khách hàng theo từ khóa với phân trang.
    *
-   * @param query - Từ khóa tìm kiếm (tên doanh nghiệp), rỗng = lấy tất cả
-   * @param page  - Trang cần lấy (1-indexed), mặc định 1
-   * @param limit - Số bản ghi mỗi trang, mặc định 20, tối đa 100
+   * @param query  - Từ khóa tìm kiếm (tên doanh nghiệp), rỗng = lấy tất cả
+   * @param page   - Trang cần lấy (1-indexed), mặc định 1
+   * @param limit  - Số bản ghi mỗi trang, mặc định 20, tối đa 100
+   * @param status - Lọc theo trạng thái khách hàng (nếu có)
    * @returns Kết quả phân trang gồm data, total, page, limit
    */
   async execute(
     query: string = '',
     page: number = 1,
     limit: number = DEFAULT_PAGE_SIZE,
+    status?: CustomerStatus,
   ): Promise<PaginatedResult<Customer>> {
     // Normalize input: đảm bảo page >= 1 và limit trong khoảng hợp lệ
     const normalizedPage = Math.max(1, page);
@@ -53,6 +55,7 @@ export class SearchCustomersQuery {
       query.trim(),
       normalizedPage,
       normalizedLimit,
+      status,
     );
   }
 }

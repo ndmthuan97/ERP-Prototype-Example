@@ -31,3 +31,10 @@ export class InactiveUserError extends Error {
     this.name = 'InactiveUserError';
   }
 }
+
+export class InvalidRoleError extends Error {
+  constructor(role: string) {
+    super(`Invalid role: ${role}`);
+    this.name = 'InvalidRoleError';
+  }
+}

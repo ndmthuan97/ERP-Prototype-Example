@@ -16,6 +16,7 @@ import {
   setRefreshToken,
   clearTokens,
 } from '../auth/token';
+import { AUTH_BYPASS } from '../auth/bypass';
 
 type QueryValue = string | number | boolean | undefined | null;
 
@@ -144,7 +145,10 @@ async function request<T>(
     }
 
     // Still 401 after refresh attempt → redirect to login (once).
-    if (res.status === 401) {
+    // Skip entirely under AUTH_BYPASS: bypass provides a fake user but no JWT,
+    // so every call 401s — redirecting would fight the bypass and cause an
+    // infinite home⇄login loop. Let the page render with empty data instead.
+    if (res.status === 401 && !AUTH_BYPASS) {
       clearTokens();
       if (
         typeof window !== 'undefined' &&

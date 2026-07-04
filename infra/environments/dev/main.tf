@@ -127,6 +127,12 @@ module "database" {
   db_password = var.db_password
   vpc_network = module.networking.vpc_id
 
+  # Keep a public IP allocated so the Cloud SQL Auth Proxy can be run from a local
+  # dev machine (see docs/run-backend-with-prod-config.md). Access stays IAM-gated:
+  # authorized_networks is empty, so only the Auth Proxy can connect. Flip to false
+  # to return to private-only.
+  enable_public_ip = true
+
   depends_on = [module.networking]
 }
 
@@ -306,6 +312,7 @@ resource "null_resource" "gateway_env_vars" {
     inventory_url  = module.cloud_run["inventory-service"].service_url
     catalog_url    = module.cloud_run["catalog-service"].service_url
     purchasing_url = module.cloud_run["purchasing-service"].service_url
+    frontend_url   = module.cloud_run["frontend"].service_url
   }
 
   provisioner "local-exec" {
@@ -316,7 +323,12 @@ resource "null_resource" "gateway_env_vars" {
     # first var (AUTH_SERVICE_URL, space-joined) — breaking gateway routing
     # (Invalid URL → 503). Use gcloud's custom-delimiter syntax (leading `^@^`)
     # so '@' delimits the pairs and no comma ever reaches PowerShell.
-    command = "gcloud run services update ${module.cloud_run["api-gateway"].service_name} --region=${var.region} --update-env-vars=\"^@^AUTH_SERVICE_URL=${module.cloud_run["auth-service"].service_url}@CUSTOMER_SERVICE_URL=${module.cloud_run["customer-service"].service_url}@ORDER_SERVICE_URL=${module.cloud_run["sales-service"].service_url}@INVENTORY_SERVICE_URL=${module.cloud_run["inventory-service"].service_url}@CATALOG_SERVICE_URL=${module.cloud_run["catalog-service"].service_url}@PURCHASING_SERVICE_URL=${module.cloud_run["purchasing-service"].service_url}\" --quiet"
+    #
+    # Also sets CORS_ORIGINS so the browser at the frontend's Cloud Run origin can
+    # call the gateway (gateway defaults to http://localhost:3000 only). The value
+    # itself contains a comma (frontend URL + localhost), which is fine because the
+    # '^@^' delimiter makes '@' — not ',' — the pair separator.
+    command = "gcloud run services update ${module.cloud_run["api-gateway"].service_name} --region=${var.region} --update-env-vars=\"^@^AUTH_SERVICE_URL=${module.cloud_run["auth-service"].service_url}@CUSTOMER_SERVICE_URL=${module.cloud_run["customer-service"].service_url}@ORDER_SERVICE_URL=${module.cloud_run["sales-service"].service_url}@INVENTORY_SERVICE_URL=${module.cloud_run["inventory-service"].service_url}@CATALOG_SERVICE_URL=${module.cloud_run["catalog-service"].service_url}@PURCHASING_SERVICE_URL=${module.cloud_run["purchasing-service"].service_url}@CORS_ORIGINS=${module.cloud_run["frontend"].service_url},http://localhost:3000\" --quiet"
   }
 
   depends_on = [module.cloud_run]

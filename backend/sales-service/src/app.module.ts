@@ -32,6 +32,7 @@ import { SALES_RETURN_REPOSITORY } from './domain/repositories/sales-return.repo
 
 import { CreateSalesOrderCommand } from './application/commands/create-sales-order.command';
 import { AddLineCommand } from './application/commands/add-line.command';
+import { RemoveLineCommand } from './application/commands/remove-line.command';
 import { SubmitSalesOrderCommand } from './application/commands/submit-sales-order.command';
 import { CancelSalesOrderCommand } from './application/commands/cancel-sales-order.command';
 import { FulfilSalesOrderCommand } from './application/commands/fulfil-sales-order.command';
@@ -107,6 +108,7 @@ import { ReturnController } from './presentation/return.controller';
     // Commands (ghi)
     CreateSalesOrderCommand,
     AddLineCommand,
+    RemoveLineCommand,
     SubmitSalesOrderCommand,
     CancelSalesOrderCommand,
     FulfilSalesOrderCommand,

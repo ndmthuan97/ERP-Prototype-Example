@@ -12,7 +12,7 @@ function StatCardsSkeleton({ count = 4 }: { count?: number }) {
       {Array.from({ length: count }, (_, i) => (
         <Col key={i} xs={24} sm={12} lg={6}>
           <Card
-            style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+            style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
             styles={{ body: { padding: 20, minHeight: 120 } }}
           >
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
@@ -31,7 +31,7 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <Card
       styles={{ body: { padding: 0 } }}
-      style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+      style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
     >
       <div style={{ padding: 16 }}>
         <Skeleton active paragraph={{ rows }} />
@@ -62,7 +62,7 @@ export function PageSkeleton({
       {/* Filter bar */}
       <Card
         styles={{ body: { padding: 16 } }}
-        style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}
       >
         <Space>
           <Skeleton.Input active style={{ width: 260 }} />
@@ -91,7 +91,7 @@ export function DetailSkeleton() {
           <Skeleton.Button active style={{ width: 100 }} />
         </Space>
       </div>
-      <Card style={{ borderRadius: 12, border: '1px solid #f0f0f0' }}>
+      <Card style={{ borderRadius: 12, border: '1px solid var(--surface-border)' }}>
         <Skeleton active paragraph={{ rows: 6 }} />
       </Card>
     </div>

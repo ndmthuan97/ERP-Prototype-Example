@@ -49,14 +49,30 @@ export class PrismaUserRepository implements IUserRepository {
     return record ? this.toDomain(record) : null;
   }
 
-  async findAll(page: number, limit: number): Promise<PaginatedResult<User>> {
+  async findAll(
+    page: number,
+    limit: number,
+    q?: string,
+  ): Promise<PaginatedResult<User>> {
+    // Optional keyword filter: match email OR fullName, case-insensitive.
+    const term = q?.trim();
+    const where = term
+      ? {
+          OR: [
+            { email: { contains: term, mode: 'insensitive' as const } },
+            { fullName: { contains: term, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
+
     const [records, total] = await Promise.all([
       this.prisma.user.findMany({
+        where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.user.count(),
+      this.prisma.user.count({ where }),
     ]);
 
     return {
@@ -80,6 +96,20 @@ export class PrismaUserRepository implements IUserRepository {
       where: { id: user.id },
       create: { id: user.id, ...data },
       update: data,
+    });
+
+    return this.toDomain(record);
+  }
+
+  async update(user: User): Promise<User> {
+    // Targeted update of the mutable RBAC fields by id.
+    const record = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        role: user.role,
+        isActive: user.isActive,
+        updatedAt: user.updatedAt,
+      },
     });
 
     return this.toDomain(record);
