@@ -64,10 +64,7 @@ export class SalesOrderController {
 
   /** DELETE /orders/:id/lines/:lineId — xóa dòng hàng (chỉ khi draft) */
   @Delete(':id/lines/:lineId')
-  async removeLine(
-    @Param('id') id: string,
-    @Param('lineId') lineId: string,
-  ) {
+  async removeLine(@Param('id') id: string, @Param('lineId') lineId: string) {
     return this.removeLineCommand.execute(id, lineId);
   }
 
