@@ -48,8 +48,10 @@ spec:
               value: https://catalog-service-dev-s3fou5y5yq-uc.a.run.app
             - name: PURCHASING_SERVICE_URL
               value: https://purchasing-service-dev-s3fou5y5yq-uc.a.run.app
+            # Cloud Run cấp 2 URL/service (mới dạng -<projectnum>.<region>, cũ dạng
+            # -<hash>-uc). Browser gửi Origin theo URL đang mở → allowlist cả 2.
             - name: CORS_ORIGINS
-              value: https://frontend-dev-s3fou5y5yq-uc.a.run.app,http://localhost:3000
+              value: https://frontend-dev-870355164559.us-central1.run.app,https://frontend-dev-s3fou5y5yq-uc.a.run.app,http://localhost:3000
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
