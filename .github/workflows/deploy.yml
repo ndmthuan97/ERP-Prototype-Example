@@ -1,25 +1,36 @@
-name: CD — Manual Full Deploy / Rollback
+name: CD — Release via Cloud Build → Cloud Deploy
 
-# Auto-deploy khi merge vào main giờ do CI — Backend / CI — Frontend đảm nhiệm
-# (mỗi CI deploy chọn lọc service của mình theo commit SHA). Workflow này chỉ
-# dùng khi cần deploy TẤT CẢ service một lượt: provision lần đầu, disaster
-# recovery, hoặc rollback đồng loạt về một tag đã biết.
+# CD chính: sau khi CI (Backend/Frontend) build+push image xong, workflow này
+# submit Cloud Build → Cloud Build tạo 1 Cloud Deploy release → Cloud Deploy
+# render (skaffold) + rollout cả cụm lên Cloud Run.
+#
+#   CI (build+push)  →[workflow_run]→  deploy.yml  →  Cloud Build  →  Cloud Deploy
+#
+# workflow_dispatch: chạy tay để re-release (vd sau khi điền URL gateway) hoặc
+# release theo 1 tag ảnh cụ thể. Rollback thì KHÔNG dùng đây — dùng thẳng
+# Cloud Deploy (rollback về rollout/release trước, xem deploy/MIGRATION.md).
 
 on:
+  workflow_run:
+    workflows: ["CI — Backend", "CI — Frontend"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Image tag để deploy (commit SHA để rollback, hoặc 'latest')"
+        description: "Tag ảnh để release (mặc định 'latest'; đưa commit SHA để release build cụ thể)"
         default: latest
         required: true
 
-# Không cho 2 lần full-deploy chồng nhau (mỗi bên cùng ghi tag lên cùng service).
+# Không cho 2 release chồng nhau (mỗi bên cùng đẩy 1 rollout vào target dev).
 concurrency:
   group: deploy-dev
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  release:
+    # Chạy khi: dispatch tay, HOẶC CI vừa kết thúc THÀNH CÔNG (bỏ qua CI fail).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -37,9 +48,20 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: Trigger Cloud Build Deploy
+      - name: Submit Cloud Build (tạo Cloud Deploy release)
         run: |
+          TAG="${{ github.event.inputs.tag || 'latest' }}"
+          # SHA nguồn: từ CI (workflow_run) hoặc commit hiện tại (dispatch).
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          # Tên release phải duy nhất + hợp lệ (^[a-z][a-z0-9-]*$, <=63 ký tự).
+          REL="rel-${SHA:0:12}-$(date +%s)"
+          # Chạy build DƯỚI danh tính deployer SA (không phải Cloud Build SA mặc
+          # định) để bước create-release có sẵn clouddeploy.releaser + actAs
+          # execution SA. Custom build SA bắt buộc logging=CLOUD_LOGGING_ONLY
+          # (đã set trong cloudbuild.yaml).
           gcloud builds submit \
             --config=cloudbuild.yaml \
-            --substitutions=_TAG=${{ inputs.tag }} \
-            --project=${{ vars.GCP_PROJECT }}
+            --substitutions=_TAG=${TAG},_RELEASE=${REL} \
+            --service-account=projects/${{ vars.GCP_PROJECT }}/serviceAccounts/${{ vars.DEPLOYER_SA }} \
+            --project=${{ vars.GCP_PROJECT }} \
+            .

@@ -1,0 +1,102 @@
+# ============================================================
+# Google Cloud Deploy — 8 Delivery Pipeline (1/service) + 1 Target dev
+# ============================================================
+# Ràng buộc: deployer cloudrun của Skaffold chỉ nhận 1 Cloud Run service / pipeline
+# ("expected singular node ... but was 8"). Microservices → mỗi service 1 pipeline,
+# tất cả trỏ chung 1 Target `dev`. Source mỗi pipeline = deploy/<service>/.
+#
+# Áp dụng (bootstrap / mỗi khi đổi):
+#   gcloud deploy apply --file=deploy/clouddeploy.yaml --region=us-central1 \
+#     --project=portfolio-497506
+# ============================================================
+
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+  name: dev
+description: Cloud Run — môi trường dev
+executionConfigs:
+  - usages: [RENDER, DEPLOY]
+    serviceAccount: erp-deployer-dev@portfolio-497506.iam.gserviceaccount.com
+run:
+  location: projects/portfolio-497506/locations/us-central1
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-api-gateway
+description: ERP — api-gateway (dev)
+serialPipeline:
+  stages:
+    - targetId: dev
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-auth-service
+description: ERP — auth-service (dev)
+serialPipeline:
+  stages:
+    - targetId: dev
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-customer-service
+description: ERP — customer-service (dev)
+serialPipeline:
+  stages:
+    - targetId: dev
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-sales-service
+description: ERP — sales-service (dev)
+serialPipeline:
+  stages:
+    - targetId: dev
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-inventory-service
+description: ERP — inventory-service (dev)
+serialPipeline:
+  stages:
+    - targetId: dev
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-catalog-service
+description: ERP — catalog-service (dev)
+serialPipeline:
+  stages:
+    - targetId: dev
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-purchasing-service
+description: ERP — purchasing-service (dev)
+serialPipeline:
+  stages:
+    - targetId: dev
+
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: erp-frontend
+description: ERP — frontend (dev)
+serialPipeline:
+  stages:
+    - targetId: dev

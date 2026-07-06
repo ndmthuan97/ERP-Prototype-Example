@@ -62,17 +62,18 @@ jobs:
 
   # ============================================================
   # Step 2: Build & push (chỉ chạy trên push, sau khi verify pass).
+  # KHÔNG deploy ở đây — deploy.yml (workflow_run) → Cloud Build → Cloud Deploy.
   # ============================================================
   build-and-push:
     needs: [verify, detect-changes]
-    # Deploy CHỈ khi code frontend/** đổi. Sửa riêng ci-frontend.yml → verify
-    # vẫn chạy để kiểm tra, nhưng KHÔNG build+deploy lại frontend.
+    # Build+push CHỈ khi code frontend/** đổi. Sửa riêng ci-frontend.yml → verify
+    # vẫn chạy để kiểm tra, nhưng KHÔNG build lại frontend.
     if: github.event_name == 'push' && needs.detect-changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     environment: dev
-    # Serialize deploy frontend qua các run liên tiếp (tránh race trên revision).
+    # Serialize push frontend qua các run liên tiếp (tránh ghi đè tag :latest).
     concurrency:
-      group: deploy-frontend-dev
+      group: build-frontend-dev
       cancel-in-progress: false
     permissions:
       id-token: write
@@ -104,13 +105,4 @@ jobs:
         run: |
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:${{ github.sha }}
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:latest
-
-      # Deploy frontend pin theo commit SHA (immutable → rollback được).
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy frontend-dev \
-            --image=us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:${{ github.sha }} \
-            --region=us-central1 \
-            --platform=managed \
-            --allow-unauthenticated \
-            --quiet
+      # Deploy: do deploy.yml (workflow_run sau CI) → Cloud Build → Cloud Deploy.

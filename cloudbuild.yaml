@@ -1,135 +1,94 @@
 # ============================================================
-# Cloud Build — Deploy all services to Cloud Run (PARALLEL)
-# Triggered by GitHub Actions CD workflow
+# Cloud Build — CD step: tạo 8 Cloud Deploy release (1/service, song song)
+# ============================================================
+# CI (GitHub Actions) build + push image → deploy.yml submit build này → Cloud
+# Build tạo 8 release (mỗi service 1 pipeline) → Cloud Deploy render+rollout.
+#
+#   CI (GH Actions)  →  CD (Cloud Build)  →  Cloud Deploy (8 pipeline)  →  Cloud Run
+#
+# Vì cloudrun deployer chỉ nhận 1 service/pipeline, mỗi bước tạo release cho 1
+# pipeline erp-<service>, source = deploy/<service>/ (skaffold + service.yaml),
+# image trỏ tag `_TAG` (mặc định latest → Cloud Deploy resolve digest lúc render,
+# ghim lại → rollback đúng digest). Các bước chạy SONG SONG (waitFor ['-']).
+# Cùng tên release `_RELEASE` ở 8 pipeline khác nhau là hợp lệ (khác namespace).
 # ============================================================
 
 steps:
-  # --- Backend Services (all run in parallel) ---
-
-  - id: deploy-auth-service
+  - id: release-api-gateway
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - auth-service-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/auth-service:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --vpc-connector=erp-vpc-connector
-      - --vpc-egress=private-ranges-only
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-api-gateway, --region=us-central1,
+           --source=deploy/api-gateway,
+           '--images=api-gateway=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/api-gateway:${_TAG}']
 
-  - id: deploy-customer-service
+  - id: release-auth-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - customer-service-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/customer-service:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --vpc-connector=erp-vpc-connector
-      - --vpc-egress=private-ranges-only
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-auth-service, --region=us-central1,
+           --source=deploy/auth-service,
+           '--images=auth-service=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/auth-service:${_TAG}']
 
-  - id: deploy-sales-service
+  - id: release-customer-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - sales-service-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/sales-service:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --vpc-connector=erp-vpc-connector
-      - --vpc-egress=private-ranges-only
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-customer-service, --region=us-central1,
+           --source=deploy/customer-service,
+           '--images=customer-service=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/customer-service:${_TAG}']
 
-  - id: deploy-inventory-service
+  - id: release-sales-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - inventory-service-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/inventory-service:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --vpc-connector=erp-vpc-connector
-      - --vpc-egress=private-ranges-only
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-sales-service, --region=us-central1,
+           --source=deploy/sales-service,
+           '--images=sales-service=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/sales-service:${_TAG}']
 
-  - id: deploy-catalog-service
+  - id: release-inventory-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - catalog-service-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/catalog-service:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --vpc-connector=erp-vpc-connector
-      - --vpc-egress=private-ranges-only
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-inventory-service, --region=us-central1,
+           --source=deploy/inventory-service,
+           '--images=inventory-service=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/inventory-service:${_TAG}']
 
-  - id: deploy-purchasing-service
+  - id: release-catalog-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - purchasing-service-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/purchasing-service:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --vpc-connector=erp-vpc-connector
-      - --vpc-egress=private-ranges-only
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-catalog-service, --region=us-central1,
+           --source=deploy/catalog-service,
+           '--images=catalog-service=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/catalog-service:${_TAG}']
 
-  - id: deploy-api-gateway
+  - id: release-purchasing-service
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - api-gateway-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/api-gateway:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --vpc-connector=erp-vpc-connector
-      - --vpc-egress=private-ranges-only
-      - --allow-unauthenticated
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-purchasing-service, --region=us-central1,
+           --source=deploy/purchasing-service,
+           '--images=purchasing-service=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/purchasing-service:${_TAG}']
 
-  # --- Frontend ---
-
-  - id: deploy-frontend
+  - id: release-frontend
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     waitFor: ['-']
-    args:
-      - run
-      - deploy
-      - frontend-dev
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/frontend:${_TAG}
-      - --region=us-central1
-      - --platform=managed
-      - --allow-unauthenticated
-      - --quiet
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-frontend, --region=us-central1,
+           --source=deploy/frontend,
+           '--images=frontend=us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/frontend:${_TAG}']
 
 substitutions:
   _TAG: latest
+  _RELEASE: rel-manual
 
 timeout: '1200s'
 options:

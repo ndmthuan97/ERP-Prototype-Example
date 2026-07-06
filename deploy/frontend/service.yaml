@@ -1,0 +1,37 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: frontend-dev
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '3'
+    spec:
+      # Frontend không cần VPC (không nối DB) và dùng SA riêng.
+      serviceAccountName: erp-frontend-dev@portfolio-497506.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: frontend   # placeholder → thay bằng --images
+          # Port 8080 phải khớp EXPOSE trong frontend/Dockerfile (Next standalone).
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: '1'
+              memory: 512Mi
+          env:
+            # NEXT_PUBLIC_API_GATEWAY được inline lúc BUILD (build-arg trong
+            # ci-frontend.yml), KHÔNG phải env runtime → không khai ở đây.
+            - name: NODE_ENV
+              value: production
+          startupProbe:
+            httpGet:
+              path: /health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3

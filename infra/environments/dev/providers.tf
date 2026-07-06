@@ -43,6 +43,10 @@ locals {
     "artifactregistry.googleapis.com",  # Artifact Registry
     "vpcaccess.googleapis.com",         # VPC Access Connector
     "cloudbuild.googleapis.com",        # Cloud Build
+    # clouddeploy.googleapis.com — CỐ Ý không quản ở đây. Đã enable bằng `gcloud
+    # deploy apply`. Thêm vào set này làm google_project_service.apis đổi →
+    # module.pubsub (depends_on apis) hoãn đọc data.google_project → project.number
+    # unknown → replace 6 binding dead-letter IAM vô cớ. Không đáng để track 1 API.
     "compute.googleapis.com",           # Compute Engine (VPC)
     "servicenetworking.googleapis.com", # Private Service Access
     "iam.googleapis.com",               # IAM

@@ -1,16 +1,16 @@
 ---
 type: System Component
 title: "CI/CD Pipeline"
-description: "CI via GitHub Actions (lint, test, build, push) + CD via Cloud Build (deploy to Cloud Run), with Workload Identity Federation and monorepo path filters"
-tags: [system, component, cicd, github-actions, cloud-build, devops]
-timestamp: "2026-06-30T08:54:00+07:00"
+description: "CI (GitHub Actions: verify/build/push) → CD (Cloud Build: create release) → Google Cloud Deploy (render+rollout) → Cloud Run. Spec service khai báo bằng manifest; WIF keyless; monorepo path filters."
+tags: [system, component, cicd, github-actions, cloud-build, cloud-deploy, devops]
+timestamp: "2026-07-06T00:00:00+07:00"
 ---
 
 # CI/CD Pipeline
 
-> Pipeline CI/CD cho ERP Prototype: GitHub Actions (CI) build và push Docker images → Cloud Build (CD) deploy lên Cloud Run. Xác thực GH→GCP bằng Workload Identity Federation (keyless).
+> **CI** (GitHub Actions) verify + build + push Docker image → **CD** (Cloud Build) tạo một **Cloud Deploy** release → **Cloud Deploy** render (Skaffold) + rollout lên **Cloud Run**. Xác thực GitHub→GCP bằng Workload Identity Federation (keyless).
 
-> Liên quan: [GCP Cloud Architecture](./gcp-cloud-architecture.md) · [System Overview](./system-overview.md) · [Event Flows](./event-flows.md)
+> Liên quan: [GCP Cloud Architecture](./gcp-cloud-architecture.md) · [System Overview](./system-overview.md) · Runbook bàn giao: [deploy/MIGRATION.md](../../deploy/MIGRATION.md)
 
 ---
 
@@ -18,394 +18,198 @@ timestamp: "2026-06-30T08:54:00+07:00"
 
 ```mermaid
 flowchart LR
-    subgraph "Developer"
-        DEV["Push to main"]
-    end
-
     subgraph "GitHub Actions — CI"
         DETECT["Detect\nChanged Services"]
-        LINT["Lint +\nTypeCheck"]
-        TEST["Unit Tests"]
+        VERIFY["Verify\n(lint+typecheck+test)"]
         BUILD["Docker Build\n(per service)"]
         PUSH["Push to\nArtifact Registry"]
     end
 
     subgraph "GCP — CD"
-        CB["Cloud Build\nDeploy"]
+        CB["Cloud Build\ncreate release"]
+        CDPL["Cloud Deploy\nrender + rollout"]
         CR["Cloud Run\nServices"]
     end
 
-    DEV --> DETECT --> LINT --> TEST --> BUILD --> PUSH --> CB --> CR
+    DETECT --> VERIFY --> BUILD --> PUSH -->|workflow_run| CB --> CDPL --> CR
 
     style DETECT fill:#2088FF,color:#fff
     style CB fill:#4285F4,color:#fff
+    style CDPL fill:#34A853,color:#fff
     style CR fill:#0F9D58,color:#fff
 ```
 
 | Phase | Tool | Chức năng |
 |---|---|---|
-| **CI** | GitHub Actions | Detect changes → lint → test → build Docker → push Artifact Registry |
-| **CD** | Cloud Build | Pull image từ Artifact Registry → deploy lên Cloud Run |
-| **Auth** | Workload Identity Federation | GitHub ↔ GCP xác thực keyless (OIDC) |
+| **CI** | GitHub Actions | Detect changes → verify (lint/typecheck/test) → build Docker → push Artifact Registry |
+| **CD (trigger)** | GitHub Actions (`deploy.yml`) | Sau CI: submit Cloud Build (chạy dưới danh tính deployer SA) |
+| **CD (release)** | Cloud Build (`cloudbuild.yaml`) | `gcloud deploy releases create` — tạo release trỏ image `:latest` cho 8 service |
+| **Delivery** | Google Cloud Deploy | Render manifest (Skaffold) → rollout lên target `dev` → Cloud Run |
+| **Auth** | Workload Identity Federation | GitHub ↔ GCP keyless (OIDC), impersonate `erp-deployer-dev` |
+
+> **Vì sao có Cloud Build ở giữa?** Cloud Build là bước "CD" đóng gói release: nó chạy
+> `gcloud deploy releases create` với danh tính deployer SA (đã có `clouddeploy.releaser`).
+> Cloud Deploy mới là thứ thực sự render + rollout. Đây đúng chuỗi thiết kế ban đầu
+> **CI(GH Actions) → CD(Cloud Build) → Cloud Deploy**.
 
 ---
 
-## 2. Monorepo Path Filters
+## 2. Ai sở hữu cái gì (spec vs nền tảng)
 
-Repo có 8 services. Mỗi lần push, **chỉ build service thay đổi** — tiết kiệm thời gian + chi phí:
+Điểm mấu chốt của kiến trúc này:
 
-```mermaid
-flowchart TB
-    PUSH["git push to main"]
-
-    PUSH --> FILTER["dorny/paths-filter"]
-
-    FILTER -->|"backend/shared/**"| ALL["Rebuild ALL\nbackend services"]
-    FILTER -->|"backend/auth-service/**"| AUTH["Rebuild\nauth-service"]
-    FILTER -->|"backend/customer-service/**"| CUST["Rebuild\ncustomer-service"]
-    FILTER -->|"backend/sales-service/**"| SALES["Rebuild\nsales-service"]
-    FILTER -->|"backend/inventory-service/**"| INV["Rebuild\ninventory-service"]
-    FILTER -->|"backend/catalog-service/**"| CAT["Rebuild\ncatalog-service"]
-    FILTER -->|"backend/purchasing-service/**"| PUR["Rebuild\npurchasing-service"]
-    FILTER -->|"backend/api-gateway/**"| GW["Rebuild\napi-gateway"]
-    FILTER -->|"frontend/**"| FE["Rebuild\nfrontend"]
-```
-
-**Trigger rules:**
-
-| Path Changed | Services Rebuilt | Lý do |
+| Thành phần | Nguồn sự thật | Ghi chú |
 |---|---|---|
-| `backend/shared/**` | **Tất cả 7 backend** | `@erp/shared` là dependency chung |
-| `backend/customer-service/**` | customer-service | Chỉ service đó thay đổi |
-| `backend/<any-service>/**` | service tương ứng | Chỉ service đó thay đổi |
-| `frontend/**` | frontend | Frontend tách biệt |
-| `infra/**` | Không build | Terraform changes không trigger CI |
-| `docs/**` | Không build | Docs changes không trigger CI |
+| **Spec Cloud Run** (port, env, secret, VPC, probe, scaling) | `deploy/manifests/*.yaml` | Cloud Deploy render + apply. **Không** còn ở Terraform. |
+| **Nền tảng** (VPC, Cloud SQL, Secret Manager, Artifact Registry, SA, WIF) | Terraform (`infra/`) | Ổn định, ít đổi. |
+| **IAM của service** (allUsers invoker, gateway→backend invoker) | Terraform (`infra/environments/dev/main.tf`) | Trỏ service theo tên literal; gate sau `enable_service_iam`. |
+| **Image tag** | Cloud Deploy release (`--images`) | Resolve `:latest`→digest lúc render, ghim lại (rollback đúng digest). |
+
+> Trước đây Terraform sở hữu spec (`module.cloud_run`, `ignore_changes=[image]`) và CI chỉ
+> lật image tag; URL gateway inject sau apply bằng `null_resource`. Đã **bàn giao** spec sang
+> manifest để Cloud Deploy sở hữu declaratively — xem [deploy/MIGRATION.md](../../deploy/MIGRATION.md).
 
 ---
 
-## 3. GitHub Actions Workflows
+## 3. Monorepo Path Filters (CI)
 
-### 3.1. CI — Backend (`ci-backend.yml`)
+8 service. Mỗi push chỉ **build service đổi** (tiết kiệm build) — `dorny/paths-filter`:
 
+| Path đổi | Service rebuild | Lý do |
+|---|---|---|
+| `backend/shared/**` hoặc `backend/Dockerfile` | **Tất cả 7 backend** | `@erp/shared` là dependency chung |
+| `backend/<service>/**` | service tương ứng | Chỉ service đó |
+| `frontend/**` | frontend | Tách biệt |
+| `.github/workflows/ci-*.yml` | verify (KHÔNG build+deploy) | Sửa CI vẫn kiểm tra thật, tránh "green giả" |
+| `infra/**`, `docs/**`, `deploy/**` | không CI | Không đổi image |
+
+> Lưu ý: CI build **selective**, nhưng một **release Cloud Deploy deploy cả 8 service** (mỗi
+> service trỏ `:latest`). Service không đổi vẫn tạo revision mới cùng digest (~no-op). Chấp nhận
+> cho prototype 1 env; cần selective per-service → tách nhiều delivery pipeline.
+
+---
+
+## 4. GitHub Actions Workflows
+
+### 4.1. `ci-backend.yml` / `ci-frontend.yml` — CI (verify + build + push)
+- `detect-changes` → `verify` (backend: shared build + lint:check + jest per service; frontend: typecheck + lint) → `build-and-push` (docker build + push `:sha` + `:latest`).
+- **KHÔNG deploy** ở đây nữa (đã bỏ `gcloud run deploy`). Deploy do `deploy.yml`.
+
+### 4.2. `deploy.yml` — CD trigger
 ```yaml
-name: CI — Backend
-
 on:
-  push:
-    branches: [main]
-    paths: ['backend/**']
-  pull_request:
-    branches: [main]
-    paths: ['backend/**']
-
-jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      shared: ${{ steps.filter.outputs.shared }}
-      matrix: ${{ steps.build-matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            shared: 'backend/shared/**'
-            auth: 'backend/auth-service/**'
-            customer: 'backend/customer-service/**'
-            sales: 'backend/sales-service/**'
-            inventory: 'backend/inventory-service/**'
-            catalog: 'backend/catalog-service/**'
-            purchasing: 'backend/purchasing-service/**'
-            gateway: 'backend/api-gateway/**'
-      - id: build-matrix
-        # Build matrix based on changed paths
-        # If shared changed → all services
-        # Otherwise → only changed services
-
-  build-and-push:
-    needs: detect-changes
-    runs-on: ubuntu-latest
-    environment: dev
-    permissions:
-      id-token: write    # Workload Identity Federation OIDC
-      contents: read
-    strategy:
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-    steps:
-      - uses: actions/checkout@v4
-
-      # Authenticate to GCP via WIF (keyless)
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_SA }}
-
-      - uses: google-github-actions/setup-gcloud@v2
-      - run: gcloud auth configure-docker us-central1-docker.pkg.dev
-
-      # Build using existing multi-stage Dockerfile
-      - run: |
-          docker build \
-            --build-arg SERVICE_DIR=${{ matrix.service }} \
-            -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }} \
-            -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:latest \
-            -f backend/Dockerfile backend/
-      - run: |
-          docker push --all-tags \
-            us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}
-```
-
-### 3.2. CI — Frontend (`ci-frontend.yml`)
-
-```yaml
-name: CI — Frontend
-
-on:
-  push:
-    branches: [main]
-    paths: ['frontend/**']
-  pull_request:
-    branches: [main]
-    paths: ['frontend/**']
-
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    environment: dev
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_SA }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - run: gcloud auth configure-docker us-central1-docker.pkg.dev
-      - run: |
-          docker build \
-            -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:${{ github.sha }} \
-            -t us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend:latest \
-            frontend/
-      - run: |
-          docker push --all-tags \
-            us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/frontend
-```
-
-### 3.3. CD — Deploy (`deploy.yml`)
-
-```yaml
-name: CD — Deploy via Cloud Build
-
-on:
-  workflow_run:
+  workflow_run:                       # tự chạy sau CI Backend/Frontend thành công
     workflows: ["CI — Backend", "CI — Frontend"]
     types: [completed]
     branches: [main]
-
-jobs:
-  deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    environment: dev
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_SA }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - run: |
-          gcloud builds submit \
-            --config=cloudbuild.yaml \
-            --substitutions=_TAG=${{ github.event.workflow_run.head_sha }} \
-            --no-source
+  workflow_dispatch:                  # bấm tay: re-release / release theo tag cụ thể
+    inputs: { tag: { default: latest } }
+# → gcloud builds submit --config=cloudbuild.yaml
+#     --substitutions=_TAG=<tag>,_RELEASE=rel-<sha>-<epoch>
+#     --service-account=<deployer SA>   # build chạy dưới danh tính deployer SA
 ```
 
----
-
-## 4. Cloud Build — CD Config (`cloudbuild.yaml`)
-
-Cloud Build nhận tag từ GitHub Actions, deploy từng service lên Cloud Run:
-
+### 4.3. `cloudbuild.yaml` — tạo 8 release (1/pipeline, song song)
 ```yaml
-steps:
-  - id: deploy-auth
-    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+steps:                                              # 8 bước, waitFor ['-'] → song song
+  - id: release-<service>
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
-    args: ['run', 'deploy', 'auth-service',
-           '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/auth-service:${_TAG}',
-           '--region', 'us-central1', '--platform', 'managed',
-           '--vpc-connector', 'erp-vpc-connector',
-           '--vpc-egress', 'private-ranges-only']
+    waitFor: ['-']
+    args: [deploy, releases, create, '${_RELEASE}',
+           --delivery-pipeline=erp-<service>, --region=us-central1,
+           --source=deploy/<service>,               # skaffold.yaml + service.yaml
+           '--images=<service>=...:${_TAG}']
+  # ... lặp cho 8 service
+options: { logging: CLOUD_LOGGING_ONLY }            # bắt buộc khi build dùng custom SA
+```
+`.gcloudignore` chỉ upload `deploy/` + `cloudbuild.yaml` (upload nhẹ).
 
-  # ... (repeat for each of 7 backend services)
+---
 
-  - id: deploy-frontend
-    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
-    args: ['run', 'deploy', 'frontend',
-           '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/erp-services/frontend:${_TAG}',
-           '--region', 'us-central1', '--allow-unauthenticated']
+## 5. Cloud Deploy config (`deploy/`)
 
-substitutions:
-  _TAG: latest
-timeout: '1200s'
+> ⚠️ **1 pipeline / 1 service** — bắt buộc. Deployer `cloudrun` của Skaffold chỉ nhận
+> MỘT Cloud Run service mỗi lần render (gộp 8 → lỗi `expected singular node ... but was 8`).
+> Nên có **8 DeliveryPipeline** `erp-<service>` dùng chung **1 Target `dev`**; mỗi service
+> một thư mục tự chứa (skaffold + manifest).
+
+```
+deploy/
+├── clouddeploy.yaml         # 1 Target "dev" + 8 DeliveryPipeline (erp-api-gateway, ...)
+├── <service>/               # 8 thư mục, mỗi service tự chứa
+│   ├── skaffold.yaml         # deployer: cloudrun; rawYaml: [service.yaml]
+│   └── service.yaml          # Cloud Run Service (knative serving.knative.dev/v1)
+│                             #   backend: private, VPC, 5 secret, /health/live
+│                             #   api-gateway: public, VPC, + URL downstream + CORS, /health
+│                             #   frontend: public, no VPC, no secret, /health, port 8080
+└── MIGRATION.md             # runbook bàn giao + vận hành
 ```
 
----
+- **Target dev**: `run.location = projects/portfolio-497506/locations/us-central1`; `executionConfigs.serviceAccount = erp-deployer-dev`. Dùng chung cho cả 8 pipeline.
+- **DeliveryPipeline** (×8): `serialPipeline.stages: [{ targetId: dev }]`. Thêm staging/prod = thêm stage + Target vào mỗi pipeline.
+- **Image substitution**: manifest để `image: <service>` (placeholder), release truyền `--images=<service>=<ảnh thật>`.
+- **Release**: 1 lần deploy = 8 release (mỗi pipeline 1, CÙNG tên — khác namespace nên hợp lệ). cloudbuild.yaml có 8 bước `releases create` chạy song song.
 
-## 5. RBAC — GitHub Environments
-
-| Element | Config |
-|---|---|
-| Environment name | `dev` |
-| Deployment branch | `main` only |
-| Required reviewers | None (auto deploy — solo project) |
-| Environment secrets | _(none — dùng GitHub Variables + WIF)_ |
-| Environment variables | `WIF_PROVIDER`, `DEPLOYER_SA`, `GCP_PROJECT` |
-
-**GitHub Variables cần set:**
-
-| Variable | Value | Mô tả |
-|---|---|---|
-| `GCP_PROJECT` | `erp-prototype-xxx` | GCP Project ID |
-| `WIF_PROVIDER` | `projects/.../providers/github-provider` | WIF provider full path |
-| `DEPLOYER_SA` | `erp-deployer@erp-prototype-xxx.iam.gserviceaccount.com` | Deployer SA email |
-
-> [!NOTE]
-> **Mở rộng RBAC**: Khi cần thêm `staging` hoặc `production` environment, chỉ cần tạo thêm GitHub Environment với required reviewers + branch protection. Workflow YAML dùng `environment:` field để gate deployment.
+Bootstrap pipeline (1 lần): `gcloud deploy apply --file=deploy/clouddeploy.yaml --region=us-central1`.
 
 ---
 
-## 6. Authentication Flow — Workload Identity Federation
+## 6. Auth & IAM — Workload Identity Federation
 
 ```mermaid
 sequenceDiagram
     participant GH as GitHub Actions
-    participant OIDC as GitHub OIDC
     participant WIF as GCP WIF Pool
-    participant SA as erp-deployer SA
+    participant SA as erp-deployer-dev
     participant AR as Artifact Registry
     participant CB as Cloud Build
+    participant CD as Cloud Deploy
+    participant CR as Cloud Run
 
-    GH->>OIDC: 1. Request OIDC token
-    OIDC-->>GH: 2. JWT (sub=repo, aud=gcp)
-    GH->>WIF: 3. Exchange JWT
-    WIF->>WIF: 4. Validate issuer + repo condition
-    WIF-->>GH: 5. Short-lived access token
-    GH->>SA: 6. Impersonate erp-deployer
-    GH->>AR: 7. docker push image
-    GH->>CB: 8. gcloud builds submit
-    CB->>CB: 9. Deploy to Cloud Run
+    GH->>WIF: OIDC JWT (sub=repo)
+    WIF-->>GH: short-lived token → impersonate SA
+    GH->>AR: docker push (CI)
+    GH->>CB: gcloud builds submit (--service-account=SA)
+    CB->>CD: gcloud deploy releases create
+    CD->>CR: render (skaffold) + rollout
 ```
 
-**Tại sao WIF thay vì SA JSON key?**
+Toàn bộ chuỗi chạy dưới **một danh tính**: `erp-deployer-dev`. Role cần (Terraform `modules/iam`):
 
-| | SA JSON Key | Workload Identity Federation |
-|---|---|---|
-| Secret management | Phải lưu key trong GitHub Secrets | Không có key → không thể leak |
-| Rotation | Manual rotation | Auto (short-lived tokens) |
-| Scope | Full SA permissions | Scoped to repo + branch |
-| GCP recommendation | ❌ Không recommend | ✅ Best practice |
+| Role | Dùng cho |
+|---|---|
+| `roles/artifactregistry.writer` | CI push image |
+| `roles/run.admin` | deploy Cloud Run (⊇ run.developer) |
+| `roles/iam.serviceAccountUser` (project) | actAs build SA (self) + runtime SA `erp-backend-dev`/`erp-frontend-dev` |
+| `roles/cloudbuild.builds.editor` + `roles/storage.admin` | chạy Cloud Build + render bucket |
+| `roles/clouddeploy.releaser` | tạo release |
+| `roles/clouddeploy.jobRunner` | Cloud Deploy dùng SA này làm execution SA (RENDER+DEPLOY) |
+
+> **Vì sao WIF thay SA JSON key?** Không có key để leak; token ngắn hạn; scope theo repo+branch;
+> đúng khuyến nghị GCP. GitHub Variables (env `dev`): `GCP_PROJECT`, `WIF_PROVIDER`, `DEPLOYER_SA`.
 
 ---
 
 ## 7. Docker Build Strategy
 
-### Backend: Shared Dockerfile
+- **Backend**: 1 `backend/Dockerfile` multi-stage chung, `--build-arg SERVICE_DIR=<service>` (shared-builder → service-builder → runner).
+- **Frontend**: `frontend/Dockerfile` Next.js `output: 'standalone'`, `--build-arg NEXT_PUBLIC_API_GATEWAY` (inline lúc build, KHÔNG phải env runtime), EXPOSE 8080.
 
-Backend sử dụng 1 Dockerfile chung ([Dockerfile](../../backend/Dockerfile)) với multi-stage build:
+---
 
-```
-Stage 1: shared-builder    → npm ci + build @erp/shared
-Stage 2: service-builder   → npm ci + build target service
-Stage 3: runner             → Copy dist + node_modules → CMD node dist/main.js
-```
+## 8. Rollback
 
-Build command:
+Không rebuild. Cloud Deploy giữ lịch sử release (đã ghim digest):
 ```bash
-docker build \
-  --build-arg SERVICE_DIR=customer-service \
-  --build-arg SERVICE_PORT=3001 \
-  -t us-central1-docker.pkg.dev/{project}/erp-services/customer-service:{sha} \
-  -f backend/Dockerfile backend/
+gcloud deploy targets rollback dev --delivery-pipeline=erp-services --region=us-central1
 ```
-
-### Frontend: Standalone Dockerfile
-
-Frontend sử dụng Next.js `output: 'standalone'` ([Dockerfile](../../frontend/Dockerfile)):
-
-```
-Stage 1: builder  → npm ci + next build (standalone output)
-Stage 2: runner   → Copy .next/standalone + static → CMD node server.js
-```
-
----
-
-## 8. Deployment Flow — End-to-End
-
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant GH as GitHub
-    participant CI as GitHub Actions (CI)
-    participant AR as Artifact Registry
-    participant CD as GitHub Actions (CD)
-    participant CB as Cloud Build
-    participant CR as Cloud Run
-
-    Dev->>GH: 1. git push main
-    GH->>CI: 2. Trigger CI workflow
-    CI->>CI: 3. Detect changed services
-    CI->>CI: 4. Lint + TypeCheck
-    CI->>CI: 5. Unit Tests
-    CI->>CI: 6. Docker Build (matrix)
-    CI->>AR: 7. Push images (:sha tag)
-    CI-->>CD: 8. workflow_run trigger
-    CD->>CB: 9. gcloud builds submit
-    CB->>AR: 10. Pull images
-    CB->>CR: 11. gcloud run deploy
-    CR-->>Dev: 12. Live at *.run.app
-```
-
-**Thời gian ước tính:**
-- CI (build + push): ~3-5 phút (per service)
-- CD (deploy): ~2-3 phút (per service)
-- **Tổng**: ~5-8 phút từ push → live
-
----
-
-## 9. Cấu trúc thư mục CI/CD
-
-```
-erp-prototype-example/
-├── .github/
-│   └── workflows/
-│       ├── ci-backend.yml          # CI cho 7 backend services
-│       ├── ci-frontend.yml         # CI cho frontend
-│       └── deploy.yml              # CD trigger Cloud Build
-│
-├── cloudbuild.yaml                 # Cloud Build deploy config
-│
-├── backend/
-│   └── Dockerfile                  # (existing) Multi-stage, shared across services
-│
-└── frontend/
-    └── Dockerfile                  # [NEW] Next.js standalone build
-```
+Hoặc UI Cloud Deploy → chọn release/rollout cũ → Rollback.
 
 ---
 
 ## Related Concepts
 
-- [GCP Cloud Architecture](./gcp-cloud-architecture.md) — hạ tầng GCP mà pipeline deploy tới
-- [System Overview](./system-overview.md) — kiến trúc tổng thể hệ thống
-- [Event Flows](./event-flows.md) — Pub/Sub topics cần verify sau deploy
-- [Tech Decisions](../overview/tech-decisions.md) — ADR-005: Pub/Sub emulator → production
+- [GCP Cloud Architecture](./gcp-cloud-architecture.md) — hạ tầng GCP pipeline deploy tới
+- [System Overview](./system-overview.md) — kiến trúc tổng thể
+- [deploy/MIGRATION.md](../../deploy/MIGRATION.md) — runbook bàn giao Terraform → Cloud Deploy

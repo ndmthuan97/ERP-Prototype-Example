@@ -47,9 +47,14 @@ resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
     "roles/run.admin",
     "roles/artifactregistry.writer",
-    "roles/iam.serviceAccountUser",
+    "roles/iam.serviceAccountUser", # actAs runtime SA (backend/frontend) + build SA (self)
     "roles/cloudbuild.builds.editor",
     "roles/storage.admin",
+    # --- Cloud Deploy (CD) ---
+    # Build (chạy dưới danh tính deployer SA) gọi `gcloud deploy releases create`.
+    "roles/clouddeploy.releaser",
+    # Cloud Deploy dùng deployer SA làm execution SA (RENDER+DEPLOY) → cần jobRunner.
+    "roles/clouddeploy.jobRunner",
   ])
 
   project = var.project_id

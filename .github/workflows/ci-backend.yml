@@ -158,17 +158,19 @@ jobs:
         run: npm test
 
   # ============================================================
-  # Step 3: Build & push changed services
+  # Step 3: Build & push changed services (KHÔNG deploy ở đây)
+  # Deploy do CD: deploy.yml (workflow_run sau CI) → Cloud Build → Cloud Deploy.
+  # Job này chỉ đẩy image lên Artifact Registry (:latest + :sha).
   # ============================================================
   build-and-push:
     needs: [detect-changes, verify]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: dev
-    # Serialize deploy của cùng 1 service qua các run liên tiếp (tránh race,
-    # không hủy nửa chừng để deploy đang chạy không bị ngắt).
+    # Serialize push của cùng 1 service qua các run liên tiếp (tránh 2 build
+    # ghi đè tag :latest chồng nhau).
     concurrency:
-      group: deploy-${{ matrix.service }}-dev
+      group: build-${{ matrix.service }}-dev
       cancel-in-progress: false
     permissions:
       id-token: write
@@ -179,25 +181,18 @@ jobs:
         include:
           - service: auth-service
             changed: ${{ needs.detect-changes.outputs.auth }}
-            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: customer-service
             changed: ${{ needs.detect-changes.outputs.customer }}
-            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: sales-service
             changed: ${{ needs.detect-changes.outputs.sales }}
-            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: inventory-service
             changed: ${{ needs.detect-changes.outputs.inventory }}
-            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: catalog-service
             changed: ${{ needs.detect-changes.outputs.catalog }}
-            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: purchasing-service
             changed: ${{ needs.detect-changes.outputs.purchasing }}
-            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only
           - service: api-gateway
             changed: ${{ needs.detect-changes.outputs.gateway }}
-            run_flags: --vpc-connector=erp-vpc-connector --vpc-egress=private-ranges-only --allow-unauthenticated
     steps:
       - name: Check if build needed
         id: check
@@ -244,15 +239,5 @@ jobs:
         run: |
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }}
           docker push us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:latest
-
-      # Deploy ngay service vừa build, pin theo commit SHA (immutable → rollback
-      # được, và service không đổi ở commit này sẽ không bị tạo revision mới).
-      - name: Deploy to Cloud Run
-        if: steps.check.outputs.should_build == 'true'
-        run: |
-          gcloud run deploy ${{ matrix.service }}-dev \
-            --image=us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/erp-services/${{ matrix.service }}:${{ github.sha }} \
-            --region=us-central1 \
-            --platform=managed \
-            ${{ matrix.run_flags }} \
-            --quiet
+      # Deploy: KHÔNG ở đây. Sau khi CI xong, deploy.yml (workflow_run) submit
+      # Cloud Build → tạo Cloud Deploy release → rollout cả cụm lên Cloud Run.

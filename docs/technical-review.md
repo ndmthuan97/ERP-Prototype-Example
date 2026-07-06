@@ -387,10 +387,13 @@ frontend/src/
 - **File:** [backend/.env](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/.env)
 - **Evidence:**
   ```
-  DATABASE_URL=postgresql://postgres.tlraqjtomszfkpcjspww:JSfFr6oyqLqDhLWy@...
-  UPSTASH_REDIS_REST_TOKEN="gQAAAAAAAk3hAAIgcDE3NDM0NTMw..."
-  JWT_SECRET=376128eaca113ede652ab059fa2f4919eb18f17725ea6dfb1a188b1984b87985
+  DATABASE_URL=postgresql://postgres.<project-ref>:***REDACTED***@...
+  UPSTASH_REDIS_REST_TOKEN="***REDACTED***"
+  JWT_SECRET=***REDACTED***
   ```
+  > ⚠️ Giá trị thật đã REDACT khỏi doc (chính doc này trước đây dán nguyên secret →
+  > tự re-leak). Các secret này đã nằm trong git history (commit gốc) → PHẢI rotate,
+  > xoá khỏi doc là chưa đủ. Xem "Giải pháp" bên dưới.
 - **Hậu quả:** Database password, Redis token, và JWT secret đang nằm trong repo. Bất kỳ ai có access repo có thể truy cập toàn bộ data.
 - **Giải pháp:**
   1. **NGAY LẬP TỨC**: Rotate tất cả credentials (đổi password Supabase, regenerate Redis token, new JWT secret)

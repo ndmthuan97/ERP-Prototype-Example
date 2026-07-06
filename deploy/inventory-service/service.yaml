@@ -1,0 +1,62 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: inventory-service-dev
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '3'
+        run.googleapis.com/vpc-access-connector: erp-vpc-connector
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      serviceAccountName: erp-backend-dev@portfolio-497506.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: inventory-service   # placeholder → thay bằng --images
+          ports:
+            - containerPort: 3003
+          resources:
+            limits:
+              cpu: '1'
+              memory: 512Mi
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PUBSUB_PROJECT_ID
+              value: portfolio-497506
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-url-dev
+                  key: latest
+            - name: DIRECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-direct-url-dev
+                  key: latest
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret-dev
+                  key: latest
+            - name: UPSTASH_REDIS_REST_URL
+              valueFrom:
+                secretKeyRef:
+                  name: upstash-redis-url-dev
+                  key: latest
+            - name: UPSTASH_REDIS_REST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: upstash-redis-token-dev
+                  key: latest
+          startupProbe:
+            httpGet:
+              path: /health/live
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3

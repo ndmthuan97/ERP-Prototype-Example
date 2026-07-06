@@ -1,0 +1,8 @@
+# `gcloud builds submit` upload thư mục nguồn. Build này (cloudbuild.yaml) chỉ
+# cần deploy/ (skaffold + manifests) — loại phần còn lại cho upload nhẹ.
+# Cú pháp giống .gitignore: '!' = KHÔNG loại (giữ lại).
+*
+
+!cloudbuild.yaml
+!deploy/
+!deploy/**

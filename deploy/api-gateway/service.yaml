@@ -1,0 +1,83 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: api-gateway-dev
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '3'
+        run.googleapis.com/vpc-access-connector: erp-vpc-connector
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      serviceAccountName: erp-backend-dev@portfolio-497506.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: api-gateway   # placeholder → thay bằng --images
+          ports:
+            - containerPort: 3010
+          resources:
+            limits:
+              cpu: '1'
+              memory: 512Mi
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PUBSUB_PROJECT_ID
+              value: portfolio-497506
+            # ⚠️ URL downstream + CORS: TRƯỚC do null_resource.gateway_env_vars
+            # inject sau `terraform apply`. Giờ khai báo THẲNG ở đây (nguồn sự
+            # thật duy nhất) — nếu bỏ trống gateway sẽ route sai → 503.
+            # Điền bằng URL Cloud Run THẬT (ổn định theo vòng đời service):
+            #   gcloud run services list --region=us-central1 \
+            #     --format='value(metadata.name,status.url)' --project=portfolio-497506
+            # Xem deploy/MIGRATION.md (Bước điền URL) trước lần release đầu.
+            - name: AUTH_SERVICE_URL
+              value: https://auth-service-dev-s3fou5y5yq-uc.a.run.app
+            - name: CUSTOMER_SERVICE_URL
+              value: https://customer-service-dev-s3fou5y5yq-uc.a.run.app
+            - name: ORDER_SERVICE_URL
+              value: https://sales-service-dev-s3fou5y5yq-uc.a.run.app
+            - name: INVENTORY_SERVICE_URL
+              value: https://inventory-service-dev-s3fou5y5yq-uc.a.run.app
+            - name: CATALOG_SERVICE_URL
+              value: https://catalog-service-dev-s3fou5y5yq-uc.a.run.app
+            - name: PURCHASING_SERVICE_URL
+              value: https://purchasing-service-dev-s3fou5y5yq-uc.a.run.app
+            - name: CORS_ORIGINS
+              value: https://frontend-dev-s3fou5y5yq-uc.a.run.app,http://localhost:3000
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-url-dev
+                  key: latest
+            - name: DIRECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-direct-url-dev
+                  key: latest
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret-dev
+                  key: latest
+            - name: UPSTASH_REDIS_REST_URL
+              valueFrom:
+                secretKeyRef:
+                  name: upstash-redis-url-dev
+                  key: latest
+            - name: UPSTASH_REDIS_REST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: upstash-redis-token-dev
+                  key: latest
+          startupProbe:
+            httpGet:
+              path: /health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3

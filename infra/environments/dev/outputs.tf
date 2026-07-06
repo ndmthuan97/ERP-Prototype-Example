@@ -2,12 +2,9 @@
 # Outputs — Values needed after terraform apply
 # ============================================================
 
-output "cloud_run_urls" {
-  description = "URLs for all Cloud Run services"
-  value = {
-    for name, svc in module.cloud_run : name => svc.service_url
-  }
-}
+# Cloud Run URLs không còn Terraform quản lý (Cloud Deploy sở hữu service). Lấy:
+#   gcloud run services list --region=us-central1 \
+#     --format='value(metadata.name,status.url)' --project=<project_id>
 
 output "cloud_sql_instance" {
   description = "Cloud SQL instance connection name"
