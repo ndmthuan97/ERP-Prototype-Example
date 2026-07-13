@@ -19,6 +19,16 @@ COPY . .
 ARG NEXT_PUBLIC_API_GATEWAY
 ENV NEXT_PUBLIC_API_GATEWAY=$NEXT_PUBLIC_API_GATEWAY
 
+# Firebase web config — public client keys, inlined into the client bundle at
+# build time (không phải secret). firebase.ts đọc chúng ở module scope → PHẢI có
+# lúc `next build`, nếu thiếu getAuth() ném auth/invalid-api-key khi prerender.
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ENV NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ENV NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID
+
 RUN npm run build
 
 # ============================================================

@@ -71,13 +71,24 @@ async function bootstrap() {
   );
   // Strip gateway-injected headers (x-user-*) from Swagger UI — they confuse
   // users into thinking they must provide them manually.
+  const HTTP_METHODS = [
+    'get',
+    'put',
+    'post',
+    'delete',
+    'options',
+    'head',
+    'patch',
+    'trace',
+  ] as const;
   for (const pathItem of Object.values(rawDoc.paths ?? {})) {
-    for (const op of Object.values(pathItem as Record<string, any>)) {
-      if (op?.parameters) {
-        op.parameters = op.parameters.filter(
-          (p: any) => !(p.in === 'header' && p.name?.startsWith('x-user-')),
-        );
-      }
+    for (const method of HTTP_METHODS) {
+      const op = pathItem[method];
+      if (!op || !op.parameters) continue;
+      op.parameters = op.parameters.filter((p) => {
+        const param = p as { in?: string; name?: string };
+        return !(param.in === 'header' && param.name?.startsWith('x-user-'));
+      });
     }
   }
   SwaggerModule.setup('docs', app, rawDoc);

@@ -30,7 +30,9 @@ import {
 
 const FIREBASE_UID = 'firebase-uid-abc';
 
-const makeUser = (overrides: Partial<ConstructorParameters<typeof User>[0]> = {}): User =>
+const makeUser = (
+  overrides: Partial<ConstructorParameters<typeof User>[0]> = {},
+): User =>
   new User({
     id: 'test-uuid-0001',
     email: 'test@example.com',
@@ -80,12 +82,12 @@ describe('Auth Application Layer (B1)', () => {
     let command: RegisterCommand;
 
     beforeEach(() => {
-      command = new RegisterCommand(mockUserRepo as any);
+      command = new RegisterCommand(mockUserRepo);
     });
 
     it('provisions a user without a password (no password field, firebaseUid null)', async () => {
       mockUserRepo.findByEmail.mockResolvedValue(null);
-      mockUserRepo.save.mockImplementation(async (u: User) => u);
+      mockUserRepo.save.mockImplementation((u: User) => u);
 
       const result = await command.execute({
         email: 'new@example.com',
@@ -93,7 +95,7 @@ describe('Auth Application Layer (B1)', () => {
         role: 'manager',
       });
 
-      const savedUser: User = mockUserRepo.save.mock.calls[0][0];
+      const [savedUser] = mockUserRepo.save.mock.calls[0] as [User];
       expect(savedUser.firebaseUid).toBeNull();
       expect(result).toEqual({
         id: savedUser.id,
@@ -109,7 +111,11 @@ describe('Auth Application Layer (B1)', () => {
       mockUserRepo.findByEmail.mockResolvedValue(makeUser());
 
       await expect(
-        command.execute({ email: 'test@example.com', fullName: 'X', role: 'staff' }),
+        command.execute({
+          email: 'test@example.com',
+          fullName: 'X',
+          role: 'staff',
+        }),
       ).rejects.toThrow(DuplicateEmailError);
     });
   });
@@ -128,8 +134,8 @@ describe('Auth Application Layer (B1)', () => {
 
     beforeEach(() => {
       command = new ExchangeSessionCommand(
-        mockUserRepo as any,
-        mockFirebaseAdmin as any,
+        mockUserRepo,
+        mockFirebaseAdmin,
         mockSessionService as any,
         mockJwtService as any,
       );
@@ -172,12 +178,14 @@ describe('Auth Application Layer (B1)', () => {
 
     it('(d) links firebaseUid on first login (repo save called with the uid)', async () => {
       mockFirebaseAdmin.verifyIdToken.mockResolvedValue(verified);
-      mockUserRepo.findByEmail.mockResolvedValue(makeUser({ firebaseUid: null }));
-      mockUserRepo.save.mockImplementation(async (u: User) => u);
+      mockUserRepo.findByEmail.mockResolvedValue(
+        makeUser({ firebaseUid: null }),
+      );
+      mockUserRepo.save.mockImplementation((u: User) => u);
 
       await command.execute({ idToken: 'tok' });
 
-      const savedUser: User = mockUserRepo.save.mock.calls[0][0];
+      const [savedUser] = mockUserRepo.save.mock.calls[0] as [User];
       expect(savedUser.firebaseUid).toBe(FIREBASE_UID);
     });
 
@@ -255,16 +263,16 @@ describe('Auth Application Layer (B1)', () => {
 
     beforeEach(() => {
       command = new UpdateUserCommand(
-        mockUserRepo as any,
+        mockUserRepo,
         mockSessionService as any,
-        mockFirebaseAdmin as any,
+        mockFirebaseAdmin,
       );
     });
 
     it('deactivation revokes all sessions and the Firebase refresh tokens', async () => {
       const user = makeUser({ id: 'u-9', firebaseUid: FIREBASE_UID });
       mockUserRepo.findById.mockResolvedValue(user);
-      mockUserRepo.update.mockImplementation(async (u: User) => u);
+      mockUserRepo.update.mockImplementation((u: User) => u);
 
       await command.execute('u-9', { isActive: false });
 
@@ -277,7 +285,7 @@ describe('Auth Application Layer (B1)', () => {
     it('does not touch sessions when only the role changes', async () => {
       const user = makeUser({ id: 'u-9', firebaseUid: FIREBASE_UID });
       mockUserRepo.findById.mockResolvedValue(user);
-      mockUserRepo.update.mockImplementation(async (u: User) => u);
+      mockUserRepo.update.mockImplementation((u: User) => u);
 
       await command.execute('u-9', { role: 'admin' });
 
