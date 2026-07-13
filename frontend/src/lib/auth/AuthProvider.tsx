@@ -1,12 +1,14 @@
 'use client';
 // =============================================================================
-// AUTH PROVIDER — Real authentication via auth-service API
+// AUTH PROVIDER — Google sign-in (Firebase / GCP Identity Platform) + token exchange
 // =============================================================================
 // Flow:
-//   1. On mount: check localStorage for token → validate JWT expiry → restore session
-//   2. login(email, password) → POST /auth/login → store JWT + user
-//   3. logout() → POST /auth/logout (server-side invalidation) → clear tokens → redirect
-//   4. Auth guard: redirect unauthenticated users to /login
+//   1. login()  → signInWithPopup(Google) → Firebase ID token
+//                → POST /api/auth/sso/callback { idToken } → app access token + user
+//   2. logout() → POST /api/auth/logout (Bearer) → signOut(Firebase) → clear + redirect
+//   3. On mount: onAuthStateChanged — if a Firebase user exists but the app token is
+//      absent/expired, silently re-exchange a fresh ID token for a new app token.
+//   4. Auth guard: redirect unauthenticated users to /login.
 
 import {
   createContext,
@@ -18,17 +20,11 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { apiClient } from '@/lib/api/client';
-import { authAdminApi } from '@/lib/api/authAdmin';
+import { auth, googleProvider } from '@/lib/firebase';
 import { AUTH_BYPASS } from './bypass';
-import {
-  setAuthToken,
-  setRefreshToken,
-  getAuthToken,
-  getRefreshToken,
-  clearTokens,
-  isTokenExpired,
-} from './token';
+import { setAuthToken, clearTokens, isTokenExpired } from './token';
 
 export type Role = 'admin' | 'manager' | 'staff' | 'viewer';
 
@@ -39,9 +35,9 @@ export interface AuthUser {
   role: Role;
 }
 
-interface LoginResponse {
+// Response of POST /api/auth/sso/callback — the accessToken is the app token.
+interface SsoResponse {
   accessToken: string;
-  refreshToken: string;
   user: {
     id: string;
     email: string;
@@ -54,11 +50,15 @@ interface AuthContextValue {
   user: AuthUser | null;
   isAdmin: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: () => Promise<void>;
   logout: () => void;
 }
 
 const USER_STORAGE_KEY = 'erp_user';
+
+function toAuthUser(u: SsoResponse['user']): AuthUser {
+  return { id: u.id, name: u.fullName, email: u.email, role: u.role as Role };
+}
 
 // DEV-ONLY login bypass — flag lives in ./bypass so the API client shares it
 // (see that module for why). Set NEXT_PUBLIC_AUTH_BYPASS=1 to skip the login
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Restore session from localStorage on mount — validate JWT expiry
+  // Restore session from the Firebase auth state on mount.
   useEffect(() => {
     if (AUTH_BYPASS) {
       // Skip the login screen entirely — inject a fake admin.
@@ -87,43 +87,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const token = getAuthToken();
-    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
-
-    if (token && savedUser) {
-      if (isTokenExpired()) {
-        // Token expired → clear and force re-login
-        // Token refresh will be handled by apiClient interceptor on next API call
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!fbUser) {
+        // No Firebase session → ensure logged-out state.
         clearTokens();
         localStorage.removeItem(USER_STORAGE_KEY);
-      } else {
-        try {
-          setUser(JSON.parse(savedUser));
-          // Best-effort refresh of the in-memory user from /me so role/name
-          // reflect the server. Resilient: on ANY error keep the localStorage
-          // user and stay logged in — never log out here.
-          authAdminApi
-            .getMe()
-            .then((me) => {
-              const fresh: AuthUser = {
-                id: me.id,
-                name: me.fullName,
-                email: me.email,
-                role: me.role as Role,
-              };
-              setUser(fresh);
-              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(fresh));
-            })
-            .catch(() => {
-              /* ignore — keep the saved user, do not log out */
-            });
-        } catch {
-          clearTokens();
-          localStorage.removeItem(USER_STORAGE_KEY);
-        }
+        setUser(null);
+        setLoading(false);
+        return;
       }
-    }
-    setLoading(false);
+
+      try {
+        // Reuse a still-valid app token + cached user to avoid a round-trip on
+        // every refresh; otherwise silently re-exchange a fresh Firebase ID token.
+        const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+        if (!isTokenExpired() && savedUser) {
+          setUser(JSON.parse(savedUser) as AuthUser);
+          return;
+        }
+
+        const idToken = await fbUser.getIdToken(true);
+        const res = await apiClient.post<SsoResponse>(
+          'auth',
+          '/api/auth/sso/callback',
+          { idToken },
+        );
+        const authUser = toAuthUser(res.user);
+        setAuthToken(res.accessToken);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authUser));
+        setUser(authUser);
+      } catch {
+        // Re-exchange failed → force logged-out state.
+        clearTokens();
+        localStorage.removeItem(USER_STORAGE_KEY);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Auth guard: redirect to /login when not authenticated
@@ -133,33 +136,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loading, user, pathname, router]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await apiClient.post<LoginResponse>('auth', '/api/auth/login', {
-      email,
-      password,
-    });
+  const login = useCallback(async () => {
+    const cred = await signInWithPopup(auth, googleProvider);
+    const idToken = await cred.user.getIdToken();
+    const res = await apiClient.post<SsoResponse>(
+      'auth',
+      '/api/auth/sso/callback',
+      { idToken },
+    );
 
-    const authUser: AuthUser = {
-      id: res.user.id,
-      name: res.user.fullName,
-      email: res.user.email,
-      role: res.user.role as Role,
-    };
-
+    const authUser = toAuthUser(res.user);
     setAuthToken(res.accessToken);
-    setRefreshToken(res.refreshToken);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authUser));
     setUser(authUser);
   }, []);
 
-  const logout = useCallback(() => {
-    // Fire-and-forget: invalidate refresh token on server
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
-      apiClient
-        .post('auth', '/api/auth/logout', { refreshToken })
-        .catch(() => {});
-    }
+  const logout = useCallback(async () => {
+    // Best-effort server-side logout — gateway derives the session from the Bearer
+    // token, so fire it while the token is still stored; never block on failure.
+    await apiClient.post('auth', '/api/auth/logout', {}).catch(() => {});
+    await signOut(auth).catch(() => {});
 
     clearTokens();
     localStorage.removeItem(USER_STORAGE_KEY);

@@ -38,8 +38,8 @@ Purchasing Service quản lý Purchase Orders (PO) và Suppliers. PO lifecycle: 
 
 - **API Reference**: [purchasing-endpoints.md](../api/purchasing-endpoints.md)
 - **Data Model**: [data-model.md](../architecture/data-model.md)
-- **Business Flows**: [flows.md](../flows.md) — Flow 5 (Purchasing → Inventory)
-- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../IMPLEMENTATION-STATUS.md)
+- **Business Flows**: [flows.md](../operations/flows.md) — Flow 5 (Purchasing → Inventory)
+- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../operations/implementation-status.md)
 
 ## Related Concepts
 

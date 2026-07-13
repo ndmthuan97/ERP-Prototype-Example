@@ -1,9 +1,9 @@
 ---
 type: Architecture Decision
 title: "Technology Decision Records (ADR)"
-description: "Architecture Decision Records for all technology choices: NestJS, Prisma, Supabase, Upstash, Pub/Sub, Auth, Frontend, npm"
-tags: [architecture, decision, adr, tech-stack]
-timestamp: "2026-06-25T00:00:00+07:00"
+description: "Architecture Decision Records for all technology choices: NestJS, Prisma, Supabase, Upstash, Pub/Sub, Auth (B1 — Identity Platform + session whitelist), Frontend, npm"
+tags: [architecture, decision, adr, tech-stack, identity-platform]
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Tech Decisions
@@ -233,7 +233,7 @@ Chọn **GCP Pub/Sub Emulator** chạy trong Docker.
 
 | Mục | Nội dung |
 |-----|----------|
-| **Status** | ✅ Accepted |
+| **Status** | ⚠️ Superseded phần login/token bởi **ADR-015** (B1, 2026-07-08) — bcrypt + login/refresh JWT tự cuộn đã gỡ. Phần **RBAC 3-role vẫn giữ nguyên**. |
 | **Date** | 2025 |
 
 ### Context
@@ -455,6 +455,50 @@ Auth Service dùng schema riêng `app_auth`. `create-schemas.js` tạo `app_auth
 
 ---
 
+## ADR-015: B1 — Google sign-in (Identity Platform) + session whitelist thay JWT tự cuộn
+
+| Mục | Nội dung |
+|-----|----------|
+| **Status** | ✅ Accepted (2026-07-08 — migration **B1**); thay phần login/token-issuance của **ADR-006** |
+
+### Context
+
+ADR-006 tự cuộn email/password + JWT stateless. [D-004](../../../new-erp-design/decisions/0004-identity-and-sso-strategy.md) **bác** cách này: internal user phải qua Identity Platform + Workspace SSO, và access token stateless **không revoke được trước hạn** → không đạt **FR-A13** (offboarding revoke tức thì) / **FR-A9** (idle timeout theo role). Xem [Auth & Session Gap](../gap/prototype-vs-newdesign-auth-gap.md).
+
+### Decision
+
+Chuyển auth sang **Google sign-in qua GCP Identity Platform (Firebase)** + **session whitelist server-side**:
+
+- **Frontend**: "Sign in with Google" (Firebase JS SDK `signInWithPopup`) → đổi Firebase ID token lấy app token.
+- **auth-service** `POST /auth/sso/callback`: verify Firebase ID token (firebase-admin) → **allowlist**-check email trong `users` (interim — xem Deviations) → link `firebaseUid` lần đầu → INSERT `app_auth.sessions` → trả **app access token HS256** (payload có `sid`, TTL `APP_TOKEN_TTL` mặc định 1h). `/auth/register` **password-less**. `/auth/logout` xoá session (`x-user-sid`). Deactivate user (`isActive:false`) revoke toàn bộ session + `revokeRefreshTokens`.
+- **gateway**: verify chữ ký app token (HS256) → check `session:<sid>` ở Redis (Upstash) bằng `getex` (đọc + slide TTL) → miss = 401 (logout / deactivation / idle timeout) → bơm `x-user-sid` cùng `x-user-*`.
+- **infra**: Terraform module `infra/modules/identity-platform` provision Identity Platform + Google IdP + service account `roles/firebaseauth.admin` (OAuth consent/client + apiKey là bước console thủ công một lần).
+
+### Why
+
+- **FR-A13 tức thì**: whitelist tra mỗi request → logout/deactivation chết token trong vài giây (thay vì chờ hết TTL 15' như bản cũ).
+- **FR-A9**: `getex` slide TTL = idle timeout, cấu hình per-role (mặc định 30m).
+- **Không tự quản credential**: Google lo password/identity → bỏ bcrypt + password reset.
+- **Giữ verify nhanh**: app token HS256 self-issued cho verify per-request rẻ; whitelist ở Redis đỡ tải Postgres.
+
+### Deviations từ D-004 (cố ý, interim)
+
+- **Consumer Gmail + allowlist** thay Workspace domain SSO — chưa có Google Workspace domain nên gate bằng email pre-provisioned (KHÔNG theo `hd`).
+- **MFA** chưa enforce tập trung (phụ thuộc Workspace).
+- **External phone/email OTP (FR-A2)** và **RBAC-as-code (FR-A4/A6/A8)** OUT of scope — vẫn 3-role.
+
+### Forward path
+
+Khi có Google Workspace domain → lật allowlist sang **restrict theo `hd` domain** (Workspace SSO), bật MFA ở Workspace. App token HS256 có thể thay bằng verify JWKS Identity Platform nếu muốn bỏ hẳn signing tự cuộn.
+
+### Consequences
+
+- **Tích cực:** đạt FR-A13 + FR-A9; off self-rolled credential; audit session (`ip`, `user_agent`, `started_at`).
+- **Tiêu cực:** thêm phụ thuộc GCP Identity Platform + Redis vào auth path; vài bước console thủ công (OAuth consent/client, apiKey).
+- **Trade-off:** chấp nhận deviation interim (allowlist, chưa MFA) để ship sớm khi chưa có Workspace domain.
+
+---
+
 ## Tổng kết
 
 | Quyết định | Lựa chọn | Lý do chính |
@@ -464,11 +508,13 @@ Auth Service dùng schema riêng `app_auth`. `create-schemas.js` tạo `app_auth
 | Database | **Supabase PostgreSQL** | Free, có dashboard, zero Docker |
 | Cache | **Upstash Redis** | Free, REST API, zero Docker |
 | Message Queue | **GCP Pub/Sub Emulator** | Production parity, zero code change khi deploy |
-| Auth | **Tự code** | Deep learning JWT, bcrypt, RBAC |
+| Auth | **Google sign-in (Identity Platform) + session whitelist** | FR-A13 revoke tức thì, FR-A9 idle timeout (B1 — ADR-015); RBAC 3-role giữ nguyên |
 | Frontend | **Next.js + Ant Design** | SSR-ready, ERP components sẵn |
 | Package Manager | **npm** | Simple, bundled, universal |
 
 > **Improvement pass (2026):** ADR-009 (outbox SKIP LOCKED + DLQ), ADR-010 (event envelope + eventId), ADR-011 (tiền = số nguyên đồng), ADR-012 (authz: gateway thô + service mịn), ADR-013 (migrate qua DIRECT_URL + ràng buộc DB), ADR-014 (schema `app_auth`). Xem [improvement-plan.md](../../improvement-plan.md).
+
+> **Migration B1 (2026-07-08):** ADR-015 — auth chuyển off self-rolled JWT sang Google sign-in (Identity Platform) + session whitelist; đóng FR-A13 + FR-A9. Xem [Auth & Session Gap](../gap/prototype-vs-newdesign-auth-gap.md).
 
 ---
 

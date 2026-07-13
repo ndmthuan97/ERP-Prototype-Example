@@ -53,6 +53,7 @@ async function bootstrap() {
     .setDescription('Order bounded context (DDD) — Aggregate Root, Saga, CQRS.')
     .setVersion('1.0')
     .addBearerAuth()
+    .addSecurityRequirements('bearer')
     .build();
   // nestjs-zod v5: DTO tạo bởi createZodDto cung cấp schema cho @nestjs/swagger khi
   // createDocument; `cleanupOpenApiDoc` hậu xử lý doc để schema Zod hiển thị đúng.

@@ -55,6 +55,25 @@ variable "upstash_redis_token" {
   description = "Upstash Redis REST API token"
 }
 
+# --- Identity Platform / Google sign-in (migration B1) ---
+
+variable "auth_authorized_domains" {
+  type        = list(string)
+  default     = ["localhost"]
+  description = "Domains allowed to complete Google sign-in via Identity Platform. Add the Cloud Run frontend domain alongside localhost when deployed."
+}
+
+variable "google_oauth_client_id" {
+  type        = string
+  description = "OAuth 2.0 Web client ID for Google sign-in (manually created in the Console — see terraform.tfvars.example)"
+}
+
+variable "google_oauth_client_secret" {
+  type        = string
+  sensitive   = true
+  description = "OAuth 2.0 Web client secret for Google sign-in (manually created in the Console)"
+}
+
 # --- GitHub (for Workload Identity Federation) ---
 
 variable "github_repo" {

@@ -12,7 +12,6 @@ const SEED_FILE = path.join(__dirname, '..', '.seed-data.json');
 
 export interface SeedData {
   accessToken: string;
-  refreshToken: string;
   customerId: string;
   productA: { id: string; sku: string; name: string };
   productB: { id: string; sku: string; name: string };
@@ -50,8 +49,6 @@ export async function seedTestData(): Promise<SeedData> {
 
   _seedData = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
   api.setAccessToken(_seedData!.accessToken);
-  // Set refresh token in globalThis so api.refresh() works
-  (globalThis as any).__E2E_REFRESH_TOKEN__ = _seedData!.refreshToken;
   return _seedData!;
 }
 

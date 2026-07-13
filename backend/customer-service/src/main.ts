@@ -73,6 +73,7 @@ async function bootstrap() {
     .setDescription('Customer bounded context (DDD) — CRUD & credit check.')
     .setVersion('1.0')
     .addBearerAuth()
+    .addSecurityRequirements('bearer')
     .build();
   // nestjs-zod v5: DTO tạo bởi createZodDto cung cấp schema cho @nestjs/swagger khi
   // createDocument; `cleanupOpenApiDoc` hậu xử lý doc để schema Zod hiển thị đúng.

@@ -1,3 +1,3 @@
 # Vendored local dev tools (e.g. Cloud SQL Auth Proxy binary) — do not commit.
-# See docs/run-backend-with-prod-config.md
+# See docs/operations/run-backend-with-prod-config.md
 .tools/

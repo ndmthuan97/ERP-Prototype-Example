@@ -29,6 +29,13 @@ spec:
               value: production
             - name: PUBSUB_PROJECT_ID
               value: portfolio-497506
+            # B1 — Identity Platform (firebase-admin dùng SA gắn kèm qua ADC, khỏi key file)
+            - name: FIREBASE_PROJECT_ID
+              value: portfolio-497506
+            - name: APP_TOKEN_TTL
+              value: '1h'
+            - name: SESSION_IDLE_MIN_DEFAULT
+              value: '30'
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

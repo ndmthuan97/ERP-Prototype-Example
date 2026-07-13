@@ -14,7 +14,6 @@ const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3010';
 // Persist tokens via globalThis (survives Jest module cache clearing)
 const G = globalThis as any;
 const TOKEN_KEY = '__E2E_ACCESS_TOKEN__';
-const REFRESH_KEY = '__E2E_REFRESH_TOKEN__';
 
 /** Create axios instance with base config */
 const client: AxiosInstance = axios.create({
@@ -23,43 +22,31 @@ const client: AxiosInstance = axios.create({
   validateStatus: () => true, // Don't throw on non-2xx
 });
 
-// Auto-attach JWT to all requests
+// Auto-attach the shared app access token — but never clobber an Authorization
+// header a caller set explicitly (used to drive a second, separate session).
 client.interceptors.request.use((config) => {
-  const token = G[TOKEN_KEY];
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!config.headers.Authorization) {
+    const token = G[TOKEN_KEY];
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
 
-// ---- Auth helpers ----
+// ---- Auth helpers (B1: Google sign-in + server-side session whitelist) ----
+// Password login / refresh tokens were removed in B1. The token comes from
+// exchanging a Firebase ID token at POST /auth/sso/callback (see global-setup).
 
-export async function login(
-  email: string,
-  password: string,
-): Promise<AxiosResponse> {
-  const res = await client.post('/api/auth/login', { email, password });
-  if (res.status === 200 && res.data.accessToken) {
-    G[TOKEN_KEY] = res.data.accessToken;
-    G[REFRESH_KEY] = res.data.refreshToken;
-  }
-  return res;
-}
-
-export async function refresh(): Promise<AxiosResponse> {
-  const res = await client.post('/api/auth/refresh', {
-    refreshToken: G[REFRESH_KEY],
-  });
-  if (res.status === 200 && res.data.accessToken) {
-    G[TOKEN_KEY] = res.data.accessToken;
-    G[REFRESH_KEY] = res.data.refreshToken;
-  }
+/** End the shared session (FR-A13 instant revoke) and drop the cached token. */
+export async function logout(): Promise<AxiosResponse> {
+  const res = await client.post('/api/auth/logout', {});
+  clearTokens();
   return res;
 }
 
 export function clearTokens(): void {
   G[TOKEN_KEY] = null;
-  G[REFRESH_KEY] = null;
 }
 
 export function getAccessToken(): string | null {

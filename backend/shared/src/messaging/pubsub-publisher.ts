@@ -41,7 +41,7 @@ export class PubSubPublisher {
 
   constructor() {
     this.pubsub = new PubSub({
-      projectId: process.env.PUBSUB_PROJECT_ID ?? 'erp-prototype',
+      projectId: process.env.PUBSUB_PROJECT_ID ?? 'portfolio-497506',
     });
   }
 

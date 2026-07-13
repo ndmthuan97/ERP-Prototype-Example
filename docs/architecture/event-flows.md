@@ -8,7 +8,7 @@ timestamp: "2026-06-25T00:00:00+07:00"
 
 # Event Flows — Luồng sự kiện
 
-> ✅ **Đã implement đầy đủ.** Outbox + Pub/Sub + Saga choreography (sales ↔ inventory ↔ customer) đã chạy ổn định. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Đã implement đầy đủ.** Outbox + Pub/Sub + Saga choreography (sales ↔ inventory ↔ customer) đã chạy ổn định. Xem [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu mô tả toàn bộ luồng event trong hệ thống ERP Prototype: Pub/Sub topics, event payload schemas, Saga orchestration, và Outbox pattern.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [design-patterns](design-patterns.md)
@@ -473,10 +473,10 @@ SELECT * FROM order.outbox
 
 ```bash
 # List all topics
-curl http://localhost:8085/v1/projects/erp-prototype/topics
+curl http://localhost:8085/v1/projects/portfolio-497506/topics
 
 # List subscriptions for a topic
-curl http://localhost:8085/v1/projects/erp-prototype/topics/order.submitted/subscriptions
+curl http://localhost:8085/v1/projects/portfolio-497506/topics/order.submitted/subscriptions
 ```
 
 ---

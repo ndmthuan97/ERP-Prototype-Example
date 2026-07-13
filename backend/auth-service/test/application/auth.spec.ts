@@ -1,229 +1,288 @@
+// =============================================================================
+// AUTH APPLICATION LAYER TESTS (B1 — Google sign-in + server-side sessions)
+// =============================================================================
+// Covers the security-critical branches of the new commands with pure mocks —
+// no real Firebase/Redis/Postgres. The deleted email/password Login/Refresh/
+// Logout commands are gone, so their tests are gone too.
+// Stub the firebase-admin subpath modules: the real SDK ships ESM that ts-jest
+// won't transform (node_modules), and we inject a mock FirebaseAdminService
+// anyway — this just keeps the import graph loadable.
+jest.mock('firebase-admin/app', () => ({
+  initializeApp: jest.fn(),
+  getApps: jest.fn(() => []),
+  applicationDefault: jest.fn(),
+}));
+jest.mock('firebase-admin/auth', () => ({
+  getAuth: jest.fn(),
+}));
+
 import { RegisterCommand } from '../../src/application/commands/register.command';
-import { LoginCommand } from '../../src/application/commands/login.command';
-import { RefreshTokenCommand } from '../../src/application/commands/refresh-token.command';
+import { ExchangeSessionCommand } from '../../src/application/commands/exchange-session.command';
+import { EndSessionCommand } from '../../src/application/commands/end-session.command';
+import { UpdateUserCommand } from '../../src/application/commands/update-user.command';
 import { User } from '../../src/domain/entities/user.entity';
 import {
   DuplicateEmailError,
   InvalidCredentialsError,
   InactiveUserError,
+  NotProvisionedError,
 } from '../../src/domain/errors';
 
-// Mock bcryptjs
-jest.mock('bcryptjs', () => ({
-  __esModule: true,
-  default: {
-    hash: jest.fn().mockResolvedValue('hashed-password'),
-    compare: jest.fn(),
-  },
-}));
+const FIREBASE_UID = 'firebase-uid-abc';
 
-import bcrypt from 'bcryptjs';
-const mockBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
-
-describe('Auth Application Layer', () => {
-  // Shared mocks
-  const mockUserRepo = {
-    findById: jest.fn(),
-    findByEmail: jest.fn(),
-    findAll: jest.fn(),
-    save: jest.fn(),
-  };
-
-  const mockJwtService = {
-    signAccessToken: jest.fn().mockReturnValue('access-token'),
-    signRefreshToken: jest.fn().mockReturnValue('refresh-token'),
-    verifyAccessToken: jest.fn(),
-    verifyRefreshToken: jest.fn(),
-  };
-
-  const mockPrisma = {
-    refreshToken: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-    },
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  const testUser = new User({
+const makeUser = (overrides: Partial<ConstructorParameters<typeof User>[0]> = {}): User =>
+  new User({
     id: 'test-uuid-0001',
     email: 'test@example.com',
-    passwordHash: 'hashed-password',
+    firebaseUid: null,
     fullName: 'Test User',
     role: 'staff',
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
+    ...overrides,
   });
 
-  // ========================================================================
-  // RegisterCommand Tests
-  // ========================================================================
+describe('Auth Application Layer (B1)', () => {
+  const mockUserRepo = {
+    findById: jest.fn(),
+    findByEmail: jest.fn(),
+    findAll: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+  };
+
+  const mockFirebaseAdmin = {
+    verifyIdToken: jest.fn(),
+    revokeRefreshTokens: jest.fn(),
+  };
+
+  const mockSessionService = {
+    create: jest.fn(),
+    revoke: jest.fn(),
+    revokeAllForUser: jest.fn(),
+  };
+
+  const mockJwtService = {
+    signAccessToken: jest.fn().mockReturnValue('access-token'),
+    verifyAccessToken: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockJwtService.signAccessToken.mockReturnValue('access-token');
+  });
+
+  // ==========================================================================
+  // RegisterCommand — password-less provisioning
+  // ==========================================================================
   describe('RegisterCommand', () => {
     let command: RegisterCommand;
 
     beforeEach(() => {
-      command = new RegisterCommand(mockUserRepo);
+      command = new RegisterCommand(mockUserRepo as any);
     });
 
-    it('should register a new user successfully', async () => {
+    it('provisions a user without a password (no password field, firebaseUid null)', async () => {
       mockUserRepo.findByEmail.mockResolvedValue(null);
-      mockUserRepo.save.mockResolvedValue(testUser);
+      mockUserRepo.save.mockImplementation(async (u: User) => u);
 
       const result = await command.execute({
-        email: 'test@example.com',
-        password: 'password123',
-        fullName: 'Test User',
+        email: 'new@example.com',
+        fullName: 'New User',
+        role: 'manager',
       });
 
+      const savedUser: User = mockUserRepo.save.mock.calls[0][0];
+      expect(savedUser.firebaseUid).toBeNull();
       expect(result).toEqual({
-        id: testUser.id,
-        email: testUser.email,
-        fullName: testUser.fullName,
-        role: testUser.role,
+        id: savedUser.id,
+        email: 'new@example.com',
+        fullName: 'New User',
+        role: 'manager',
       });
-      expect(mockUserRepo.save).toHaveBeenCalled();
+      // No password anywhere on the returned shape.
+      expect(result).not.toHaveProperty('password');
     });
 
-    it('should throw DuplicateEmailError for existing email', async () => {
-      mockUserRepo.findByEmail.mockResolvedValue(testUser);
+    it('throws DuplicateEmailError for an existing email', async () => {
+      mockUserRepo.findByEmail.mockResolvedValue(makeUser());
 
       await expect(
-        command.execute({
-          email: 'test@example.com',
-          password: 'password123',
-          fullName: 'Test User',
-        }),
+        command.execute({ email: 'test@example.com', fullName: 'X', role: 'staff' }),
       ).rejects.toThrow(DuplicateEmailError);
     });
   });
 
-  // ========================================================================
-  // LoginCommand Tests
-  // ========================================================================
-  describe('LoginCommand', () => {
-    let command: LoginCommand;
+  // ==========================================================================
+  // ExchangeSessionCommand — Firebase ID token → app access token
+  // ==========================================================================
+  describe('ExchangeSessionCommand', () => {
+    let command: ExchangeSessionCommand;
+
+    const verified = {
+      uid: FIREBASE_UID,
+      email: 'test@example.com',
+      email_verified: true,
+    };
 
     beforeEach(() => {
-      command = new LoginCommand(
-        mockUserRepo,
+      command = new ExchangeSessionCommand(
+        mockUserRepo as any,
+        mockFirebaseAdmin as any,
+        mockSessionService as any,
         mockJwtService as any,
-        mockPrisma as any,
+      );
+      mockSessionService.create.mockResolvedValue({ sid: 'session-xyz' });
+    });
+
+    it('(a) throws NotProvisionedError when the email is not in the allowlist', async () => {
+      mockFirebaseAdmin.verifyIdToken.mockResolvedValue(verified);
+      mockUserRepo.findByEmail.mockResolvedValue(null);
+
+      await expect(command.execute({ idToken: 'tok' })).rejects.toThrow(
+        NotProvisionedError,
       );
     });
 
-    it('should login successfully with valid credentials', async () => {
-      mockUserRepo.findByEmail.mockResolvedValue(testUser);
-      (mockBcrypt.compare as jest.Mock).mockResolvedValue(true);
+    it('(b) throws InactiveUserError for a deactivated user', async () => {
+      mockFirebaseAdmin.verifyIdToken.mockResolvedValue(verified);
+      mockUserRepo.findByEmail.mockResolvedValue(
+        makeUser({ isActive: false, firebaseUid: FIREBASE_UID }),
+      );
 
-      const result = await command.execute({
-        email: 'test@example.com',
-        password: 'password123',
+      await expect(command.execute({ idToken: 'tok' })).rejects.toThrow(
+        InactiveUserError,
+      );
+    });
+
+    it('(c) rejects an unverified Firebase email', async () => {
+      mockFirebaseAdmin.verifyIdToken.mockResolvedValue({
+        ...verified,
+        email_verified: false,
       });
 
-      expect(result.accessToken).toBe('access-token');
-      expect(result.refreshToken).toBe('refresh-token');
-      expect(result.user.email).toBe('test@example.com');
+      await expect(command.execute({ idToken: 'tok' })).rejects.toThrow(
+        InvalidCredentialsError,
+      );
+      // Must never reach the allowlist / session for an unverified email.
+      expect(mockUserRepo.findByEmail).not.toHaveBeenCalled();
+      expect(mockSessionService.create).not.toHaveBeenCalled();
     });
 
-    it('should throw InvalidCredentialsError for wrong password', async () => {
-      mockUserRepo.findByEmail.mockResolvedValue(testUser);
-      (mockBcrypt.compare as jest.Mock).mockResolvedValue(false);
+    it('(d) links firebaseUid on first login (repo save called with the uid)', async () => {
+      mockFirebaseAdmin.verifyIdToken.mockResolvedValue(verified);
+      mockUserRepo.findByEmail.mockResolvedValue(makeUser({ firebaseUid: null }));
+      mockUserRepo.save.mockImplementation(async (u: User) => u);
 
-      await expect(
-        command.execute({ email: 'test@example.com', password: 'wrong' }),
-      ).rejects.toThrow(InvalidCredentialsError);
+      await command.execute({ idToken: 'tok' });
+
+      const savedUser: User = mockUserRepo.save.mock.calls[0][0];
+      expect(savedUser.firebaseUid).toBe(FIREBASE_UID);
     });
 
-    it('should throw InvalidCredentialsError for non-existent user', async () => {
-      mockUserRepo.findByEmail.mockResolvedValue(null);
+    it('rejects when the linked firebaseUid differs (email re-used by another Google account)', async () => {
+      mockFirebaseAdmin.verifyIdToken.mockResolvedValue(verified);
+      mockUserRepo.findByEmail.mockResolvedValue(
+        makeUser({ firebaseUid: 'some-other-uid' }),
+      );
 
-      await expect(
-        command.execute({
-          email: 'nonexistent@example.com',
-          password: 'password',
-        }),
-      ).rejects.toThrow(InvalidCredentialsError);
+      await expect(command.execute({ idToken: 'tok' })).rejects.toThrow(
+        InvalidCredentialsError,
+      );
+      expect(mockSessionService.create).not.toHaveBeenCalled();
     });
 
-    it('should throw InactiveUserError for inactive user', async () => {
-      const inactiveUser = new User({
-        ...testUser,
-        isActive: false,
-        id: 'inactive',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    it('rejects a token that fails verification', async () => {
+      mockFirebaseAdmin.verifyIdToken.mockRejectedValue(new Error('bad sig'));
+
+      await expect(command.execute({ idToken: 'tok' })).rejects.toThrow(
+        InvalidCredentialsError,
+      );
+    });
+
+    it('(e) returns { accessToken, user } and signs a payload carrying the sid', async () => {
+      mockFirebaseAdmin.verifyIdToken.mockResolvedValue(verified);
+      mockUserRepo.findByEmail.mockResolvedValue(
+        makeUser({ firebaseUid: FIREBASE_UID, role: 'manager' }),
+      );
+
+      const result = await command.execute({ idToken: 'tok' });
+
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        user: {
+          id: 'test-uuid-0001',
+          email: 'test@example.com',
+          fullName: 'Test User',
+          role: 'manager',
+        },
       });
-      mockUserRepo.findByEmail.mockResolvedValue(inactiveUser);
-
-      await expect(
-        command.execute({ email: 'test@example.com', password: 'password123' }),
-      ).rejects.toThrow(InactiveUserError);
+      expect(mockJwtService.signAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({ sid: 'session-xyz', sub: 'test-uuid-0001' }),
+      );
+      // Returning login (uid already linked) must not re-save.
+      expect(mockUserRepo.save).not.toHaveBeenCalled();
     });
   });
 
-  // ========================================================================
-  // RefreshTokenCommand Tests
-  // ========================================================================
-  describe('RefreshTokenCommand', () => {
-    let command: RefreshTokenCommand;
+  // ==========================================================================
+  // EndSessionCommand — logout
+  // ==========================================================================
+  describe('EndSessionCommand', () => {
+    let command: EndSessionCommand;
 
     beforeEach(() => {
-      command = new RefreshTokenCommand(
-        mockJwtService as any,
-        mockPrisma as any,
+      command = new EndSessionCommand(mockSessionService as any);
+    });
+
+    it('revokes the given session id', async () => {
+      await command.execute('sid-1');
+      expect(mockSessionService.revoke).toHaveBeenCalledWith('sid-1');
+    });
+
+    it('is a no-op when no sid is present', async () => {
+      await command.execute('');
+      expect(mockSessionService.revoke).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // UpdateUserCommand — deactivation must instantly cut off access (FR-A13)
+  // ==========================================================================
+  describe('UpdateUserCommand', () => {
+    let command: UpdateUserCommand;
+
+    beforeEach(() => {
+      command = new UpdateUserCommand(
+        mockUserRepo as any,
+        mockSessionService as any,
+        mockFirebaseAdmin as any,
       );
     });
 
-    it('should refresh tokens successfully', async () => {
-      mockJwtService.verifyRefreshToken.mockReturnValue({ sub: 'user-1' });
-      mockPrisma.refreshToken.findUnique.mockResolvedValue({
-        id: 'rt-1',
-        token: 'old-refresh-token',
-        expiresAt: new Date(Date.now() + 86400000),
-        user: {
-          id: 'user-1',
-          email: 'test@example.com',
-          role: 'staff',
-          fullName: 'Test User',
-          isActive: true,
-        },
-      });
-      mockJwtService.signAccessToken.mockReturnValue('new-access-token');
-      mockJwtService.signRefreshToken.mockReturnValue('new-refresh-token');
+    it('deactivation revokes all sessions and the Firebase refresh tokens', async () => {
+      const user = makeUser({ id: 'u-9', firebaseUid: FIREBASE_UID });
+      mockUserRepo.findById.mockResolvedValue(user);
+      mockUserRepo.update.mockImplementation(async (u: User) => u);
 
-      const result = await command.execute({
-        refreshToken: 'old-refresh-token',
-      });
+      await command.execute('u-9', { isActive: false });
 
-      expect(result.accessToken).toBe('new-access-token');
-      expect(result.refreshToken).toBe('new-refresh-token');
-      expect(mockPrisma.refreshToken.delete).toHaveBeenCalled();
-      expect(mockPrisma.refreshToken.create).toHaveBeenCalled();
+      expect(mockSessionService.revokeAllForUser).toHaveBeenCalledWith('u-9');
+      expect(mockFirebaseAdmin.revokeRefreshTokens).toHaveBeenCalledWith(
+        FIREBASE_UID,
+      );
     });
 
-    it('should throw InvalidCredentialsError for expired token', async () => {
-      mockJwtService.verifyRefreshToken.mockReturnValue({ sub: 'user-1' });
-      mockPrisma.refreshToken.findUnique.mockResolvedValue({
-        id: 'rt-1',
-        token: 'expired-token',
-        expiresAt: new Date(Date.now() - 86400000),
-        user: {
-          id: 'user-1',
-          email: 'test@example.com',
-          role: 'staff',
-          fullName: 'Test User',
-          isActive: true,
-        },
-      });
+    it('does not touch sessions when only the role changes', async () => {
+      const user = makeUser({ id: 'u-9', firebaseUid: FIREBASE_UID });
+      mockUserRepo.findById.mockResolvedValue(user);
+      mockUserRepo.update.mockImplementation(async (u: User) => u);
 
-      await expect(
-        command.execute({ refreshToken: 'expired-token' }),
-      ).rejects.toThrow(InvalidCredentialsError);
+      await command.execute('u-9', { role: 'admin' });
+
+      expect(mockSessionService.revokeAllForUser).not.toHaveBeenCalled();
+      expect(mockFirebaseAdmin.revokeRefreshTokens).not.toHaveBeenCalled();
     });
   });
 });

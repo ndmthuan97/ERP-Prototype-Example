@@ -3,12 +3,12 @@ type: System Component
 title: "Bounded Contexts"
 description: "6 bounded contexts with context map, interaction rules, data ownership, and event contracts"
 tags: [system, component, ddd, bounded-context]
-timestamp: "2026-06-25T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Bounded Contexts — Ranh giới ngữ cảnh
 
-> ✅ **Trạng thái:** Tất cả 6 bounded contexts đã implement đầy đủ. Xem chi tiết: [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Trạng thái:** Tất cả 6 bounded contexts đã implement đầy đủ. Xem chi tiết: [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu mô tả các Bounded Context trong hệ thống ERP Prototype, quy tắc tương tác giữa chúng, và sự kiện (events) mà mỗi context publish/consume.
 > Liên quan: [system-overview](system-overview.md) · [data-model](data-model.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
@@ -39,7 +39,7 @@ Trong Domain-Driven Design (DDD), **Bounded Context** là ranh giới logic mà 
 ```mermaid
 flowchart TB
     subgraph Supporting
-        Auth["Auth Context\n:3004\nschema: auth"]
+        Auth["Auth Context\n:3004\nschema: app_auth"]
     end
 
     subgraph Core Contexts
@@ -93,18 +93,18 @@ flowchart TB
 |---|---|
 | **Vai trò** | Supporting Context — hỗ trợ xác thực và phân quyền cho toàn hệ thống |
 | **Service** | Auth Service `:3004` |
-| **Schema** | `auth` |
-| **Tables** | `users`, `refresh_tokens` |
+| **Schema** | `app_auth` |
+| **Tables** | `users`, `sessions`, `refresh_tokens` (deprecated) |
 | **Events published** | Không có (auth không publish event) |
 | **Events consumed** | Không có |
 
-**Responsibilities:**
+**Responsibilities (sau B1):**
 
-1. Đăng ký user mới (hash password bằng bcrypt)
-2. Đăng nhập — trả về Access Token (JWT) + Refresh Token
-3. Refresh Token — cấp lại Access Token khi hết hạn
+1. Đăng ký user mới **password-less** (email + role + fullName = entry allowlist) — chỉ admin
+2. Đăng nhập qua **Google sign-in** (Identity Platform): verify Firebase ID token, allowlist email, tạo session → trả **app token HS256** (mang `sid`)
+3. Đăng xuất — xoá session khỏi whitelist (`x-user-sid`); deactivate user → revoke toàn bộ session + `revokeRefreshTokens`
 4. Quản lý user (CRUD) — chỉ admin
-5. Cung cấp endpoint verify token cho Gateway
+5. Chia sẻ secret HS256 để Gateway tự verify app token; Gateway tra `session:<sid>` ở Redis mỗi request (không gọi Auth để verify)
 
 **Tại sao là Supporting Context?**
 Auth không chứa business logic cốt lõi của ERP (không liên quan đến khách hàng, đơn hàng, kho). Nó chỉ hỗ trợ các core context bằng cách xác thực danh tính user.

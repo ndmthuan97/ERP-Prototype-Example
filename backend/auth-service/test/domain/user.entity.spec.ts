@@ -5,7 +5,6 @@ describe('User Entity', () => {
     overrides: Partial<{
       id: string;
       email: string;
-      passwordHash: string;
       fullName: string;
       role: UserRole;
       isActive: boolean;
@@ -16,7 +15,6 @@ describe('User Entity', () => {
     return new User({
       id: 'user-1',
       email: 'test@example.com',
-      passwordHash: 'hashed',
       fullName: 'Test User',
       role: 'staff',
       isActive: true,

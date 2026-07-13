@@ -9,7 +9,7 @@ timestamp: "2026-06-26T00:00:00+07:00"
 
 # Purchasing Service — API Endpoints
 
-> ✅ **Đã implement đầy đủ.** `purchasing-service` với Purchase Order lifecycle (draft→placed→received), PO Line CRUD, Supplier CRUD, goods receipt → Inventory. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Đã implement đầy đủ.** `purchasing-service` với Purchase Order lifecycle (draft→placed→received), PO Line CRUD, Supplier CRUD, goods receipt → Inventory. Xem [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu tham chiếu cho tất cả endpoints của **Purchasing Service** (`localhost:3006`).
 > Service quản lý quy trình mua hàng — từ tạo đơn đặt mua (PO), thêm dòng hàng, đặt hàng nhà cung cấp, đến nhận hàng nhập kho. Khi nhận hàng, service publish event `goods.received` để Inventory Service tự động tăng stock.

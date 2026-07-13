@@ -54,7 +54,7 @@ module "database" {
   vpc_network = module.networking.vpc_id
 
   # Keep a public IP allocated so the Cloud SQL Auth Proxy can be run from a local
-  # dev machine (see docs/run-backend-with-prod-config.md). Access stays IAM-gated:
+  # dev machine (see docs/operations/run-backend-with-prod-config.md). Access stays IAM-gated:
   # authorized_networks is empty, so only the Auth Proxy can connect. Flip to false
   # to return to private-only.
   enable_public_ip = true
@@ -119,6 +119,41 @@ module "iam" {
   environment = var.environment
 
   depends_on = [google_project_service.apis]
+}
+
+# ============================================================
+# Module: Identity Platform (Google sign-in / Firebase Auth GA)
+# ============================================================
+# Backs migration B1 — auth-service verifies Google ID tokens via Firebase
+# Admin. Enables Identity Platform, configures the Google IdP, and provisions
+# the auth-svc-admin runtime SA with roles/firebaseauth.admin. The module owns
+# its own google_project_service (identitytoolkit), so no depends_on the central
+# google_project_service.apis here.
+
+module "identity_platform" {
+  source = "../../modules/identity-platform"
+
+  project_id                 = var.project_id
+  authorized_domains         = var.auth_authorized_domains
+  google_oauth_client_id     = var.google_oauth_client_id
+  google_oauth_client_secret = var.google_oauth_client_secret
+}
+
+# Firebase Auth admin for the CURRENTLY-RUNNING auth-service.
+# The auth-service runs under the shared backend runtime SA (erp-backend-<env>),
+# and its Cloud Run spec is owned by Google Cloud Deploy (deploy/auth-service/
+# service.yaml), NOT Terraform — so swapping its runtime identity to
+# auth-svc-admin from here is not possible without an invasive manifest change.
+# Lower-risk choice: grant firebaseauth.admin to the existing backend SA so the
+# running auth-service can verifyIdToken / revokeRefreshTokens today. When the
+# auth-service manifest is updated to run as
+# module.identity_platform.auth_service_account_email, drop this binding.
+resource "google_project_iam_member" "auth_service_firebaseauth" {
+  project = var.project_id
+  role    = "roles/firebaseauth.admin"
+  member  = "serviceAccount:${module.iam.backend_sa_email}"
+
+  depends_on = [module.iam]
 }
 
 # ============================================================

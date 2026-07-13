@@ -28,9 +28,9 @@ describe('01 — Health Check', () => {
     api.clearTokens();
     const res = await api.get('/customers');
     expect(res.status).toBe(401);
-    // Restore token
+    // Restore the cached token (no re-login under B1 — token came from SSO exchange)
     if (token) {
-      await api.login('admin@gmail.com', 'Admin@123');
+      api.setAccessToken(token);
     }
   });
 

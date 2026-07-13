@@ -45,7 +45,7 @@ Inventory Service quản lý stock levels, movements, và hỗ trợ batch reser
 - **Event Flows**: [event-flows.md §2-4](../architecture/event-flows.md) — subscriber side
 - **Design Patterns**: [design-patterns.md §9](../architecture/design-patterns.md) — Optimistic Locking
 - **Business Requirements**: [business-requirements.md §3.3](../overview/business-requirements.md)
-- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../IMPLEMENTATION-STATUS.md)
+- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../operations/implementation-status.md)
 
 ## Related Concepts
 

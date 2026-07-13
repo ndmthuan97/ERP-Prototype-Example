@@ -1,10 +1,10 @@
 ---
 type: System Component
 title: "API Gateway"
-description: "Centralized entry point with JWT verification, RBAC enforcement, reverse proxy to 6 services, Helmet, and rate limiting"
+description: "Centralized entry point with app token (HS256) verification + session whitelist (Redis), RBAC enforcement, reverse proxy to 6 services, Helmet, and rate limiting"
 resource: "http://localhost:3010"
-tags: [system, component, gateway, jwt, proxy, rate-limiting]
-timestamp: "2026-06-26T00:00:00+07:00"
+tags: [system, component, gateway, jwt, session, proxy, rate-limiting]
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # API Gateway
@@ -16,15 +16,16 @@ timestamp: "2026-06-26T00:00:00+07:00"
 | **Port** | `:3010` |
 | **Schema** | — (không có DB) |
 | **Vai trò** | Infrastructure — single entry point cho toàn hệ thống |
-| **Patterns** | API Gateway, JWT Guard, RBAC, Rate Limiting |
+| **Patterns** | API Gateway, App-token Guard, Session Whitelist, RBAC, Rate Limiting |
 
-API Gateway là điểm truy cập duy nhất. Frontend gọi Gateway → Gateway verify JWT → check RBAC → proxy tới service backend tương ứng. Áp dụng Helmet security headers và rate limiting (100 req/15min global, 5 req/15min login).
+API Gateway là điểm truy cập duy nhất. Frontend gọi Gateway → Gateway verify **app token HS256** → tra **session whitelist** (`getex session:<sid>` ở Redis, slide TTL; miss = 401) → check RBAC → proxy tới service backend tương ứng, inject `x-user-*` + `x-user-sid`. Áp dụng Helmet security headers và rate limiting (100 req/15min global, 5 req/15min cho `/auth/sso/callback`).
 
 ## Dependencies
 
 | Dependency | Type | Mô tả |
 |-----------|------|-------|
-| Auth Service | Internal | Verify JWT tokens |
+| Auth Service | Internal | Forward `/api/auth/*` (Gateway tự verify app token, không gọi Auth để verify) |
+| Redis (Upstash) | External | Tra `session:<sid>` mỗi request (session whitelist) |
 | Customer Service | Internal | Proxy `/api/customers/*` → `:3001` |
 | Sales Service | Internal | Proxy `/api/orders/*` → `:3002` |
 | Inventory Service | Internal | Proxy `/api/inventory/*` → `:3003` |
@@ -36,7 +37,8 @@ API Gateway là điểm truy cập duy nhất. Frontend gọi Gateway → Gatewa
 
 | Env Var | Required | Mô tả |
 |---------|:--------:|-------|
-| `JWT_SECRET` | ✅ | Shared JWT secret (same as Auth Service) |
+| `JWT_SECRET` | ✅ | Shared HS256 secret verify app token (same as Auth Service) |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | ✅ | Redis cho session whitelist (`session:<sid>`) |
 | `AUTH_SERVICE_URL` | ✅ | Auth Service URL |
 | `CUSTOMER_SERVICE_URL` | ✅ | Customer Service URL |
 | `ORDER_SERVICE_URL` | ✅ | Sales Service URL |
@@ -61,7 +63,7 @@ API Gateway là điểm truy cập duy nhất. Frontend gọi Gateway → Gatewa
 - **RBAC Detail**: [rbac.md](../architecture/rbac.md)
 - **System Overview**: [system-overview.md §4](../architecture/system-overview.md)
 - **Design Patterns**: [design-patterns.md §10, §11](../architecture/design-patterns.md)
-- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../IMPLEMENTATION-STATUS.md)
+- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../operations/implementation-status.md)
 
 ## Related Concepts
 

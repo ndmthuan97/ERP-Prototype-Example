@@ -3,7 +3,7 @@ type: Reference
 title: "Coding Standards"
 description: "Code conventions covering Clean Code, SOLID principles, DDD layer structure, naming, error handling, and @erp/shared integration"
 tags: [reference, coding-standards, clean-code, solid]
-timestamp: "2026-06-25T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Coding Standards — Quy chuẩn viết code
@@ -331,7 +331,7 @@ type(scope): description
 | Type       | Mục đích                                  | Ví dụ                                           |
 | ---------- | ----------------------------------------- | ------------------------------------------------ |
 | `feat`     | Tính năng mới                             | `feat(order): add order submission endpoint`     |
-| `fix`      | Sửa bug                                   | `fix(auth): handle expired refresh token`        |
+| `fix`      | Sửa bug                                   | `fix(auth): reject request when session revoked` |
 | `chore`    | Cấu hình, dependency, tooling             | `chore(deps): update prisma to v6.0`             |
 | `docs`     | Cập nhật tài liệu                         | `docs(api): add inventory endpoint reference`    |
 | `refactor` | Refactor code (không thay đổi behavior)   | `refactor(customer): extract tax-code value object` |
@@ -362,7 +362,7 @@ type(scope): description
 ```bash
 git commit -m "feat(order): add order lifecycle CQRS read model"
 git commit -m "fix(customer): prevent duplicate tax code on creation"
-git commit -m "chore(auth): configure bcrypt salt rounds"
+git commit -m "chore(auth): configure app token TTL"
 git commit -m "docs(api): document inventory stock endpoints"
 git commit -m "refactor(order): extract order status to value object"
 ```
@@ -461,7 +461,7 @@ import { CustomerResponseDto } from '../dtos/customer-response.dto';
 
 | Thứ tự | Loại                | Ví dụ prefix                     |
 | ------ | ------------------- | -------------------------------- |
-| 1      | External packages   | `@nestjs/`, `bcrypt`, `prisma`   |
+| 1      | External packages   | `@nestjs/`, `firebase-admin`, `prisma` |
 | 2      | Internal (absolute) | `@domain/`, `@application/`      |
 | 3      | Relative            | `./`, `../`                      |
 

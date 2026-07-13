@@ -313,7 +313,7 @@ infra/
 | `UPSTASH_REDIS_REST_URL` | Upstash URL | Upstash URL (same) |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash token | Secret Manager ref |
 | `PUBSUB_EMULATOR_HOST` | `localhost:8085` | **NOT SET** → SDK kết nối real Pub/Sub |
-| `PUBSUB_PROJECT_ID` | `erp-prototype` | GCP project ID |
+| `PUBSUB_PROJECT_ID` | `portfolio-497506` | GCP project ID |
 | `JWT_SECRET` | `.env` plaintext | Secret Manager ref |
 | `AUTH_SERVICE_URL` | `http://localhost:3004` | `https://auth-service-xxx.run.app` |
 | `*_SERVICE_URL` | `http://localhost:300x` | Cloud Run internal URLs |

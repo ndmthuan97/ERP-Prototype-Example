@@ -6,7 +6,6 @@
 // localStorage keeps session alive across page refreshes.
 
 const STORAGE_KEY = 'erp_access_token';
-const REFRESH_KEY = 'erp_refresh_token';
 
 let cachedToken: string | null = null;
 
@@ -32,28 +31,10 @@ export function getAuthToken(): string | null {
   return cachedToken;
 }
 
-export function setRefreshToken(token: string | null): void {
-  if (typeof window !== 'undefined') {
-    if (token) {
-      localStorage.setItem(REFRESH_KEY, token);
-    } else {
-      localStorage.removeItem(REFRESH_KEY);
-    }
-  }
-}
-
-export function getRefreshToken(): string | null {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem(REFRESH_KEY);
-  }
-  return null;
-}
-
 export function clearTokens(): void {
   cachedToken = null;
   if (typeof window !== 'undefined') {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(REFRESH_KEY);
   }
 }
 

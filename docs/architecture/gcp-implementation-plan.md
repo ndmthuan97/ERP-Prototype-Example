@@ -567,7 +567,7 @@ CMD ["node", "server.js"]
 +# LOCAL DEV: uncomment line below
 +# PUBSUB_EMULATOR_HOST=localhost:8085
 +# PRODUCTION: Do NOT set PUBSUB_EMULATOR_HOST → SDK auto-connects to real Pub/Sub
- PUBSUB_PROJECT_ID=erp-prototype
+ PUBSUB_PROJECT_ID=portfolio-497506
 ```
 
 ---

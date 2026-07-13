@@ -9,7 +9,7 @@ timestamp: "2026-06-26T00:00:00+07:00"
 
 # Inventory Service — API Endpoints
 
-> ✅ **Đã implement đầy đủ.** `inventory-service` với optimistic locking, reserve/release, receive, decimal quantities. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Đã implement đầy đủ.** `inventory-service` với optimistic locking, reserve/release, receive, decimal quantities. Xem [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu tham chiếu cho tất cả endpoints của **Inventory Service** (`localhost:3003`).
 > Service quản lý hàng hóa (items), kho hàng (warehouses), và tồn kho (stock) — bao gồm nhập kho, xuất kho, và truy vấn lịch sử movements.

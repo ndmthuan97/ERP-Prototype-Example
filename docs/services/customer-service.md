@@ -46,7 +46,7 @@ Customer Service là bounded context đầu tiên trong hệ thống. Quản lý
 - **Events**: [event-flows.md §3.2](../architecture/event-flows.md)
 - **Design Patterns**: [design-patterns.md §1-5, §13](../architecture/design-patterns.md)
 - **Business Requirements**: [business-requirements.md §3.1](../overview/business-requirements.md)
-- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../IMPLEMENTATION-STATUS.md)
+- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../operations/implementation-status.md)
 
 ## Related Concepts
 

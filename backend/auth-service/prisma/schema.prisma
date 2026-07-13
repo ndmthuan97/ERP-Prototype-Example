@@ -4,9 +4,11 @@
 // Prisma v7: url/directUrl are configured in prisma.config.ts
 // This schema only declares provider, models, and schemas.
 //
-// Auth Service owns the "auth" schema with 2 tables:
-//   1. users          — User accounts with hashed passwords and roles
-//   2. refresh_tokens — JWT refresh tokens for token rotation
+// Auth Service owns the "app_auth" schema. Tables:
+//   1. users          — User accounts (identity + role); password-less under B1
+//                       (Google/Identity Platform is the credential; firebase_uid links the account)
+//   2. sessions       — Server-side session whitelist for instant revoke (FR-A13) + idle (FR-A9)
+//   3. refresh_tokens — DEPRECATED under B1 (Firebase SDK holds the refresh token). Kept until cleanup.
 
 datasource db {
   provider  = "postgresql"
@@ -24,7 +26,9 @@ generator client {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
-  passwordHash String   @map("password_hash")
+  // Identity Platform / Firebase UID, linked on first successful Google sign-in.
+  // Allowlist gates by email; this pins the account that email is tied to.
+  firebaseUid  String?  @unique @map("firebase_uid")
   fullName     String   @map("full_name")
   role         String   @default("staff")  // admin | manager | staff
   isActive     Boolean  @default(true) @map("is_active")
@@ -32,14 +36,39 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+  sessions      Session[]
 
   @@map("users")
   @@schema("app_auth")
 }
 
 // =============================================================================
-// MODEL: RefreshToken — Secure token rotation for JWT refresh flow
+// MODEL: Session — Server-side whitelist for instant revoke + idle timeout
 // =============================================================================
+// One row per active login. The gateway checks `session:<id>` in Redis on every
+// request; this table is the durable record (enumerate a user's sessions to
+// revoke ALL on deactivation — FR-A13) and the idle bound (`expiresAt`, FR-A9).
+// Column shape follows new-erp-design 03-module-requirements §3.4 `auth.sessions`.
+model Session {
+  id        String   @id                              // = sid, also embedded in the app access token
+  userId    String   @map("user_id")
+  startedAt DateTime @default(now()) @map("started_at")
+  expiresAt DateTime @map("expires_at")               // idle bound; slid on refresh
+  ip        String?
+  userAgent String?  @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+  @@schema("app_auth")
+}
+
+// =============================================================================
+// MODEL: RefreshToken — DEPRECATED under B1 (Firebase SDK holds the refresh token)
+// =============================================================================
+// Left in place so existing data isn't destroyed; no code path writes to it now.
+// Drop in a later cleanup once B1 is confirmed in prod.
 model RefreshToken {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")

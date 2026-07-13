@@ -12,3 +12,14 @@ db_password         = "change-me-strong-password"
 jwt_secret          = "change-me-jwt-secret-key"
 upstash_redis_url   = "https://your-redis-instance.upstash.io"
 upstash_redis_token = "your-upstash-redis-token"
+
+# --- Identity Platform / Google sign-in (migration B1) ---
+# client_id + client_secret come from a MANUALLY-created OAuth 2.0 Web client
+# and OAuth consent screen (Console -> APIs & Services -> Credentials).
+# Terraform cannot create the consent screen, so you provide these by hand.
+# The web SDK's apiKey + authDomain (used by the FRONTEND) are ALSO copied from
+# the Console (Project settings / Identity Platform "Application setup") and are
+# NOT managed by Terraform.
+google_oauth_client_id     = "1234567890-xxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+google_oauth_client_secret = "GOCSPX-change-me"
+auth_authorized_domains    = ["localhost"] # add your Cloud Run frontend domain when deployed

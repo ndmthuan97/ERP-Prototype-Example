@@ -2,7 +2,7 @@
 
 > Prototype validate kiến trúc microservices: DDD, Event-driven, CQRS, Outbox, Saga, Aggregate Root.
 
-> ✅ **Trạng thái:** Tất cả **6 backend services** + API Gateway + Frontend đã implement đầy đủ. Chi tiết: [docs/IMPLEMENTATION-STATUS.md](docs/IMPLEMENTATION-STATUS.md).
+> ✅ **Trạng thái:** Tất cả **6 backend services** + API Gateway + Frontend đã implement đầy đủ. Chi tiết: [docs/operations/implementation-status.md](docs/operations/implementation-status.md).
 
 ## Cấu trúc
 
@@ -83,7 +83,7 @@ curl http://localhost:3010/health     # API Gateway health
 | 9 | [Event Flows](docs/architecture/event-flows.md) | Pub/Sub topics, saga flow |
 | 10 | [Design Patterns](docs/architecture/design-patterns.md) | 14+ patterns giải thích |
 | 11 | [RBAC](docs/architecture/rbac.md) | 3 roles, permission matrix |
-| 12 | [System Flows](docs/flows.md) | 9 luồng nghiệp vụ chính |
+| 12 | [System Flows](docs/operations/flows.md) | 9 luồng nghiệp vụ chính |
 | 13 | [API Reference](docs/api/) | Endpoints cho từng service |
 | 14 | [Getting Started](docs/development/getting-started.md) | Setup + chạy lần đầu |
 | 15 | [Coding Standards](docs/development/coding-standards.md) | Quy tắc code, tích hợp `@erp/shared` |
@@ -98,15 +98,15 @@ curl http://localhost:3010/health     # API Gateway health
 | Hiểu 1 service cụ thể | [Services](docs/services/) — quick reference per service |
 | Setup chạy local | [Getting Started](docs/development/getting-started.md) |
 | Xem API endpoints | [Auth](docs/api/auth-endpoints.md) · [Customer](docs/api/customer-endpoints.md) · [Sales](docs/api/order-endpoints.md) · [Inventory](docs/api/inventory-endpoints.md) · [Catalog](docs/api/catalog-endpoints.md) · [Purchasing](docs/api/purchasing-endpoints.md) |
-| Xem system flows | [Flows](docs/flows.md) — Auth, Saga, Delivery, Return, Purchasing, Catalog |
+| Xem system flows | [Flows](docs/operations/flows.md) — Auth, Saga, Delivery, Return, Purchasing, Catalog |
 | Hiểu kiến trúc | [System Overview](docs/architecture/system-overview.md) |
-| Hiểu Saga flow | [Event Flows](docs/architecture/event-flows.md) · [Flows](docs/flows.md#flow-2-sales-order-saga-) |
+| Hiểu Saga flow | [Event Flows](docs/architecture/event-flows.md) · [Flows](docs/operations/flows.md#flow-2-sales-order-saga-) |
 | Hiểu database schema | [Data Model](docs/architecture/data-model.md) |
 | Biết quy tắc phân quyền | [RBAC](docs/architecture/rbac.md) |
 | Hiểu tại sao chọn NestJS, Prisma... | [Tech Decisions](docs/overview/tech-decisions.md) |
 | Hiểu `@erp/shared` package | [System Overview → §11](docs/architecture/system-overview.md) · [Design Patterns → §12–14](docs/architecture/design-patterns.md) · [Coding Standards → §8–9](docs/development/coding-standards.md) |
 | Xem technical review | [Technical Review](docs/technical-review.md) |
-| Xem E2E test plan | [E2E Test Plan](docs/e2e-test-plan.md) |
+| Xem E2E test plan | [E2E Test Plan](docs/operations/e2e-test-plan.md) |
 | Xem tài liệu đã archive | [Archive](docs/archive/) — upgrade-plan, domain-gap-analysis |
 
 ---

@@ -3,7 +3,7 @@ type: Business Rule
 title: "ERP Business Requirements"
 description: "Business context, user personas, RBAC matrix, and user stories for all bounded contexts"
 tags: [business-rule, requirements, user-stories, erp]
-timestamp: "2026-06-25T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Business Requirements
@@ -142,10 +142,10 @@ stateDiagram-v2
 
 | ID | Story | Acceptance Criteria | Pattern liên quan |
 |----|-------|--------------------|--------------------|
-| **AUTH-01** | Là user, tôi muốn **đăng nhập** bằng email + password | - Verify password bằng bcrypt <br> - Trả về access token (JWT, 15 phút) + refresh token (7 ngày) | JWT, bcrypt |
-| **AUTH-02** | Là hệ thống, tôi muốn **phân quyền** dựa trên role trong JWT | - Mỗi endpoint có decorator chỉ định roles được phép <br> - API Gateway validate JWT trước khi forward | RBAC |
-| **AUTH-03** | Là user, tôi muốn **refresh token** khi access token hết hạn | - Gửi refresh token → nhận access token mới <br> - Refresh token cũ bị invalidate (rotation) | JWT |
-| **AUTH-04** | Là admin, tôi muốn **quản lý users** (tạo, đổi role, deactivate) | - Chỉ admin mới có quyền <br> - Không thể deactivate chính mình | RBAC |
+| **AUTH-01** | Là user, tôi muốn **đăng nhập bằng "Sign in with Google"** | - Frontend lấy Firebase ID token → `POST /auth/sso/callback` <br> - Server verify ID token + **allowlist** email trong `users` (chưa provision → 403) <br> - Trả **app token HS256** (payload có `sid`, TTL mặc định 1h) + tạo session | Identity Platform, App token, Session Whitelist |
+| **AUTH-02** | Là hệ thống, tôi muốn **phân quyền** dựa trên role trong app token | - Mỗi endpoint có decorator chỉ định roles được phép <br> - API Gateway verify app token + tra `session:<sid>` (Redis) trước khi forward | RBAC |
+| **AUTH-03** | Là hệ thống, tôi muốn **thu hồi phiên tức thì + idle timeout** | - Logout xoá session; deactivate user revoke **toàn bộ** session (+ `revokeRefreshTokens`) <br> - Gateway tra `session:<sid>` mỗi request (miss = 401 trong vài giây) <br> - Idle timeout theo role (mặc định 30m, slide) | Session Whitelist (FR-A13, FR-A9) |
+| **AUTH-04** | Là admin, tôi muốn **quản lý users** (tạo password-less, đổi role, deactivate) | - Chỉ admin mới có quyền <br> - Không thể deactivate chính mình | RBAC |
 
 ### 3.5. Catalog Context — User Stories
 

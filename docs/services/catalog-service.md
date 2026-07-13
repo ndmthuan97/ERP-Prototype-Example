@@ -38,8 +38,8 @@ Catalog Service quản lý product catalog. Khi tạo product mới, publish eve
 
 - **API Reference**: [catalog-endpoints.md](../api/catalog-endpoints.md)
 - **Data Model**: [data-model.md](../architecture/data-model.md)
-- **Business Flows**: [flows.md](../flows.md) — Flow 6 (Catalog → Inventory)
-- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../IMPLEMENTATION-STATUS.md)
+- **Business Flows**: [flows.md](../operations/flows.md) — Flow 6 (Catalog → Inventory)
+- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../operations/implementation-status.md)
 
 ## Related Concepts
 

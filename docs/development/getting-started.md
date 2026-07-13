@@ -3,7 +3,7 @@ type: Runbook
 title: "Getting Started — Setup Guide"
 description: "Step-by-step guide to install prerequisites, configure services, and run the full ERP system locally"
 tags: [runbook, setup, development, getting-started]
-timestamp: "2026-06-27T09:15:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Getting Started — Hướng dẫn cài đặt và chạy dự án
@@ -127,13 +127,13 @@ cp backend/.env.example backend/.env
 | ---------------------------- | ----------------------------------- | ---------------------------------------- |
 | `DATABASE_URL`               | Connection pooled (PgBouncer, 6543) — dùng cho runtime | `postgresql://postgres.[ref]:pass@...pooler.supabase.com:6543/postgres` |
 | `DIRECT_URL`                 | Connection direct (5432) — dùng cho `prisma migrate`/`db push` | `postgresql://postgres.[ref]:pass@db.[ref].supabase.co:5432/postgres` |
-| `JWT_SECRET`                 | Secret key cho JWT                  | `your-super-secret-key-min-32-chars`     |
-| `JWT_EXPIRES_IN`             | Thời hạn access token               | `15m`                                    |
-| `JWT_REFRESH_EXPIRES_IN`     | Thời hạn refresh token              | `7d`                                     |
+| `JWT_SECRET`                 | Secret HS256 ký/verify app token (dùng chung Gateway) | `your-super-secret-key-min-32-chars`     |
+| `APP_TOKEN_TTL`              | Thời hạn app token                  | `1h`                                     |
+| `FIREBASE_PROJECT_ID`        | Project Identity Platform (verify Firebase ID token) | `portfolio-497506`             |
 | `UPSTASH_REDIS_REST_URL`     | Upstash Redis URL                   | `https://xxx.upstash.io`                 |
 | `UPSTASH_REDIS_REST_TOKEN`   | Upstash Redis token                 | `AXxx...`                                |
 | `PUBSUB_EMULATOR_HOST`      | Pub/Sub Emulator host               | `localhost:8085`                          |
-| `PUBSUB_PROJECT_ID`         | GCP project ID (giả lập)            | `erp-prototype`                          |
+| `PUBSUB_PROJECT_ID`         | GCP project ID (giả lập)            | `portfolio-497506`                          |
 
 > **Schema per service:** mỗi service quản lý 1 Prisma schema riêng (`auth`, `customer`, `sales`, `inventory`, `catalog`, `purchasing`) — **không** truyền `?schema=` trên connection string.
 
@@ -337,11 +337,11 @@ curl http://localhost:3006/health   # Purchasing
 
 ---
 
-## 9. Seed — Tạo admin user đầu tiên
+## 9. Seed — Provision admin user đầu tiên (password-less)
 
-> Auth-service đã implement đầy đủ. Schema `app_auth` với bảng `users` và `refresh_tokens` đã chạy.
+> Sau **B1**, auth dùng **Google sign-in (Identity Platform)** — user **không có password**. Schema `app_auth` gồm `users`, `sessions` (`refresh_tokens` deprecated). Record `users` (email + role + fullName) chính là **entry allowlist**; `firebase_uid` được link ở lần đăng nhập Google đầu tiên.
 
-Vì endpoint `POST /auth/register` yêu cầu admin token, bạn cần seed admin user trực tiếp vào database lần đầu tiên.
+Vì endpoint `POST /auth/register` yêu cầu admin token, bạn cần provision admin đầu tiên trực tiếp vào database (con gà–quả trứng).
 
 ### Cách 1: Dùng Seed Script (khuyến nghị)
 
@@ -352,15 +352,14 @@ npx ts-node prisma/seed.ts
 
 ### Cách 2: Insert trực tiếp qua SQL
 
-Truy cập **Supabase SQL Editor** và chạy:
+Truy cập **SQL Editor** (Cloud SQL Studio / Supabase) và chạy — **không có password**, email phải trùng tài khoản Google sẽ đăng nhập:
 
 ```sql
--- Password: Admin@123 (đã hash bằng bcrypt, 10 salt rounds)
-INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
+-- Password-less: chỉ email (allowlist) + role. firebase_uid link ở lần sign-in đầu.
+INSERT INTO app_auth.users (id, email, full_name, role, created_at, updated_at)
 VALUES (
   gen_random_uuid(),
-  'admin@company.com',
-  '$2b$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',  -- Thay bằng hash thật
+  'admin@company.com',   -- phải là email Google thật sẽ dùng để sign-in
   'System Admin',
   'admin',
   NOW(),
@@ -368,28 +367,21 @@ VALUES (
 );
 ```
 
-> **Cách lấy bcrypt hash**: Chạy lệnh sau trong Node.js REPL:
-> ```bash
-> node -e "const bcrypt = require('bcrypt'); bcrypt.hash('Admin@123', 10).then(h => console.log(h))"
-> ```
-
 ### Kiểm tra đăng nhập
 
+Đăng nhập là **"Sign in with Google"** ở frontend → frontend lấy Firebase ID token → gọi `POST /auth/sso/callback`. Kiểm nhanh bằng curl (cần Firebase ID token thật / emulator):
+
 ```bash
-curl -X POST http://localhost:3010/auth/login \
+curl -X POST http://localhost:3010/auth/sso/callback \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@company.com",
-    "password": "Admin@123"
-  }'
+  -d '{ "idToken": "<firebase_id_token>" }'
 ```
 
 Kết quả mong đợi:
 
 ```json
 {
-  "accessToken": "eyJ...",
-  "refreshToken": "eyJ...",
+  "accessToken": "eyJ...(app token HS256, payload có sid)",
   "user": {
     "id": "uuid-...",
     "email": "admin@company.com",

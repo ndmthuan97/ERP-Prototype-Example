@@ -23,6 +23,12 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  # Identity Platform (google_identity_platform_config) bills to the consumer
+  # project, so the provider must send the X-Goog-User-Project header. Required
+  # when authenticating with user ADC (gcloud auth application-default login).
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 provider "google-beta" {

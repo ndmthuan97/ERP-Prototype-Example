@@ -13,7 +13,7 @@ import {
   Controller,
   Get,
   Header,
-  Headers,
+  Req,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -133,9 +133,9 @@ export class MetricsController {
    */
   @Get('metrics')
   @Header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
-  scrape(@Headers('authorization') authHeader?: string): string {
+  scrape(@Req() req: any): string {
     const token = process.env.METRICS_TOKEN;
-    if (token && authHeader !== `Bearer ${token}`) {
+    if (token && req.headers.authorization !== `Bearer ${token}`) {
       throw new UnauthorizedException('Metrics endpoint yêu cầu token hợp lệ');
     }
     return this.metrics.render();

@@ -11,6 +11,7 @@ import {
   Body,
   Param,
   Headers,
+  Ip,
   Query,
   HttpCode,
   HttpStatus,
@@ -20,17 +21,14 @@ import { ApiBody } from '@nestjs/swagger';
 
 import { RegisterCommand } from '../application/commands/register.command.js';
 import { UpdateUserCommand } from '../application/commands/update-user.command.js';
-import { LoginCommand } from '../application/commands/login.command.js';
-import { RefreshTokenCommand } from '../application/commands/refresh-token.command.js';
-import { LogoutCommand } from '../application/commands/logout.command.js';
+import { ExchangeSessionCommand } from '../application/commands/exchange-session.command.js';
+import { EndSessionCommand } from '../application/commands/end-session.command.js';
 import { GetMeQuery } from '../application/queries/get-me.query.js';
 import { ListUsersQuery } from '../application/queries/list-users.query.js';
 import {
   RegisterBodyDto,
   UpdateUserBodyDto,
-  LoginBodyDto,
-  RefreshBodyDto,
-  LogoutBodyDto,
+  SsoCallbackBodyDto,
 } from '../application/dtos/auth.dto.js';
 
 @Controller('auth')
@@ -38,14 +36,13 @@ export class AuthController {
   constructor(
     private readonly registerCommand: RegisterCommand,
     private readonly updateUserCommand: UpdateUserCommand,
-    private readonly loginCommand: LoginCommand,
-    private readonly refreshTokenCommand: RefreshTokenCommand,
-    private readonly logoutCommand: LogoutCommand,
+    private readonly exchangeSessionCommand: ExchangeSessionCommand,
+    private readonly endSessionCommand: EndSessionCommand,
     private readonly getMeQuery: GetMeQuery,
     private readonly listUsersQuery: ListUsersQuery,
   ) {}
 
-  /** POST /auth/register — Admin creates a new user */
+  /** POST /auth/register — Admin creates a new user (password-less) */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiBody({ type: RegisterBodyDto })
@@ -97,28 +94,24 @@ export class AuthController {
     return this.updateUserCommand.execute(id, body);
   }
 
-  /** POST /auth/login — Authenticate and receive tokens */
-  @Post('login')
+  /** POST /auth/sso/callback — Exchange a Firebase ID token for an app token */
+  @Post('sso/callback')
   @HttpCode(HttpStatus.OK)
-  @ApiBody({ type: LoginBodyDto })
-  async login(@Body() body: LoginBodyDto) {
-    return this.loginCommand.execute(body);
+  @ApiBody({ type: SsoCallbackBodyDto })
+  async ssoCallback(
+    @Body() body: SsoCallbackBodyDto,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.exchangeSessionCommand.execute(body, { ip, userAgent });
   }
 
-  /** POST /auth/refresh — Rotate refresh token and get new access token */
-  @Post('refresh')
-  @HttpCode(HttpStatus.OK)
-  @ApiBody({ type: RefreshBodyDto })
-  async refresh(@Body() body: RefreshBodyDto) {
-    return this.refreshTokenCommand.execute(body);
-  }
-
-  /** POST /auth/logout — Invalidate refresh token */
+  /** POST /auth/logout — Revoke the current server-side session */
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiBody({ type: LogoutBodyDto })
-  async logout(@Body() body: LogoutBodyDto) {
-    await this.logoutCommand.execute(body.refreshToken);
+  async logout(@Headers('x-user-sid') sid?: string) {
+    // The gateway injects x-user-sid (the session id embedded in the app token).
+    await this.endSessionCommand.execute(sid ?? '');
   }
 
   /** GET /auth/me — Return current user info (requires x-user-id header from gateway) */

@@ -3,7 +3,7 @@ type: Reference
 title: "ERP Glossary"
 description: "Glossary of domain terms (Customer, Order, Inventory) and architecture terms (DDD, CQRS, Saga, Outbox, etc.)"
 tags: [reference, glossary, ddd, terminology]
-timestamp: "2026-06-25T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Glossary — Bảng thuật ngữ
@@ -57,7 +57,7 @@ erDiagram
 | **Chuỗi giao dịch phân tán** | Saga Pattern | Pattern quản lý **distributed transactions** — khi một business operation span qua nhiều services. Saga chia transaction thành các bước nhỏ, mỗi bước là một local transaction. Nếu một bước fail → thực hiện **compensation** (hoàn tác) các bước trước đó. Trong project: Order Submit Saga gồm Reserve Stock → Credit Check → Confirm. |
 | **Hoàn tác bù trừ** | Compensation | Hành động **hoàn tác** (undo) một bước trong Saga khi bước sau fail. Khác với rollback của DB transaction, compensation là một action nghiệp vụ mới. Ví dụ: nếu Credit Check fail sau khi đã Reserve Stock → compensation là Release Stock (trả lại stock đã reserve). |
 | **Khóa lạc quan** | Optimistic Locking | Kỹ thuật xử lý **concurrent updates** mà không cần lock record trong DB. Mỗi record có cột `version`. Khi update, kiểm tra version hiện tại có khớp không — nếu khớp thì update và tăng version, nếu không khớp (ai đó đã sửa trước) thì **reject và retry**. Dùng cho Stock Level trong Inventory Context. |
-| **Mã thông báo web JSON** | JWT (JSON Web Token) | Chuẩn mở để trao đổi thông tin xác thực giữa client và server dưới dạng **token**. Token chứa payload (user ID, role, expiry) được ký bằng secret key. Server không cần lưu session — chỉ cần verify chữ ký. Trong project: access token (15 phút) + refresh token (7 ngày). |
+| **Mã thông báo web JSON** | JWT (JSON Web Token) | Chuẩn mở để trao đổi thông tin xác thực giữa client và server dưới dạng **token**. Token chứa payload (user ID, role, expiry) được ký bằng secret key. Trong project (sau **B1**): **app token HS256** (payload có `sid`, TTL mặc định 1h) do auth-service phát sau **Google sign-in** (Identity Platform); refresh token do Identity Platform quản. Gateway verify chữ ký **và** tra **session whitelist** (`session:<sid>` ở Redis) mỗi request → không hoàn toàn stateless (đổi lấy revoke tức thì). |
 | **Kiểm soát truy cập theo vai trò** | RBAC (Role-Based Access Control) | Mô hình phân quyền dựa trên **role** (vai trò) của user. Mỗi role có tập permissions riêng. Trong project có 3 roles: `admin` (full quyền), `manager` (CRUD + approve), `staff` (xem + tạo). Permissions được enforce qua NestJS Guards ở backend và route protection ở frontend. |
 | **Cổng API** | API Gateway | Service trung gian đứng giữa client (frontend) và backend services. Chịu trách nhiệm: routing requests đến đúng service, validate JWT, rate limiting, và aggregation. Trong project: API Gateway chạy port `:3010`, forward requests đến các services (`:3001` → `:3004`). |
 | **Xuất bản / Đăng ký** | Pub/Sub (Publish/Subscribe) | Mô hình messaging trong đó **publisher** phát event vào **topic**, và **subscriber** đăng ký lắng nghe topic đó. Publisher không biết subscriber là ai (loose coupling). Trong project: dùng GCP Pub/Sub Emulator — Order Service publish vào topic `order-events`, Inventory Service subscribe để nhận events. |

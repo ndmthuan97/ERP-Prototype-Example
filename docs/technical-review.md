@@ -3,7 +3,7 @@ type: Technical Review
 title: "Technical Review Board — ERP Prototype"
 description: "Comprehensive technical review covering architecture, code quality, security, and production readiness"
 tags: [review, architecture, security, quality]
-timestamp: "2026-06-23T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # 🏛️ Technical Review Board — ERP Prototype Example
@@ -13,6 +13,12 @@ timestamp: "2026-06-23T00:00:00+07:00"
 > **Project:** ERP Prototype — Microservices architecture learning project  
 > **Commit Context:** Production-readiness assessment based on full source code analysis  
 > **Updates:** Circuit Breaker, API Versioning, Rate Limiting đã implement. FE đã hoàn thiện đầy đủ.
+
+> [!NOTE]
+> **Stack đã dịch chuyển sang GCP managed** (2026-07): Database = **Cloud SQL**, deploy = **Cloud Run** (CI: GitHub Actions → Cloud Build → Cloud Deploy), message bus = **Pub/Sub managed** — không còn Supabase / Docker-Compose / Pub/Sub Emulator. Bảng Tech Stack + phần phân tích rủi ro / CI-CD / hạ tầng bên dưới đã cập nhật theo stack mới. Hạ tầng chi tiết: [GCP Cloud Architecture](./architecture/gcp-cloud-architecture.md).
+
+> [!NOTE]
+> **Auth đã dịch chuyển ở B1** (2026-07-08): login = **"Sign in with Google"** qua **Identity Platform (Firebase)** → `POST /auth/sso/callback` trả **app token HS256** (mang `sid`); **session whitelist** (`app_auth.sessions` + Redis `session:<sid>`) cho **revoke tức thì** (FR-A13) + idle timeout (FR-A9). Đã **gỡ**: `POST /auth/login` · `/auth/refresh` · password/bcrypt · refresh-token JWT tự cuộn. ⇒ các finding liên quan **refresh token** (SEC-06, Refactor #12) **không còn áp dụng**; SEC-02/CRIT-02 (token trong `localStorage`) nay áp cho **app token** (phần refresh token đã bỏ). Chi tiết: [Auth Endpoints](./api/auth-endpoints.md) · [ADR-015](./overview/tech-decisions.md) · [Auth Gap](./gap/prototype-vs-newdesign-auth-gap.md).
 
 ---
 
@@ -27,12 +33,12 @@ timestamp: "2026-06-23T00:00:00+07:00"
 |---|---|
 | Backend | NestJS, Prisma v7, TypeScript |
 | Frontend | Next.js 15, Ant Design 5, React 19, TanStack React Query |
-| Database | Supabase PostgreSQL (free tier) |
+| Database | Cloud SQL PostgreSQL (GCP, private IP) |
 | Cache | Upstash Redis REST API |
-| Message Queue | GCP Pub/Sub Emulator (Docker) |
-| Auth | bcrypt + JWT (self-implemented) |
-| CI/CD | GitHub Actions |
-| Container | Docker Compose (dev) |
+| Message Queue | GCP Pub/Sub (managed) |
+| Auth | Identity Platform (Google sign-in) + app token HS256 + session whitelist (B1) |
+| CI/CD | GitHub Actions → Cloud Build → Cloud Deploy |
+| Container | Cloud Run (deploy) · local `npm run dev:all` (dev) |
 
 ### Kiến trúc hiện tại
 **Microservices** — 7 backend services + 1 API Gateway + 1 Frontend:
@@ -63,7 +69,7 @@ ERP core modules: **Customer Management**, **Sales Orders** (with saga), **Inven
 - `@prisma/client` v7 (ORM with multi-schema)
 - `@google-cloud/pubsub` (event messaging)
 - `@upstash/redis` (REST-based cache)
-- `jsonwebtoken` + `bcryptjs` (auth)
+- `firebase-admin` + `jsonwebtoken` (auth — verify Firebase ID token, ký app token HS256; bcrypt gỡ ở B1)
 - `zod` (validation)
 - `antd` v5 + `@tanstack/react-query` (frontend)
 
@@ -79,10 +85,10 @@ sequenceDiagram
     participant IS as Inventory Service
     participant PS as Pub/Sub
 
-    FE->>GW: POST /api/auth/login
+    FE->>GW: POST /api/auth/sso/callback (Firebase ID token)
     GW->>Auth: Forward (public route)
-    Auth-->>GW: JWT tokens
-    GW-->>FE: tokens + user
+    Auth-->>GW: app token HS256 (sid) + user
+    GW-->>FE: accessToken + user
 
     FE->>GW: POST /api/orders (with JWT)
     GW->>GW: Verify JWT
@@ -135,14 +141,14 @@ presentation/    → NestJS Controllers (HTTP layer)
 
 | Vấn đề | Mức độ | Vị trí |
 |---|:---:|---|
-| **Single Database** cho tất cả services | 🟠 HIGH | Toàn bộ backend dùng 1 Supabase instance |
+| **Single Database** cho tất cả services | 🟠 HIGH | Toàn bộ backend dùng 1 Cloud SQL instance (schema-per-context) |
 | **Shared DB = Distributed Monolith risk** | 🟡 MEDIUM | Multi-schema trên cùng 1 PostgreSQL |
-| **No service discovery** | 🟡 MEDIUM | Hardcoded URLs trong docker-compose |
+| **No service discovery** | 🟡 MEDIUM | Service URL cấu hình qua env var (Cloud Run), chưa có registry động |
 | ~~**No circuit breaker**~~ | ✅ FIXED | Đã implement opossum circuit breaker (sales → customer) |
 | **Polling-based outbox** (setInterval) | 🟢 LOW | Acceptable cho prototype |
 
 ### Bottleneck
-- **Single Supabase PostgreSQL (free tier)**: mọi service đọc/ghi cùng 1 instance → single point of failure, connection pool limit
+- **Single Cloud SQL PostgreSQL**: mọi service đọc/ghi cùng 1 instance → SPOF nếu chạy single-zone (dev), mitigate bằng HA tier (regional, tự failover). Connection limit theo machine tier (không còn hard-cap ~20 kiểu free-tier)
 - **Outbox Worker polling mỗi 2s**: latency cố định 0–2s cho event delivery. Production cần LISTEN/NOTIFY hoặc WAL-based CDC
 
 ### Rủi ro dài hạn
@@ -150,7 +156,7 @@ presentation/    → NestJS Controllers (HTTP layer)
 - ~~**No API versioning**~~: ✅ Đã implement API versioning `/v1/` trên tất cả services + gateway proxy
 
 ### Kết luận kiến trúc
-> Kiến trúc hiện tại **PHÙ HỢP cho mục tiêu prototype/learning**. KHÔNG cần thay đổi kiến trúc tổng thể. Cần bổ sung: circuit breaker, retry pattern cho inter-service HTTP calls, và tách database khi scale.
+> Kiến trúc hiện tại **PHÙ HỢP cho mục tiêu prototype/learning**. KHÔNG cần thay đổi kiến trúc tổng thể. Cần bổ sung: retry pattern cho inter-service HTTP calls, và tách database khi scale (circuit breaker đã có — opossum).
 
 ---
 
@@ -246,9 +252,9 @@ backend/
 
 | # | Vấn đề | Vị trí | Mức độ |
 |---|---|---|:---:|
-| 1 | **No rate limiting** | All services | 🟠 HIGH |
+| 1 | ~~**No rate limiting**~~ ✅ `express-rate-limit` ở gateway (ingress) | api-gateway/main.ts:266 | ✅ Done |
 | 2 | **No request timeout** | HTTP calls sales→customer | 🟡 MEDIUM |
-| 3 | **No API versioning** (`/v1/customers`) | All controllers | 🟡 MEDIUM |
+| 3 | ~~**No API versioning**~~ ✅ `/v1/` trên tất cả controller + gateway proxy | All controllers | ✅ Done |
 | 4 | **No pagination metadata** in some responses | Varies | 🟢 LOW |
 
 ### Service Design ⭐⭐⭐⭐⭐
@@ -268,10 +274,10 @@ backend/
 
 ### Issues cần cải thiện
 
-#### No Circuit Breaker on Inter-service HTTP
+#### ~~No Circuit Breaker on Inter-service HTTP~~ ✅ opossum đã implement
 - **File:** [customer-client.ts](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/sales-service/src/infrastructure/http/customer-client.ts) (assumed)
-- **Vấn đề:** Sales → Customer credit check via HTTP. Nếu customer-service down, sales-service sẽ fail cascade
-- **Giải pháp:** Thêm circuit breaker (opossum lib) + timeout + fallback
+- **Vấn đề gốc:** Sales → Customer credit check via HTTP. Nếu customer-service down, sales-service sẽ fail cascade
+- **Trạng thái:** ✅ đã bọc **opossum circuit breaker**; còn nên thêm request timeout + fallback tường minh
 
 #### No Retry Strategy for Event Processing
 - **Vấn đề:** Event subscriber failure có retry qua outbox, nhưng subscriber-side (consumer) failure chỉ dựa vào Pub/Sub redelivery
@@ -327,7 +333,7 @@ frontend/src/
 | 6 | **No lazy loading/code splitting** for pages | All pages | 🟡 MEDIUM |
 | 7 | **Inline styles** instead of CSS modules | Dashboard, AppShell | 🟢 LOW |
 | 8 | **`salesApi.list({ limit: 200 })`** for donut chart — expensive | [page.tsx:L103](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/frontend/src/app/page.tsx#L103) | 🟠 HIGH |
-| 9 | **No refresh token rotation** — token expired = forced re-login | [AuthProvider.tsx](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/frontend/src/lib/auth/AuthProvider.tsx) | 🟡 MEDIUM |
+| 9 | **Chưa silent-refresh chủ động (FE)** — token hết hạn lúc load → re-login; refresh qua interceptor ở call kế (rotation đã có ở backend) | [AuthProvider.tsx](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/frontend/src/lib/auth/AuthProvider.tsx) | 🟢 LOW |
 
 ### Accessibility
 - **No explicit ARIA labels** on interactive elements
@@ -350,7 +356,7 @@ frontend/src/
 - `sales` schema: (implied from sales-service prisma)
 - `catalog` schema: (implied)
 - `purchasing` schema: (implied)
-- `auth` schema: `users`, `refresh_tokens`
+- `app_auth` schema: `users`, `sessions` (whitelist); `refresh_tokens` deprecated sau B1
 
 ### Schema Design Highlights
 
@@ -369,7 +375,7 @@ frontend/src/
 | 2 | **No composite index** `(deletedAt, createdAt)` cho search query | 🟡 MEDIUM | `search()` filter `deletedAt IS NULL` + ORDER BY `createdAt DESC` |
 | 3 | **`status` as String** thay vì Enum | 🟢 LOW | Flexible nhưng mất type safety ở DB level |
 | 4 | **Decimal → number conversion dùng `Math.round()`** | 🟡 MEDIUM | [customer.repository.impl.ts:L88](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/customer-service/src/infrastructure/persistence/customer.repository.impl.ts#L88) — OK cho VND (integer) nhưng sẽ sai nếu domain mở rộng ra USD/EUR |
-| 5 | **Free tier Supabase** — connection pool limit ~20 | 🟠 HIGH | 7 services cùng kết nối 1 instance |
+| 5 | **Connection pool** — chưa có pooler, `connection_limit` theo tier | 🟡 MEDIUM | 7 services cùng kết nối 1 Cloud SQL; cần set `connection_limit` (Prisma) hoặc PgBouncer |
 | 6 | **No database migration CI** — dùng `prisma db push` | 🟡 MEDIUM | [ci.yml:L130](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/.github/workflows/ci.yml#L130) — push thay vì migrate, không có rollback |
 
 ### N+1 Query Risk
@@ -396,7 +402,7 @@ frontend/src/
   > xoá khỏi doc là chưa đủ. Xem "Giải pháp" bên dưới.
 - **Hậu quả:** Database password, Redis token, và JWT secret đang nằm trong repo. Bất kỳ ai có access repo có thể truy cập toàn bộ data.
 - **Giải pháp:**
-  1. **NGAY LẬP TỨC**: Rotate tất cả credentials (đổi password Supabase, regenerate Redis token, new JWT secret)
+  1. **NGAY LẬP TỨC**: Rotate tất cả credentials (đổi password Cloud SQL user `erp_app`, regenerate Redis token, new JWT secret) — lưu ở Secret Manager
   2. Thêm `.env` vào `.gitignore` (đã có nhưng `.env` vẫn tracked)
   3. Dùng `git filter-branch` hoặc BFG Repo Cleaner xóa history
   4. Dùng secret manager (GCP Secret Manager, Vault) cho production
@@ -411,10 +417,10 @@ frontend/src/
 
 | # | Vấn đề | File | Chi tiết |
 |---|---|---|---|
-| SEC-03 | **No rate limiting** | API Gateway, all services | Brute-force login, DDoS |
+| SEC-03 | ~~**No rate limiting**~~ ✅ Mitigated — `express-rate-limit` ở gateway (login + ingress) | api-gateway/main.ts:266 | Brute-force/DDoS chặn ở ingress |
 | SEC-04 | **CORS `origin: true`** in API Gateway | [api-gateway/main.ts:L49-52](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/api-gateway/src/main.ts#L49-L52) | Allows ANY origin |
 | SEC-05 | **No input sanitization** for XSS | Controllers, frontend | Raw user input rendered without encoding |
-| SEC-06 | **No refresh token rotation** | AuthProvider | Refresh token reuse attack possible |
+| SEC-06 | ~~**No refresh token rotation**~~ ✅ Mitigated — backend rotate mỗi refresh (xoá token cũ) | refresh-token.command.ts | Reuse attack bị chặn |
 
 ### 🟡 MEDIUM Issues
 
@@ -423,7 +429,7 @@ frontend/src/
 | SEC-07 | No CSRF protection | All mutation endpoints |
 | SEC-08 | `process.exit(1)` on missing JWT_SECRET | [api-gateway/main.ts:L57-58](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/api-gateway/src/main.ts#L57-L58) — crashes instead of graceful error |
 | SEC-09 | User info passed as HTTP headers (`x-user-id`) | Gateway→services — headers can be spoofed if service exposed directly |
-| SEC-10 | No Helmet in API Gateway | [api-gateway/main.ts](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/api-gateway/src/main.ts) — other services have it |
+| SEC-10 | ~~No Helmet in API Gateway~~ ✅ `app.use(helmet())` | [api-gateway/main.ts:263](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/api-gateway/src/main.ts#L263) |
 
 ### 🟢 LOW Issues
 
@@ -441,7 +447,7 @@ frontend/src/
 | Area | Status | Notes |
 |---|:---:|---|
 | Async/await usage | ✅ | No blocking operations |
-| Connection pooling | ✅ | Prisma handles pool; Supabase PgBouncer on port 6543 |
+| Connection pooling | ✅ | Prisma pool; Cloud SQL qua Cloud SQL Auth Proxy (set `connection_limit` theo tier) |
 | Cache-aside strategy | ✅ | Customer detail cached 5 min |
 | Parallel queries | ✅ | `Promise.all` for count + data |
 
@@ -453,7 +459,7 @@ frontend/src/
 | 2 | **Outbox polling every 2s** | [outbox-worker.service.ts:L66](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/shared/src/messaging/outbox-worker.service.ts#L66) | 🟢 LOW — acceptable for prototype |
 | 3 | **ILIKE '%q%'** search (leading wildcard) | [customer.repository.impl.ts:L183](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/customer-service/src/infrastructure/persistence/customer.repository.impl.ts#L183) | 🟡 MEDIUM — seq scan on large tables |
 | 4 | **`invalidatePattern()` using SCAN loop** | [redis-cache.service.ts:L106](file:///d:/Private_Space/Wecare/New-ERP-GG-Cloud/erp-prototype-example/backend/shared/src/cache/redis-cache.service.ts#L106) | 🟢 LOW — only used after writes |
-| 5 | **Free tier Supabase** | Global | 🟠 HIGH — connection limits, IO limits |
+| 5 | **Cloud SQL tier limits** | Global | 🟡 MEDIUM — connection/IO theo machine tier; chọn tier + pooler theo tải |
 
 ### Optimization Recommendations
 1. **Dashboard aggregation API**: Create `GET /api/dashboard/stats` server-side instead of fetching 200 orders client-side
@@ -510,24 +516,26 @@ frontend/src/
 
 | # | Vấn đề | Mức độ |
 |---|---|:---:|
-| 1 | **No Dockerfile** per service | 🟡 MEDIUM |
-| 2 | **No production docker-compose** | 🟡 MEDIUM |
+| 1 | ~~**No Dockerfile**~~ | ✅ RESOLVED — `backend/Dockerfile` dùng chung, build-arg `SERVICE_DIR` |
+| 2 | ~~**No production docker-compose**~~ | ✅ N/A — deploy bằng Cloud Run, bỏ docker-compose |
 | 3 | ~~`docker-compose.dev.yml` runs `npm ci` on every startup~~ | ✅ RESOLVED — file removed, dev uses native `npm run dev:all` |
-| 4 | **No staging/production environment** | 🟠 HIGH |
-| 5 | **No deployment pipeline** (only CI, no CD) | 🟡 MEDIUM |
+| 4 | **Chỉ 1 env (Cloud Run `dev`)** — chưa tách staging/prod | 🟠 HIGH — D-014 muốn 3 GCP project riêng |
+| 5 | ~~**No CD pipeline**~~ | ✅ RESOLVED — GitHub Actions → Cloud Build → Cloud Deploy → Cloud Run |
 | 6 | **`prisma db push` instead of `prisma migrate deploy`** | 🟡 MEDIUM — no migration history |
-| 7 | **No rollback strategy** | 🟠 HIGH |
-| 8 | **CI chỉ test customer + inventory** — 5 services khác bỏ qua | 🟡 MEDIUM |
+| 7 | ~~**No rollback strategy**~~ | ✅ RESOLVED — Cloud Deploy release ghim digest, rollback về rollout trước |
+| 8 | **CI verify theo path (matrix từng service đổi)** — shared đổi mới verify hết | 🟢 LOW |
 
 ### Infrastructure
 
-| Component | Dev | Production |
+| Component | Local dev | Deployed (Cloud Run `dev`) |
 |---|:---:|:---:|
-| PostgreSQL | Supabase free | ❌ Not planned |
-| Redis | Upstash free | ❌ Not planned |
-| Pub/Sub | Docker emulator | ❌ No GCP setup |
-| API Gateway | Docker | ❌ No cloud deploy |
-| Frontend | `next dev` | ❌ No build/deploy |
+| PostgreSQL | Cloud SQL (Auth Proxy) | Cloud SQL (private IP) |
+| Redis | Upstash | Upstash |
+| Pub/Sub | Cloud Pub/Sub (managed) | Cloud Pub/Sub (managed) |
+| API Gateway | `npm run dev:all` | Cloud Run |
+| Frontend | `next dev` | Cloud Run |
+
+> Chỉ có 1 môi trường (`dev`); chưa tách staging/prod (xem Issue #4 phần CI/CD).
 
 ---
 
@@ -550,7 +558,7 @@ frontend/src/
 | Alerting rules | ❌ |
 | Distributed tracing (Jaeger/Zipkin) | ❌ (correlation ID is manual) |
 | SLA/SLO/SLI defined | ❌ |
-| Backup strategy | ❌ (relies on Supabase) |
+| Backup strategy | 🟡 Cloud SQL automated backup + PITR (chưa test restore/DR) |
 | Disaster recovery plan | ❌ |
 | Incident handling runbook | ❌ |
 | Log aggregation (ELK/Loki) | ❌ |
@@ -631,8 +639,8 @@ frontend/src/
 | **IMPLEMENTATION-STATUS.md** | ⭐⭐⭐⭐⭐ | Excellent source of truth — rare to see in projects |
 | **API Documentation** | ⭐⭐⭐⭐ | Docs now match implementation; all endpoints documented and working |
 | **Architecture Documentation** | ⭐⭐⭐ | Sequence diagrams, data model exist but may be stale |
-| **Setup Guide** | ⭐⭐⭐⭐ | Docker Compose dev setup works |
-| **Deployment Guide** | ⭐ | None exists |
+| **Setup Guide** | ⭐⭐⭐⭐ | Local dev (`npm run dev:all` + Cloud SQL Auth Proxy) works |
+| **Deployment Guide** | ⭐⭐⭐ | [CI/CD Pipeline](./architecture/cicd-pipeline.md) mô tả build→deploy; chưa có runbook prod đầy đủ |
 | **ADR (Architecture Decision Records)** | ⭐⭐⭐⭐ | Referenced in docs (ADR-009, ADR-010) |
 | **Code Comments** | ⭐⭐⭐⭐⭐ | Extremely thorough — excellent for learning |
 
@@ -741,11 +749,11 @@ frontend/src/
 ## 🟠 High Priority Improvements
 
 1. **Rotate all leaked credentials** and remove from git history
-2. **Add rate limiting** (express-rate-limit) to API Gateway and auth endpoints
+2. ~~**Add rate limiting**~~ ✅ đã có (`express-rate-limit` ở gateway)
 3. **Fix CORS** — whitelist specific origins instead of `origin: true` on gateway
-4. **Add circuit breaker** for inter-service HTTP calls (sales → customer)
+4. ~~**Add circuit breaker**~~ ✅ đã có (opossum, sales → customer)
 5. **Create dashboard aggregation API** instead of fetching 200 orders client-side
-6. **Add unit tests for `@erp/shared` library** — critical infrastructure untested
+6. **Add unit test cho `redis-cache`** (`@erp/shared` — outbox + idempotency đã có spec)
 7. **Add tests for sales/catalog/purchasing services**
 8. **Fix mobile responsive sidebar** in AppShell
 
@@ -754,14 +762,14 @@ frontend/src/
 ## 🟡 Medium Priority Improvements
 
 1. **Encapsulate entity properties** — make fields private, expose via methods
-2. **Add API versioning** (`/v1/customers`)
+2. ~~**Add API versioning**~~ ✅ đã có (`/v1/`)
 3. **Replace `prisma db push` with `prisma migrate`** for migration history
 4. **Add error boundaries** in frontend
-5. **Implement refresh token rotation**
+5. ~~**Implement refresh token rotation**~~ ✅ backend đã rotate; còn thiếu silent-refresh FE
 6. **Add request timeout** for HTTP calls between services
 7. **Remove dead code** (scaffold files in auth/sales services)
 8. **Add composite index** `(deletedAt, createdAt)` for search queries
-9. **Add Helmet to API Gateway**
+9. ~~**Add Helmet to API Gateway**~~ ✅ đã có (`app.use(helmet())`)
 10. **Create Dockerfiles** for each service
 
 ---
@@ -792,23 +800,23 @@ frontend/src/
 |---|---|---|:---:|:---:|
 | 1 | Credentials in git | Rotate + remove history + secret manager | Easy | **High** |
 | 2 | JWT in localStorage | HttpOnly cookies + CSRF | Medium | **High** |
-| 3 | No rate limiting | Add `express-rate-limit` to gateway | Easy | **High** |
+| 3 | ~~No rate limiting~~ ✅ RESOLVED — `express-rate-limit` ở gateway (main.ts:266) | — | — | **Done** |
 | 4 | CORS `origin: true` on gateway | Whitelist specific origins | Easy | **High** |
 | 5 | Dashboard fetches 200 orders | Create BFF aggregation endpoint | Medium | **High** |
-| 6 | No circuit breaker | Add `opossum` to inter-service HTTP | Medium | **High** |
+| 6 | ~~No circuit breaker~~ ✅ RESOLVED — `opossum` cho inter-service HTTP (sales → customer) | — | — | **Done** |
 | 7 | Entity properties public | Make private + domain methods | Medium | **Medium** |
-| 8 | `@erp/shared` untested | Add unit tests for outbox, idempotency, cache | Medium | **High** |
-| 9 | No API versioning | Add `/v1/` prefix to all routes | Easy | **Medium** |
+| 8 | `@erp/shared` — `redis-cache` chưa test (outbox + idempotency đã có spec) | Thêm unit test cho `redis-cache` | Medium | **Medium** |
+| 9 | ~~No API versioning~~ ✅ RESOLVED — `/v1/` trên tất cả service + gateway proxy | — | — | **Done** |
 | 10 | `prisma db push` | Switch to `prisma migrate` | Easy | **Medium** |
 | 11 | No error boundary (FE) | Add React Error Boundary + fallback UI | Easy | **Medium** |
-| 12 | No refresh token rotation | Implement silent refresh + rotation | Medium | **Medium** |
+| 12 | ~~No refresh token rotation~~ ✅ RESOLVED — backend rotate mỗi refresh (xoá cũ + ghi mới); silent-refresh FE tuỳ | — | — | **Done** |
 | 13 | ILIKE leading wildcard search | Add trigram GIN index or `tsvector` | Medium | **Medium** |
 | 14 | No mobile sidebar collapse | Add responsive drawer mode | Easy | **Medium** |
 | 15 | Vietnamese log messages | Switch to English for all structured logs | Easy | **Low** |
 | 16 | Dead scaffold files | Remove `app.controller.ts`, `app.service.ts` from auth/sales | Easy | **Low** |
 | 17 | Missing composite index | Add `@@index([deletedAt, createdAt])` | Easy | **Medium** |
-| 18 | No Helmet on API Gateway | Add `app.use(helmet())` | Easy | **Medium** |
-| 19 | No Dockerfiles per service | Create multi-stage Dockerfiles | Medium | **Medium** |
+| 18 | ~~No Helmet on API Gateway~~ ✅ RESOLVED — `app.use(helmet())` ở gateway (main.ts:263) | — | — | **Done** |
+| 19 | ~~No Dockerfiles per service~~ ✅ RESOLVED — `backend/Dockerfile` dùng chung (build-arg `SERVICE_DIR`) | — | — | **Done** |
 | 20 | Dashboard 447-line monolith | Split into sub-components (KPICards, Charts, Tables) | Easy | **Low** |
 
 ---
@@ -819,21 +827,21 @@ frontend/src/
 |---|:---:|---|
 | **Architecture** | **8**/10 | Excellent DDD/Event-Driven foundation. Single DB is the only gap. |
 | **Code Quality** | **8**/10 | Clean, well-structured, great naming. Minor encapsulation issues. |
-| **Backend** | **7**/10 | Solid patterns. Missing rate limit, circuit breaker, timeout. |
+| **Backend** | **7**/10 | Solid patterns. Rate limit + circuit breaker đã có; còn thiếu request timeout. |
 | **Frontend** | **6**/10 | Functional but needs error handling, a11y, responsive sidebar. |
-| **Database** | **7**/10 | Good schema design. Missing some indexes, free tier risk. |
-| **Security** | **3**/10 | Critical: credentials in git, JWT in localStorage, no rate limit. |
+| **Database** | **7**/10 | Good schema design. Missing some indexes; single Cloud SQL — cần quản lý connection pool. |
+| **Security** | **3**/10 | Critical: credentials in git, JWT in localStorage, CORS mở, no CSRF. |
 | **Performance** | **6**/10 | Acceptable for prototype. Dashboard 200-order fetch is wasteful. |
 | **Testing** | **5**/10 | Customer+Inventory well tested. 5 other services untested. |
-| **DevOps** | **4**/10 | CI exists. No CD, no Dockerfiles, no staging, no rollback. |
+| **DevOps** | **7**/10 | CI + CD (Cloud Build/Deploy), Dockerfile, rollback qua Cloud Deploy. Còn thiếu: tách staging/prod, blue-green, vuln scan, migration CI. |
 | **Documentation** | **7**/10 | Excellent code comments + status tracking. Missing deploy docs. |
 | **Maintainability** | **8**/10 | DDD structure + shared lib make changes very manageable. |
-| **Scalability** | **5**/10 | Single DB bottleneck. Outbox polling. Free tier limits. |
+| **Scalability** | **5**/10 | Single DB bottleneck. Outbox polling. Cloud SQL scaling theo tier. |
 
-### Total Score: **74 / 120 → Normalized: 62 / 100**
+### Total Score: **77 / 120 → Normalized: 64 / 100**
 
 > [!IMPORTANT]
-> **Verdict: NOT production-ready** — primarily due to security issues (credentials in git, JWT storage) and missing DevOps infrastructure. However, the **architecture and code quality are excellent for a learning prototype** and provide a solid foundation for production evolution.
+> **Verdict: NOT production-ready** — primarily due to security issues (credentials in git, JWT storage). DevOps đã có CI/CD + Cloud Run + rollback, nhưng còn thiếu tách staging/prod + hardening. **Architecture và code quality xuất sắc cho learning prototype**, nền tảng tốt để tiến hoá lên production.
 
 > [!TIP]
-> **Quick wins to reach 75+:** Fix SEC-01 (credentials), SEC-02 (JWT storage), add rate limiting, and add tests for shared library. These 4 changes would raise Security from 3→6 and Testing from 5→7, gaining ~12 points.
+> **Quick wins:** Fix SEC-01 (credentials in git), SEC-02 (JWT trong localStorage → HttpOnly cookie), thêm test `redis-cache` + các service chưa có test. *(Rate limiting / circuit breaker / API versioning / Helmet đã xong.)* Chủ yếu nâng Security 3→6.

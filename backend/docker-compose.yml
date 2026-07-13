@@ -25,7 +25,7 @@ services:
     command: >
       gcloud beta emulators pubsub start
       --host-port=0.0.0.0:8085
-      --project=erp-prototype
+      --project=portfolio-497506
     ports:
       - "8085:8085"
     restart: unless-stopped

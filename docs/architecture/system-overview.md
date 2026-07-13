@@ -3,12 +3,12 @@ type: System Component
 title: "System Architecture Overview"
 description: "Overall system architecture: service map, tech stack, request flows, DDD layer structure, and @erp/shared library"
 tags: [system, component, architecture, microservices]
-timestamp: "2026-06-25T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # System Overview — Kiến trúc tổng quan
 
-> ✅ **Trạng thái:** Tất cả 7 backend services + API Gateway + Frontend đã implement đầy đủ. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Trạng thái:** Tất cả 7 backend services + API Gateway + Frontend đã implement đầy đủ. Xem [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu mô tả kiến trúc tổng thể của ERP Prototype.
 > Liên quan: [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
@@ -21,7 +21,7 @@ timestamp: "2026-06-25T00:00:00+07:00"
 flowchart TB
     Browser["Browser"]
     FE["Frontend :3000"]
-    GW["API Gateway :3010  (JWT + RBAC)"]
+    GW["API Gateway :3010  (App token + Session + RBAC)"]
 
     Auth["Auth :3004"]
     Cust["Customer :3001"]
@@ -83,7 +83,7 @@ flowchart TB
 | **Data Fetching** | TanStack React Query | Cache, refetch, mutations |
 | **Backend** | NestJS (TypeScript) | Framework có cấu trúc DDD (modules, DI, guards) |
 | **ORM** | Prisma (code-first) | Schema → Migration → DB tables |
-| **Auth** | bcrypt + jsonwebtoken | Hash password, sign/verify JWT |
+| **Auth** | Identity Platform (Firebase) + firebase-admin + jsonwebtoken | Google sign-in; verify Firebase ID token → phát app token HS256 + session whitelist (bcrypt đã gỡ ở B1) |
 | **Database** | Supabase PostgreSQL | Cloud PostgreSQL (free tier, 500MB) |
 | **Cache** | Upstash Redis | Cloud Redis (free tier, REST API) |
 | **Message Queue** | GCP Pub/Sub Emulator | Event-driven communication (Docker container) |
@@ -94,7 +94,7 @@ flowchart TB
 ## 3. Service Map — 5 services
 
 | **API Gateway** | 3010 | — | JWT Guard, RBAC, Reverse Proxy |
-| **Auth Service** | 3004 | `app_auth` | bcrypt, JWT, Refresh Token |
+| **Auth Service** | 3004 | `app_auth` | Identity Platform (Google sign-in), App token HS256, Session Whitelist |
 | **Customer Service** | 3001 | `customer` | DDD layers, Repository, Value Object, Outbox |
 | **Sales Service** | 3002 | `sales` | Aggregate Root, Saga, CQRS, Outbox |
 | **Inventory Service** | 3003 | `inventory` | Optimistic Locking, CHECK constraint, Outbox |
@@ -109,7 +109,7 @@ Các nội dung chi tiết nằm ở docs chuyên biệt:
 
 | Chủ đề | Xem tại |
 |--------|--------|
-| **JWT Authentication Flow** | [rbac.md](rbac.md) §3 — JWT Guard Flow |
+| **Auth / Session Flow** | [rbac.md](rbac.md) §3 — App token + Session whitelist Guard Flow · [auth-endpoints.md](../api/auth-endpoints.md) |
 | **Saga / Submit Flow** | [event-flows.md](event-flows.md) §4 — Order Submit Flow |
 | **Database Schemas** | [data-model.md](data-model.md) — ER diagrams, table definitions |
 | **Outbox Pattern** | [design-patterns.md](design-patterns.md) §5 — Transactional event publishing |

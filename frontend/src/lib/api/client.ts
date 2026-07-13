@@ -3,20 +3,16 @@
 // =============================================================================
 // MỌI call API phải đi qua đây. Lợi ích:
 // - Gắn Authorization + x-correlation-id ở 1 chỗ
-// - Token refresh interceptor: auto-refresh khi 401
+// - Token re-exchange interceptor: on 401, swap a fresh Firebase ID token for a
+//   new app access token, then retry once
 // - Chuẩn hoá lỗi BE → ApiError
 // - Xử lý 204 No Content (DELETE customer)
 
 import { API, type ServiceName } from './config';
 import { ApiError, type ApiIssue } from './errors';
-import {
-  getAuthToken,
-  getRefreshToken,
-  setAuthToken,
-  setRefreshToken,
-  clearTokens,
-} from '../auth/token';
+import { getAuthToken, setAuthToken, clearTokens } from '../auth/token';
 import { AUTH_BYPASS } from '../auth/bypass';
+import { auth } from '../firebase';
 
 type QueryValue = string | number | boolean | undefined | null;
 
@@ -27,8 +23,8 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
-// Mutex for token refresh — prevents multiple concurrent refreshes
-let refreshPromise: Promise<boolean> | null = null;
+// Mutex for token re-exchange — prevents multiple concurrent exchanges
+let reExchangePromise: Promise<boolean> | null = null;
 
 // Guards against a stampede of concurrent 401s each firing window.location =
 // '/login' (a dashboard fires several queries at once). Only the first redirects.
@@ -60,23 +56,25 @@ function correlationId(): string {
 }
 
 /**
- * Attempt to refresh the access token using the stored refresh token.
- * Returns true if refresh succeeded, false otherwise.
- * Uses a mutex so only one refresh happens at a time.
+ * On 401, get a fresh Firebase ID token from the current user and exchange it
+ * for a new app access token via /api/auth/sso/callback.
+ * Returns true if the exchange succeeded, false otherwise (no Firebase user or
+ * a failed exchange). Uses a mutex so only one exchange happens at a time.
  */
-function tryRefreshToken(): Promise<boolean> {
-  // Reuse the in-flight refresh if one is already running (real mutex).
-  if (refreshPromise) return refreshPromise;
+function tryReExchangeToken(): Promise<boolean> {
+  // Reuse the in-flight exchange if one is already running (real mutex).
+  if (reExchangePromise) return reExchangePromise;
 
-  refreshPromise = (async () => {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) return false;
+  reExchangePromise = (async () => {
+    const fbUser = auth.currentUser;
+    if (!fbUser) return false;
 
     try {
-      const res = await fetch(buildUrl(API.auth, '/api/auth/refresh'), {
+      const idToken = await fbUser.getIdToken(true);
+      const res = await fetch(buildUrl(API.auth, '/api/auth/sso/callback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ idToken }),
       });
 
       if (!res.ok) return false;
@@ -84,7 +82,6 @@ function tryRefreshToken(): Promise<boolean> {
       const data = await res.json();
       if (data.accessToken) {
         setAuthToken(data.accessToken);
-        if (data.refreshToken) setRefreshToken(data.refreshToken);
         return true;
       }
       return false;
@@ -93,11 +90,11 @@ function tryRefreshToken(): Promise<boolean> {
     }
   })().finally(() => {
     // Reset on the promise chain itself so the mutex is released exactly once,
-    // only after the single refresh settles — not per awaiting caller.
-    refreshPromise = null;
+    // only after the single exchange settles — not per awaiting caller.
+    reExchangePromise = null;
   });
 
-  return refreshPromise;
+  return reExchangePromise;
 }
 
 async function request<T>(
@@ -128,9 +125,9 @@ async function request<T>(
     signal: opts.signal,
   });
 
-  // 401 → attempt token refresh, then retry once
-  if (res.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/refresh')) {
-    const refreshed = await tryRefreshToken();
+  // 401 → re-exchange a fresh Firebase ID token for a new app token, retry once
+  if (res.status === 401 && !path.includes('/auth/sso/callback')) {
+    const refreshed = await tryReExchangeToken();
     if (refreshed) {
       const retryHeaders = { ...headers };
       const newToken = getAuthToken();
@@ -144,7 +141,7 @@ async function request<T>(
       });
     }
 
-    // Still 401 after refresh attempt → redirect to login (once).
+    // Still 401 after the exchange attempt → redirect to login (once).
     // Skip entirely under AUTH_BYPASS: bypass provides a fake user but no JWT,
     // so every call 401s — redirecting would fight the bypass and cause an
     // infinite home⇄login loop. Let the page render with empty data instead.

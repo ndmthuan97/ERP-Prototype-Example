@@ -1,9 +1,9 @@
 ---
-type: System Component
+type: Reference
 title: "ERP Prototype — Project Goals"
 description: "Project objectives, scope definition, and success criteria for the ERP learning prototype"
 tags: [system, goals, scope, erp]
-timestamp: "2026-06-25T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Project Goals
@@ -56,7 +56,7 @@ Mục tiêu **không phải** xây dựng một ERP hoàn chỉnh, mà là:
 
 | Bounded Context | Chức năng | Patterns áp dụng |
 |----------------|-----------|-------------------|
-| **Auth** | Đăng nhập, đăng ký, JWT access/refresh token, RBAC 3 roles (admin/manager/staff) | JWT, RBAC, bcrypt |
+| **Auth** | Google sign-in (Identity Platform), đăng ký password-less, app token HS256 + session whitelist (revoke tức thì), RBAC 3 roles (admin/manager/staff) | Identity Platform, Session Whitelist, RBAC |
 | **Customer** | CRUD khách hàng, credit check, quản lý tax code | DDD, Repository, Value Object, Aggregate Root |
 | **Sales** | Tạo đơn hàng (header + lines), submit → saga flow, cancel, Delivery Order 6-state, Sales Return | DDD, CQRS, Saga, Outbox, Event-driven, Aggregate Root |
 | **Inventory** | Tạo items/warehouses, nhập/xuất stock, reserve/release, movement log | DDD, Repository, Optimistic Locking, Aggregate Root |

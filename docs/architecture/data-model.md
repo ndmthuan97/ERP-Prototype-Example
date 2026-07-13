@@ -3,12 +3,12 @@ type: Database Schema
 title: "ERP Data Model"
 description: "Complete database schema across 8 PostgreSQL schemas with ER diagrams, table definitions, columns, and constraints"
 tags: [database, schema, postgresql, data-model]
-timestamp: "2026-06-26T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Data Model — Mô hình dữ liệu
 
-> ✅ **Tất cả schemas đã implement:** `customer`, `sales` (headers, lines, delivery, returns), `inventory`, `catalog`, `purchasing` (PO + suppliers), `app_auth`. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Tất cả schemas đã implement:** `customer`, `sales` (headers, lines, delivery, returns), `inventory`, `catalog`, `purchasing` (PO + suppliers), `app_auth`. Xem [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu chi tiết cấu trúc database của ERP Prototype: 4 schemas, tất cả tables, columns, constraints và ER diagrams.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [event-flows](event-flows.md) · [design-patterns](design-patterns.md)
@@ -21,7 +21,7 @@ Hệ thống sử dụng **một Supabase PostgreSQL instance** nhưng chia thà
 
 | Schema | Service sở hữu | Tables | Mục đích |
 |---|---|---|---|
-| `app_auth` | Auth Service `:3004` | `users`, `refresh_tokens` | Xác thực, phân quyền (KHÔNG dùng `auth` — schema của Supabase, xem [ADR-014](../overview/tech-decisions.md)) |
+| `app_auth` | Auth Service `:3004` | `users`, `sessions`, `refresh_tokens` (deprecated) | Xác thực (Identity Platform / Google sign-in), phân quyền, session whitelist. KHÔNG dùng `auth` — schema của Supabase ([ADR-014](../overview/tech-decisions.md)); từ **B1** dùng session whitelist thay refresh-token JWT tự cuộn ([ADR-015](../overview/tech-decisions.md)) |
 | `customer` | Customer Service `:3001` | `cores`, `outbox` | Quản lý khách hàng B2B |
 | `order` | Order Service `:3002` | `headers`, `lines`, `status_history`, `lifecycle_view`, `outbox` | Quản lý đơn hàng |
 | `inventory` | Inventory Service `:3003` | `items`, `warehouses`, `stock_levels`, `movements`, `outbox` | Quản lý kho hàng |
@@ -55,12 +55,21 @@ erDiagram
     users {
         uuid id PK
         varchar email UK "unique, not null"
-        varchar password_hash "not null"
+        varchar firebase_uid UK "unique, nullable — link Identity Platform"
         varchar full_name "not null"
         varchar role "admin | manager | staff"
         boolean is_active "default true"
         timestamp created_at "default now()"
         timestamp updated_at "default now()"
+    }
+
+    sessions {
+        uuid id PK
+        uuid user_id FK "references users.id"
+        timestamp started_at "default now()"
+        timestamp expires_at "not null"
+        varchar ip "nullable"
+        varchar user_agent "nullable"
     }
 
     refresh_tokens {
@@ -71,8 +80,11 @@ erDiagram
         timestamp created_at "default now()"
     }
 
-    users ||--o{ refresh_tokens : "has"
+    users ||--o{ sessions : "has"
+    users ||--o{ refresh_tokens : "has (deprecated)"
 ```
+
+> **B1 (2026-07-08):** đăng nhập chuyển sang **Identity Platform (Google sign-in)** → cột `password_hash` đã **drop hẳn** (2026-07-10, không còn login password), thêm `firebase_uid` (unique) để link Firebase. Bảng `sessions` là **session whitelist** (revoke tức thì + idle timeout); `refresh_tokens` **deprecated** — Firebase quản refresh token (revoke qua `revokeRefreshTokens`). Xem [ADR-015](../overview/tech-decisions.md), [Auth Endpoints](../api/auth-endpoints.md).
 
 ### 2.2. Chi tiết Tables
 
@@ -81,8 +93,8 @@ erDiagram
 | Column | Type | Constraints | Mô tả |
 |---|---|---|---|
 | `id` | `UUID` | PK, default `gen_random_uuid()` | ID duy nhất của user |
-| `email` | `VARCHAR(255)` | UNIQUE, NOT NULL | Email đăng nhập |
-| `password_hash` | `VARCHAR(255)` | NOT NULL | Password đã hash bằng bcrypt |
+| `email` | `VARCHAR(255)` | UNIQUE, NOT NULL | Email đăng nhập — cũng là **entry allowlist** (Google sign-in phải khớp email) |
+| `firebase_uid` | `VARCHAR(255)` | UNIQUE, NULLABLE | UID Identity Platform, link ở lần đăng nhập Google đầu tiên (B1) |
 | `full_name` | `VARCHAR(255)` | NOT NULL | Tên đầy đủ |
 | `role` | `VARCHAR(50)` | NOT NULL | Enum: `admin`, `manager`, `staff` |
 | `is_active` | `BOOLEAN` | DEFAULT `true` | Tài khoản đang hoạt động? |
@@ -91,7 +103,22 @@ erDiagram
 
 > **Lưu ý**: `role` lưu trực tiếp dạng string trong table users. Đây là thiết kế đơn giản cho prototype — không cần bảng `roles` hay `permissions` riêng. Trong production nên dùng RBAC table riêng.
 
-#### `app_auth.refresh_tokens`
+#### `app_auth.sessions` — Session whitelist (B1)
+
+Mỗi phiên đăng nhập = 1 row + key `session:<sid>` ở Redis. Gateway tra `session:<sid>` mỗi request (`getex`, slide TTL) → miss = 401 (logout / deactivation / idle). Đạt **FR-A13** (revoke tức thì) + **FR-A9** (idle timeout theo role).
+
+| Column | Type | Constraints | Mô tả |
+|---|---|---|---|
+| `id` | `UUID` | PK | Session id (`sid`) — khoá whitelist, mang trong app token |
+| `user_id` | `UUID` | FK → `users.id`, NOT NULL | Thuộc user nào |
+| `started_at` | `TIMESTAMP` | DEFAULT `now()` | Thời điểm bắt đầu phiên |
+| `expires_at` | `TIMESTAMP` | NOT NULL | Thời điểm hết hạn tuyệt đối |
+| `ip` | `VARCHAR` | NULLABLE | IP lúc đăng nhập |
+| `user_agent` | `VARCHAR` | NULLABLE | User agent lúc đăng nhập |
+
+#### `app_auth.refresh_tokens` — ⚠️ Deprecated (B1)
+
+> **Deprecated sau B1** — không còn ghi/đọc. Refresh token nay do **Identity Platform (Firebase)** quản (revoke qua `revokeRefreshTokens`). Bảng được **giữ lại, không drop**.
 
 | Column | Type | Constraints | Mô tả |
 |---|---|---|---|
@@ -490,20 +517,21 @@ erDiagram
 
 | # | Schema | Table | Vai trò | Pattern áp dụng |
 |---|---|---|---|---|
-| 1 | `app_auth` | `users` | Lưu thông tin user | — |
-| 2 | `app_auth` | `refresh_tokens` | Lưu refresh tokens (rotation + reuse detection) | — |
-| 3 | `customer` | `cores` | Lưu thông tin khách hàng | Value Object (TaxCode) |
-| 4 | `customer` | `outbox` | Event queue nội bộ | Outbox Pattern |
-| 5 | `order` | `headers` | Đơn hàng (Aggregate Root) | Aggregate Root |
-| 6 | `order` | `lines` | Chi tiết đơn hàng | Aggregate (child entity) |
-| 7 | `order` | `status_history` | Lịch sử trạng thái | Audit Trail |
-| 8 | `order` | `lifecycle_view` | Read model cho listing | CQRS |
-| 9 | `order` | `outbox` | Event queue nội bộ | Outbox Pattern |
-| 10 | `inventory` | `items` | Master data sản phẩm | — |
-| 11 | `inventory` | `warehouses` | Master data kho | — |
-| 12 | `inventory` | `stock_levels` | Tồn kho hiện tại | Optimistic Locking |
-| 13 | `inventory` | `movements` | Lịch sử xuất nhập kho | Audit Trail |
-| 14 | `inventory` | `outbox` | Event queue nội bộ | Outbox Pattern |
+| 1 | `app_auth` | `users` | Lưu thông tin user (allowlist email + `firebase_uid`) | — |
+| 2 | `app_auth` | `sessions` | Session whitelist (revoke tức thì + idle timeout) — B1 | Session Whitelist |
+| 3 | `app_auth` | `refresh_tokens` | ⚠️ Deprecated sau B1 (Firebase quản refresh token) | — |
+| 4 | `customer` | `cores` | Lưu thông tin khách hàng | Value Object (TaxCode) |
+| 5 | `customer` | `outbox` | Event queue nội bộ | Outbox Pattern |
+| 6 | `order` | `headers` | Đơn hàng (Aggregate Root) | Aggregate Root |
+| 7 | `order` | `lines` | Chi tiết đơn hàng | Aggregate (child entity) |
+| 8 | `order` | `status_history` | Lịch sử trạng thái | Audit Trail |
+| 9 | `order` | `lifecycle_view` | Read model cho listing | CQRS |
+| 10 | `order` | `outbox` | Event queue nội bộ | Outbox Pattern |
+| 11 | `inventory` | `items` | Master data sản phẩm | — |
+| 12 | `inventory` | `warehouses` | Master data kho | — |
+| 13 | `inventory` | `stock_levels` | Tồn kho hiện tại | Optimistic Locking |
+| 14 | `inventory` | `movements` | Lịch sử xuất nhập kho | Audit Trail |
+| 15 | `inventory` | `outbox` | Event queue nội bộ | Outbox Pattern |
 
 ---
 

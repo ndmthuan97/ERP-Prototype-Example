@@ -45,10 +45,10 @@ Sales Service là trung tâm nghiệp vụ. Khi submit đơn hàng: HTTP reserve
 - **Bounded Context**: [bounded-contexts.md §3.3](../architecture/bounded-contexts.md)
 - **Data Model**: [data-model.md §4](../architecture/data-model.md)
 - **Event Flows**: [event-flows.md §4](../architecture/event-flows.md)
-- **Business Flows**: [flows.md](../flows.md) — Flow 2 (Sales Saga), Flow 3 (Delivery), Flow 4 (Return)
+- **Business Flows**: [flows.md](../operations/flows.md) — Flow 2 (Sales Saga), Flow 3 (Delivery), Flow 4 (Return)
 - **Design Patterns**: [design-patterns.md §4, §7, §8](../architecture/design-patterns.md) — Aggregate Root, CQRS, Saga
 - **Business Requirements**: [business-requirements.md §3.2](../overview/business-requirements.md)
-- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../IMPLEMENTATION-STATUS.md)
+- **Implementation Status**: [IMPLEMENTATION-STATUS.md](../operations/implementation-status.md)
 
 ## Related Concepts
 

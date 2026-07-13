@@ -23,17 +23,25 @@ async function post(url: string, data: unknown, token?: string) {
 module.exports = async function globalSetup() {
   console.log('\n🌱 E2E Global Setup — seeding test data...');
 
-  // 1. Login
-  const loginRes = await post('/api/auth/login', {
-    email: 'admin@gmail.com',
-    password: 'Admin@123',
-  });
+  // 1. Auth (B1: Google sign-in). Password login was removed, so the harness
+  //    exchanges a Firebase ID token (of an allowlisted admin) for an app token.
+  //    Get a fresh E2E_ID_TOKEN per test/e2e/README.md → "Getting an E2E_ID_TOKEN".
+  const idToken = process.env.E2E_ID_TOKEN;
+  if (!idToken) {
+    throw new Error(
+      'E2E_ID_TOKEN is not set. Under B1 (Google sign-in) the E2E harness needs a ' +
+        'Firebase ID token for an allowlisted admin user. See test/e2e/README.md.',
+    );
+  }
+  const loginRes = await post('/api/auth/sso/callback', { idToken });
   if (loginRes.status !== 200) {
-    throw new Error(`Login failed (${loginRes.status}): ${JSON.stringify(loginRes.data)}`);
+    throw new Error(
+      `SSO exchange failed (${loginRes.status}): ${JSON.stringify(loginRes.data)}. ` +
+        'Is E2E_ID_TOKEN fresh (Firebase ID tokens expire after ~1h) and its email allowlisted with an admin role?',
+    );
   }
   const token = loginRes.data.accessToken;
-  const refreshToken = loginRes.data.refreshToken;
-  console.log('  ✅ Login OK');
+  console.log('  ✅ SSO exchange OK');
 
   const authPost = (url: string, data: unknown) => post(url, data, token);
   const runId = Date.now().toString().slice(-8);
@@ -108,7 +116,6 @@ module.exports = async function globalSetup() {
   // Save to file for suites to read
   const seedData = {
     accessToken: token,
-    refreshToken,
     customerId: custRes.data.id,
     productA: { id: prodA.data.id, sku: skuA, name: `E2E Alpha ${runId}` },
     productB: { id: prodB.data.id, sku: skuB, name: `E2E Beta ${runId}` },

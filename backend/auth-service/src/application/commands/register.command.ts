@@ -1,8 +1,9 @@
 // =============================================================================
-// REGISTER COMMAND — Admin creates a new user account
+// REGISTER COMMAND — Admin provisions a new user account (password-less)
 // =============================================================================
+// Under B1 there is no password: the admin adds an email + role to the
+// allowlist; the Google account links itself on first sign-in (firebaseUid).
 import { Injectable, Inject } from '@nestjs/common';
-import bcrypt from 'bcryptjs';
 import { v4 } from 'uuid';
 import {
   USER_REPOSITORY,
@@ -29,14 +30,11 @@ export class RegisterCommand {
       throw new DuplicateEmailError(dto.email);
     }
 
-    // Hash password with bcrypt (12 salt rounds)
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-
     const now = new Date();
     const user = new User({
       id: v4(),
       email: dto.email,
-      passwordHash,
+      firebaseUid: null,
       fullName: dto.fullName,
       role: dto.role,
       isActive: true,

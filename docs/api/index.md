@@ -6,7 +6,7 @@ API endpoint documentation cho từng backend service. Tất cả endpoint truy 
 
 | Concept | Type | Resource | Mô tả |
 |---------|------|----------|-------|
-| [Auth Service](./auth-endpoints.md) | API Endpoint | `:3004` | Login, refresh, logout, RBAC |
+| [Auth Service](./auth-endpoints.md) | API Endpoint | `:3004` | Google sign-in SSO callback, logout (session revoke), RBAC |
 | [Customer Service](./customer-endpoints.md) | API Endpoint | `:3001` | Customer CRUD, credit check |
 | [Order Service](./order-endpoints.md) | API Endpoint | `:3002` | SO lifecycle, Saga, Delivery, Return |
 | [Inventory Service](./inventory-endpoints.md) | API Endpoint | `:3003` | Stock items, receive, reserve, release |

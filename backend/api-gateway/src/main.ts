@@ -4,8 +4,8 @@
  * The gateway is the SINGLE ENTRY POINT for the frontend:
  * - Frontend only knows one URL: http://localhost:3010
  * - Gateway receives requests → verifies JWT → forwards to correct service
- * - Public routes (login, refresh): forwarded without JWT verification
- * - Protected routes: JWT verified first, user info attached as headers
+ * - Public routes (SSO callback): forwarded without JWT verification
+ * - Protected routes: JWT verified + session checked, user info attached as headers
  *
  * Routing:
  *   /api/auth/*       → Auth Service     :3004
@@ -33,6 +33,7 @@ import {
   responseInterceptor,
 } from 'http-proxy-middleware';
 import { GoogleAuth, type IdTokenClient } from 'google-auth-library';
+import { Redis } from '@upstash/redis';
 import { AppModule } from './app.module.js';
 
 interface JwtPayload {
@@ -40,6 +41,9 @@ interface JwtPayload {
   email: string;
   role: string;
   fullName: string;
+  // B1: session id — links the token to a server-side session:<sid> whitelist
+  // entry in Redis so the gateway can revoke it instantly (FR-A13).
+  sid: string;
 }
 
 // Requests carry the minted Google ID token here so the (sync) onProxyReq hook
@@ -114,11 +118,21 @@ async function fetchIdToken(target: string): Promise<string> {
   return raw.replace(/^Bearer\s+/i, '');
 }
 
-// Routes that bypass JWT verification
+// B1: session whitelist store (Upstash Redis REST). One client per process; the
+// JWT middleware reads session:<sid> on every protected request for instant
+// revoke (FR-A13) and idle timeout (FR-A9). Env is already loaded by dotenv
+// above, so reading process.env at module init is safe.
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL ?? '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN ?? '',
+});
+
+// Routes that bypass JWT verification. Login is now the SSO callback
+// (POST /api/auth/sso/callback); the old /login and /refresh endpoints are gone.
 const PUBLIC_ROUTES: Array<{ method: string; path: RegExp }> = [
-  { method: 'POST', path: /^\/api\/auth\/login$/ },
-  { method: 'POST', path: /^\/api\/auth\/refresh$/ },
+  { method: 'POST', path: /^\/api\/auth\/sso\/callback$/ },
   { method: 'GET', path: /^\/health$/ },
+  { method: 'GET', path: /^\/metrics$/ },
 ];
 
 function isPublicRoute(method: string, path: string): boolean {
@@ -271,16 +285,19 @@ async function bootstrap() {
     }),
   );
 
-  // Strict rate limit for auth login: configurable via env (default: 5 / 15 min)
+  // Strict rate limit for the auth exchange (SSO callback): configurable via env
+  // (default: 10 / 15 min). Repointed from the removed /api/auth/login — the app
+  // token expires ~hourly so a legit client re-exchanges rarely; 10 leaves room
+  // for multiple tabs while still bounding abuse of the token-exchange endpoint.
   app.use(
-    '/api/auth/login',
+    '/api/auth/sso/callback',
     rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: parseInt(process.env.LOGIN_RATE_LIMIT || '5', 10),
+      max: parseInt(process.env.LOGIN_RATE_LIMIT || '10', 10),
       message: {
         statusCode: 429,
         error: 'Too Many Requests',
-        message: 'Too many login attempts, please try again later',
+        message: 'Too many authentication attempts, please try again later',
       },
     }),
   );
@@ -292,8 +309,13 @@ async function bootstrap() {
     );
   }
 
-  // JWT verification middleware — runs BEFORE proxy forwarding
-  app.use((req: Request, res: Response, next: NextFunction) => {
+  // Idle-timeout window (seconds) the session TTL is slid to on each authorized
+  // request. Read once at bootstrap; default 1800 (30 min).
+  const idleSec = parseInt(process.env.GATEWAY_SESSION_IDLE_SEC || '1800', 10);
+
+  // JWT verification + session whitelist middleware — runs BEFORE proxy
+  // forwarding. Async because the whitelist check hits Redis.
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
     // Skip JWT check for public routes
     if (isPublicRoute(req.method, req.path)) {
       return next();
@@ -309,18 +331,13 @@ async function bootstrap() {
     }
 
     const token = authHeader.slice(7);
+    let payload: JwtPayload;
     try {
       // Pin the algorithm: with only an HMAC secret configured, accepting any
       // alg the token declares invites algorithm-confusion attacks.
-      const payload = jwt.verify(token, jwtSecret, {
+      payload = jwt.verify(token, jwtSecret, {
         algorithms: ['HS256'],
       }) as JwtPayload;
-      // Attach user info as headers for downstream services
-      req.headers['x-user-id'] = payload.sub;
-      req.headers['x-user-role'] = payload.role;
-      req.headers['x-user-email'] = payload.email;
-      req.headers['x-user-fullname'] = payload.fullName;
-      next();
     } catch {
       return res.status(401).json({
         statusCode: 401,
@@ -328,6 +345,48 @@ async function bootstrap() {
         message: 'Invalid or expired token',
       });
     }
+
+    // B1 server-side session whitelist: a valid signature is not enough — the
+    // session must still exist in Redis (covers logout, deactivation, idle
+    // timeout, and pre-B1 tokens that carry no sid). getex fetches the session
+    // AND slides its TTL in one round-trip. Fail CLOSED on any Redis error so a
+    // cache outage never becomes an auth bypass (accepted prototype trade-off:
+    // an outage logs everyone out).
+    const sid = payload.sid;
+    let sess: unknown = null;
+    try {
+      if (sid) {
+        sess = await redis.getex('session:' + sid, { ex: idleSec });
+      }
+    } catch (err) {
+      logger.error(
+        `Redis session check failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return res.status(401).json({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message: 'Session expired or revoked',
+      });
+    }
+
+    if (!sid || sess == null) {
+      return res.status(401).json({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message: 'Session expired or revoked',
+      });
+    }
+
+    // Attach user info as headers for downstream services. x-user-sid lets
+    // auth-service's logout endpoint revoke this exact session.
+    req.headers['x-user-id'] = payload.sub;
+    req.headers['x-user-role'] = payload.role;
+    req.headers['x-user-email'] = payload.email;
+    req.headers['x-user-fullname'] = payload.fullName;
+    req.headers['x-user-sid'] = sid;
+    next();
   });
 
   // Service URLs from environment
@@ -545,11 +604,11 @@ async function bootstrap() {
         '- **Catalog**    → `/api/catalog/*`    → Catalog Service',
         '- **Purchasing** → `/api/purchasing/*` & `/api/suppliers/*` → Purchasing Service',
         '',
-        'The gateway verifies a JWT Bearer token and reverse-proxies each ' +
-          'request to the matching microservice. All routes require a Bearer ' +
-          'token EXCEPT `POST /api/auth/login` and `POST /api/auth/refresh`. ' +
-          'Click **Authorize** and paste your access token to try protected ' +
-          'endpoints.',
+        'The gateway verifies a JWT Bearer token (and checks the session is ' +
+          'still live) then reverse-proxies each request to the matching ' +
+          'microservice. All routes require a Bearer token EXCEPT ' +
+          '`POST /api/auth/sso/callback`. Click **Authorize** and paste your ' +
+          'access token to try protected endpoints.',
       ].join('\n'),
     )
     .setVersion('1.0')

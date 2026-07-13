@@ -53,6 +53,7 @@ async function bootstrap() {
     )
     .setVersion('1.0')
     .addBearerAuth()
+    .addSecurityRequirements('bearer')
     .build();
   // nestjs-zod v5: DTOs built with createZodDto are picked up by the swagger
   // CLI plugin; cleanupOpenApiDoc() post-processes the Zod-generated schemas

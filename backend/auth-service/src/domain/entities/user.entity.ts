@@ -22,7 +22,8 @@ export type UserRole = (typeof USER_ROLES)[number];
 export interface UserProps {
   id: string;
   email: string;
-  passwordHash: string;
+  // Identity Platform / Firebase UID, linked on first successful Google sign-in.
+  firebaseUid?: string | null;
   fullName: string;
   role: UserRole;
   isActive: boolean;
@@ -57,7 +58,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Set<string>> = {
 export class User {
   readonly id: string;
   email: string;
-  passwordHash: string;
+  firebaseUid: string | null;
   fullName: string;
   role: UserRole;
   isActive: boolean;
@@ -67,7 +68,7 @@ export class User {
   constructor(props: UserProps) {
     this.id = props.id;
     this.email = props.email;
-    this.passwordHash = props.passwordHash;
+    this.firebaseUid = props.firebaseUid ?? null;
     this.fullName = props.fullName;
     this.role = props.role;
     this.isActive = props.isActive;

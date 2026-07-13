@@ -9,19 +9,21 @@ import {
   MetricsController,
   HealthController,
   HEALTH_INDICATORS,
+  RedisCacheService,
   type HealthIndicator,
 } from '@erp/shared';
 
 import { PrismaService } from './infrastructure/persistence/prisma.service.js';
 import { PrismaUserRepository } from './infrastructure/persistence/user.repository.impl.js';
 import { JwtTokenService } from './infrastructure/auth/jwt.service.js';
+import { FirebaseAdminService } from './infrastructure/auth/firebase-admin.service.js';
+import { SessionService } from './infrastructure/auth/session.service.js';
 import { USER_REPOSITORY } from './domain/repositories/user.repository.js';
 
 import { RegisterCommand } from './application/commands/register.command.js';
 import { UpdateUserCommand } from './application/commands/update-user.command.js';
-import { LoginCommand } from './application/commands/login.command.js';
-import { RefreshTokenCommand } from './application/commands/refresh-token.command.js';
-import { LogoutCommand } from './application/commands/logout.command.js';
+import { ExchangeSessionCommand } from './application/commands/exchange-session.command.js';
+import { EndSessionCommand } from './application/commands/end-session.command.js';
 import { GetMeQuery } from './application/queries/get-me.query.js';
 import { ListUsersQuery } from './application/queries/list-users.query.js';
 
@@ -34,6 +36,9 @@ import { AuthController } from './presentation/auth.controller.js';
     PrismaService,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     JwtTokenService,
+    FirebaseAdminService,
+    SessionService,
+    RedisCacheService,
 
     // Shared observability
     MetricsService,
@@ -56,9 +61,8 @@ import { AuthController } from './presentation/auth.controller.js';
     // Application — Use Cases
     RegisterCommand,
     UpdateUserCommand,
-    LoginCommand,
-    RefreshTokenCommand,
-    LogoutCommand,
+    ExchangeSessionCommand,
+    EndSessionCommand,
     GetMeQuery,
     ListUsersQuery,
   ],

@@ -9,7 +9,7 @@ timestamp: "2026-06-26T00:00:00+07:00"
 
 # Catalog Service — API Endpoints
 
-> ✅ **Đã implement đầy đủ.** `catalog-service` với Product CRUD, activate/deactivate, SKU validation, taxRate per product (VN rates: 0/5/8/10%). Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Đã implement đầy đủ.** `catalog-service` với Product CRUD, activate/deactivate, SKU validation, taxRate per product (VN rates: 0/5/8/10%). Xem [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu tham chiếu cho tất cả endpoints của **Catalog Service** (`localhost:3005`).
 > Service quản lý danh mục sản phẩm — tạo, cập nhật, tìm kiếm, kích hoạt/vô hiệu hóa. Khi tạo product mới, service publish event `product.created` để Inventory Service tự động tạo stock item tương ứng.

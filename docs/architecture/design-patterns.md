@@ -3,12 +3,12 @@ type: Reference
 title: "Design Patterns Reference"
 description: "14+ design patterns applied in the ERP prototype: DDD, Repository, Outbox, Cache-Aside, Saga, CQRS, Optimistic Locking, and more"
 tags: [reference, design-patterns, ddd, architecture]
-timestamp: "2026-06-25T00:00:00+07:00"
+timestamp: "2026-07-08T00:00:00+07:00"
 ---
 
 # Design Patterns — Các mẫu thiết kế
 
-> ✅ **Tất cả 14+ patterns đã implement đầy đủ:** DDD Layers, Repository, Value Object, Outbox, Cache-Aside, Observability, Saga, CQRS, Optimistic Locking, JWT+RBAC, API Gateway, Idempotent Consumer, Circuit Breaker, API Versioning, Rate Limiting. Xem [Implementation Status](../IMPLEMENTATION-STATUS.md).
+> ✅ **Tất cả 14+ patterns đã implement đầy đủ:** DDD Layers, Repository, Value Object, Outbox, Cache-Aside, Observability, Saga, CQRS, Optimistic Locking, JWT+RBAC, API Gateway, Idempotent Consumer, Circuit Breaker, API Versioning, Rate Limiting. Xem [Implementation Status](../operations/implementation-status.md).
 
 > Tài liệu mô tả 14 design patterns được áp dụng trong ERP Prototype. Mỗi pattern: giải thích, vấn đề nó giải quyết, nơi áp dụng, và code/diagram minh họa.
 > Liên quan: [system-overview](system-overview.md) · [bounded-contexts](bounded-contexts.md) · [data-model](data-model.md) · [event-flows](event-flows.md)
@@ -843,18 +843,20 @@ flowchart LR
 
 ### Sơ đồ kết hợp
 
+> **Sau B1:** đăng nhập qua **Google sign-in (Identity Platform)** thay cho email+password; auth-service phát **app token HS256** mang `sid`, và Gateway thêm bước tra **session whitelist** (`session:<sid>` ở Redis) trước khi check role — đây là lớp revoke tức thì (FR-A13) + idle timeout (FR-A9). Xem [rbac.md](rbac.md), [auth-endpoints.md](../api/auth-endpoints.md).
+
 ```mermaid
 flowchart TB
-    Login["1. Login\n(email + password)"]
-    Hash["2. bcrypt.compare()"]
-    Token["3. Generate JWT\n(sub, email, role, exp)"]
-    Req["4. Request + Bearer JWT"]
-    Verify["5. jwt.verify()"]
+    Login["1. Sign in with Google\n(Identity Platform)"]
+    Verify0["2. verify Firebase ID token\n(firebase-admin) + allowlist email"]
+    Token["3. Phát app token HS256\n(sub, email, role, sid, exp) + tạo session"]
+    Req["4. Request + Bearer app token"]
+    Verify["5. jwt.verify() HS256\n+ getex session:sid (Redis)"]
     RBAC["6. Check role ∈ allowed roles"]
-    OK["7. Forward to service"]
+    OK["7. Forward to service\n(x-user-*, x-user-sid)"]
 
-    Login --> Hash
-    Hash --> Token
+    Login --> Verify0
+    Verify0 --> Token
     Token --> Req
     Req --> Verify
     Verify --> RBAC
@@ -873,11 +875,12 @@ flowchart TB
 
 | Component | Service | Chi tiết |
 |---|---|---|
-| Password hashing | Auth Service | `bcrypt` với salt rounds = 10 |
-| JWT signing | Auth Service | `jsonwebtoken.sign()` với secret |
-| JWT verification | API Gateway | `jsonwebtoken.verify()` |
+| Identity | Identity Platform (Firebase) | Google sign-in; verify Firebase ID token bằng `firebase-admin` (bcrypt đã gỡ ở B1) |
+| App token signing | Auth Service | `jsonwebtoken.sign()` HS256, payload có `sid` |
+| App token verification | API Gateway | `jsonwebtoken.verify()` HS256 |
+| Session whitelist | API Gateway + Redis | `getex session:<sid>` mỗi request — revoke tức thì + idle timeout |
 | Role checking | API Gateway | Match role against route config |
-| Role storage | Auth Service DB | `auth.users.role` column |
+| Role storage | Auth Service DB | `app_auth.users.role` column |
 
 **Chi tiết RBAC:** Xem [rbac.md](rbac.md) để xem permission matrix đầy đủ cho tất cả endpoints.
 

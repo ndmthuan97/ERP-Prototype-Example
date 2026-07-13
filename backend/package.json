@@ -26,10 +26,8 @@
     "prisma:catalog": "cd catalog-service && npx prisma generate",
     "prisma:purchasing": "cd purchasing-service && npx prisma generate",
     "install:all": "npm run install:shared && npm run install:customer && npm run install:inventory && npm run install:sales && npm run install:auth && npm run install:catalog && npm run install:purchasing && npm run install:gateway",
-    "dev:all": "dotenv -e .env -- concurrently \"npm run dev:customer\" \"npm run dev:inventory\" \"npm run dev:sales\" \"npm run dev:auth\" \"npm run dev:catalog\" \"npm run dev:purchasing\" \"npm run dev:gateway\"",
     "db:proxy": ".tools\\cloud-sql-proxy.exe portfolio-497506:us-central1:erp-postgres-dev --port 5432",
-    "dev:prod:services": "dotenv -e .env.production -- concurrently \"npm run dev:customer\" \"npm run dev:inventory\" \"npm run dev:sales\" \"npm run dev:auth\" \"npm run dev:catalog\" \"npm run dev:purchasing\" \"npm run dev:gateway\"",
-    "dev:prod": "concurrently -k -n proxy,api -c blue,green \"npm run db:proxy\" \"wait-on tcp:127.0.0.1:5432 && npm run dev:prod:services\"",
+    "dev:all": "concurrently -k -n proxy,api -c blue,green \"npm run db:proxy\" \"wait-on tcp:127.0.0.1:5432 && dotenv -e .env.production -- concurrently npm:dev:customer npm:dev:inventory npm:dev:sales npm:dev:auth npm:dev:catalog npm:dev:purchasing npm:dev:gateway\"",
     "prisma:all": "cd auth-service && npx prisma generate && cd ../customer-service && npx prisma generate && cd ../inventory-service && npx prisma generate && cd ../sales-service && npx prisma generate && cd ../catalog-service && npx prisma generate && cd ../purchasing-service && npx prisma generate",
     "test:e2e": "jest --config test/e2e/jest.e2e.config.ts --runInBand --forceExit"
   },

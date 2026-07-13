@@ -60,15 +60,27 @@ async function bootstrap() {
     .setDescription('Authentication & Authorization bounded context (DDD).')
     .setVersion('1.0')
     .addBearerAuth()
+    .addSecurityRequirements('bearer')
     .build();
   // nestjs-zod v5: createZodDto DTOs expose their schema to @nestjs/swagger at
   // createDocument time; `cleanupOpenApiDoc` post-processes the generated doc so
   // the Zod-derived request/response schemas render correctly. (v5 replaces the
   // old v4 `patchNestjsSwagger()` — that function no longer exists.)
-  const document = cleanupOpenApiDoc(
+  const rawDoc = cleanupOpenApiDoc(
     SwaggerModule.createDocument(app, swaggerConfig),
   );
-  SwaggerModule.setup('docs', app, document);
+  // Strip gateway-injected headers (x-user-*) from Swagger UI — they confuse
+  // users into thinking they must provide them manually.
+  for (const pathItem of Object.values(rawDoc.paths ?? {})) {
+    for (const op of Object.values(pathItem as Record<string, any>)) {
+      if (op?.parameters) {
+        op.parameters = op.parameters.filter(
+          (p: any) => !(p.in === 'header' && p.name?.startsWith('x-user-')),
+        );
+      }
+    }
+  }
+  SwaggerModule.setup('docs', app, rawDoc);
 
   const port = parseInt(
     process.env.PORT || process.env.AUTH_SERVICE_PORT || String(DEFAULT_PORT),

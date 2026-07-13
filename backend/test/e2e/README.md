@@ -5,11 +5,12 @@ End-to-end tests that run against all services via the API Gateway (`localhost:3
 ## Prerequisites
 
 1. All 6 services + API Gateway + Pub/Sub Emulator running
-2. Auth accounts seeded in DB:
-   - `admin@gmail.com` / `Admin@123` (role: admin)
-   - `manager@gmail.com` / `Manager@123` (role: manager)
-   - `staff@gmail.com` / `Staff@123` (role: staff)
-3. Database schemas migrated
+2. **One allowlisted Google account** in `app_auth.users` with the **admin** role
+   (seeding creates customers/products/etc., which needs write access)
+3. A **fresh Firebase ID token** for that account, exported as `E2E_ID_TOKEN`
+   (see [Getting an E2E_ID_TOKEN](#getting-an-e2e_id_token) below). Password login
+   was removed in B1 — the harness authenticates via `POST /auth/sso/callback`.
+4. Database schemas migrated
 
 ## Quick Start
 
@@ -22,19 +23,36 @@ docker compose up -d
 npm run dev:all
 
 # 3. Wait for services to be ready (~10s)
-# Check: curl http://localhost:3010/api/auth/login -X POST -d '{}' -H 'Content-Type: application/json'
+# Check: curl http://localhost:3010/api/auth/sso/callback -X POST -d '{}' -H 'Content-Type: application/json'
 # Should return 400 (not connection refused)
 
-# 4. Run E2E tests (in another terminal)
+# 4. Run E2E tests (in another terminal) with a fresh ID token
+export E2E_ID_TOKEN="<paste a fresh Firebase ID token — see below>"
 npm run test:e2e
 ```
+
+## Getting an E2E_ID_TOKEN
+
+Under B1 the only way in is Google sign-in, so the harness needs a real Firebase
+ID token for an allowlisted admin. It expires ~1h after minting — grab a fresh one
+right before a run:
+
+- **From the running frontend (easiest):** sign in with Google at the app, then in
+  the browser DevTools console run
+  `await firebase.auth().currentUser.getIdToken()` (or read the token the app sent
+  to `/auth/sso/callback` in the Network tab) and copy the string.
+- **Headless (CI):** point the backend at the Firebase Auth Emulator
+  (`FIREBASE_AUTH_EMULATOR_HOST`) and mint a token against it — not wired up yet;
+  see the auth-gap doc for the forward path.
+
+The token's email must exist in `app_auth.users` with the `admin` role.
 
 ## Test Suites (sequential order)
 
 | # | Suite | Description | Tests |
 |---|-------|-------------|:-----:|
 | 01 | Health | Smoke test — gateway alive | 3 |
-| 02 | Auth | JWT login, refresh, logout | 9 |
+| 02 | Auth | SSO exchange, session whitelist, instant revoke (FR-A13) | 5 |
 | 03 | Catalog | Product CRUD + cross-context event | 8 |
 | 04 | Customer | Customer CRUD + credit check | 7 |
 | 05 | Inventory | Stock operations + optimistic locking | 10 |

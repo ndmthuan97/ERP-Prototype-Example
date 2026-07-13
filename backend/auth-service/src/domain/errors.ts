@@ -32,6 +32,16 @@ export class InactiveUserError extends Error {
   }
 }
 
+// Email is not on the allowlist (no matching row in `users`). Distinct from
+// InvalidCredentialsError so the gateway/UI can tell "not provisioned" (403)
+// apart from "bad/forged token" (401).
+export class NotProvisionedError extends Error {
+  constructor(email: string) {
+    super(`Email not provisioned: ${email}`);
+    this.name = 'NotProvisionedError';
+  }
+}
+
 export class InvalidRoleError extends Error {
   constructor(role: string) {
     super(`Invalid role: ${role}`);

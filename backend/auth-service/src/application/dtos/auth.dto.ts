@@ -4,9 +4,10 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
+// Password-less under B1: admin provisions a user by email + role only; the
+// Google/Identity Platform account becomes the credential on first sign-in.
 export const registerSchema = z.object({
   email: z.email('Invalid email format'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
   fullName: z.string().min(1, 'Full name is required'),
   role: z.enum(['admin', 'manager', 'staff']).optional().default('staff'),
 });
@@ -24,24 +25,12 @@ export const updateUserSchema = z
 
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 
-export const loginSchema = z.object({
-  email: z.email('Invalid email format'),
-  password: z.string().min(1, 'Password is required'),
+// SSO callback: the frontend exchanges a Firebase ID token for an app token.
+export const ssoCallbackSchema = z.object({
+  idToken: z.string().min(1, 'idToken is required'),
 });
 
-export type LoginDto = z.infer<typeof loginSchema>;
-
-export const refreshSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
-});
-
-export type RefreshDto = z.infer<typeof refreshSchema>;
-
-export const logoutSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
-});
-
-export type LogoutDto = z.infer<typeof logoutSchema>;
+export type SsoCallbackDto = z.infer<typeof ssoCallbackSchema>;
 
 // -----------------------------------------------------------------------------
 // Swagger DTO classes — bridge the existing Zod schemas above to OpenAPI so that
@@ -52,6 +41,4 @@ export type LogoutDto = z.infer<typeof logoutSchema>;
 // -----------------------------------------------------------------------------
 export class RegisterBodyDto extends createZodDto(registerSchema) {}
 export class UpdateUserBodyDto extends createZodDto(updateUserSchema) {}
-export class LoginBodyDto extends createZodDto(loginSchema) {}
-export class RefreshBodyDto extends createZodDto(refreshSchema) {}
-export class LogoutBodyDto extends createZodDto(logoutSchema) {}
+export class SsoCallbackBodyDto extends createZodDto(ssoCallbackSchema) {}

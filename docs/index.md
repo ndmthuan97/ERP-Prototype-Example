@@ -6,14 +6,7 @@ Tài liệu kỹ thuật cho dự án ERP Prototype — microservices architectu
 
 | Concept | Type | Mô tả |
 |---------|------|-------|
-| [Implementation Status](./IMPLEMENTATION-STATUS.md) | Reference | Source of truth cho trạng thái implement |
 | [Technical Review](./technical-review.md) | Technical Review | Đánh giá kỹ thuật toàn diện |
-| [E2E Test Plan](./e2e-test-plan.md) | Runbook | Kế hoạch E2E test (9 suites, ~80+ tests) |
-| [System Flows](./flows.md) | Reference | 9 luồng nghiệp vụ chính (sequence diagrams) |
-| [Frontend Improvement Plan](./frontend-improvement-plan.md) | Technical Review | Đánh giá FE — 38 tasks chia 4 phase: bug fixes, features, UX, architecture |
-| [Frontend Fix & UI Revamp Plan](./frontend-fix-and-ui-revamp-plan.md) | Runbook | Plan: sửa FE gọi sai URL + Swagger gateway `/docs`, setup Database (Cloud SQL migrate + seed users), re-theme UI (Tailwind+AntD theo Fluent 2/D365, pilot Catalog) |
-| [UI D365 Rollout & BE↔FE Backlog](./ui-d365-rollout-and-backlog.md) | Runbook | Trạng thái rollout UI D365 toàn app, fix từ review (remove-line/filter/a11y), feature mới (User Mgmt, fulfil, issue…) + backlog & deploy còn lại |
-| [Run Backend with Prod Config](./run-backend-with-prod-config.md) | Runbook | Chạy 6 service + gateway ở local trỏ tài nguyên PROD (Cloud SQL Auth Proxy + `dev:prod`) |
 
 ## Subdirectories
 
@@ -23,7 +16,8 @@ Tài liệu kỹ thuật cho dự án ERP Prototype — microservices architectu
 | [architecture/](./architecture/index.md) | Kiến trúc hệ thống, data model, patterns |
 | [api/](./api/index.md) | API endpoint reference cho từng service |
 | [services/](./services/index.md) | Quick reference per service (port, schema, dependencies, links) |
+| [operations/](./operations/index.md) | Trạng thái & vận hành: implementation status, known bugs, flows, E2E test, run prod config, UI backlog, CDC plan |
 | [development/](./development/index.md) | Setup guide, coding standards |
+| [gap/](./gap/index.md) | Gap analysis prototype ↔ new-erp-design (auth, CDC/reporting) |
 | [archive/](./archive/index.md) | Tài liệu đã hoàn thành (lịch sử) |
-| [learning/](./learning/index.md) | Tài liệu học tập & nghiên cứu (Terraform, ...) |
-
+| [learning/](./learning/index.md) | Tài liệu học tập & nghiên cứu (Terraform, GCP services, ...) |

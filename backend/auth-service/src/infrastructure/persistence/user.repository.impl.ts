@@ -13,7 +13,7 @@ import type {
 type PrismaUser = {
   id: string;
   email: string;
-  passwordHash: string;
+  firebaseUid: string | null;
   fullName: string;
   role: string;
   isActive: boolean;
@@ -30,7 +30,7 @@ export class PrismaUserRepository implements IUserRepository {
     return new User({
       id: record.id,
       email: record.email,
-      passwordHash: record.passwordHash,
+      firebaseUid: record.firebaseUid,
       fullName: record.fullName,
       role: record.role as UserRole,
       isActive: record.isActive,
@@ -86,7 +86,7 @@ export class PrismaUserRepository implements IUserRepository {
   async save(user: User): Promise<User> {
     const data = {
       email: user.email,
-      passwordHash: user.passwordHash,
+      firebaseUid: user.firebaseUid,
       fullName: user.fullName,
       role: user.role,
       isActive: user.isActive,

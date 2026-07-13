@@ -15,6 +15,7 @@ import {
   DuplicateEmailError,
   InactiveUserError,
   InvalidRoleError,
+  NotProvisionedError,
 } from '../domain/errors.js';
 
 @Catch(
@@ -23,6 +24,7 @@ import {
   DuplicateEmailError,
   InactiveUserError,
   InvalidRoleError,
+  NotProvisionedError,
 )
 export class DomainExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(DomainExceptionFilter.name);
@@ -39,6 +41,8 @@ export class DomainExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof DuplicateEmailError) {
       status = HttpStatus.CONFLICT;
     } else if (exception instanceof InactiveUserError) {
+      status = HttpStatus.FORBIDDEN;
+    } else if (exception instanceof NotProvisionedError) {
       status = HttpStatus.FORBIDDEN;
     } else if (exception instanceof InvalidRoleError) {
       status = HttpStatus.BAD_REQUEST;
